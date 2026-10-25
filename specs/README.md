@@ -21,4 +21,4 @@ If implementation shows that a requirement is wrong or incomplete, the requireme
 | Phase | Requirements | Implementation plan | Status |
 | --- | --- | --- | --- |
 | [Roadmap](ProphetoVol%20—%20Project%20Roadmap.md) | | | Context for later phases; not being built |
-| Phase 1: deterministic backtester | [Requirements](requirements/ProphetoVol%20—%20Phase%201%20Requirements%20Specification.md) (v3, agreed) | [Plan](implementation_plans/ProphetoVol%20—%20Phase%201%20Implementation%20Plan.md) | Plan in review |
+| Phase 1: deterministic backtester | [Requirements](requirements/ProphetoVol%20—%20Phase%201%20Requirements%20Specification.md) (v5, agreed) | [Plan](implementation_plans/ProphetoVol%20—%20Phase%201%20Implementation%20Plan.md) (v2, agreed) | Phase 0 next |

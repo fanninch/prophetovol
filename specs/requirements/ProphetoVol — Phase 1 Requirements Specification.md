@@ -1,6 +1,14 @@
 # ProphetoVol — Phase 1 Requirements Specification
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v3). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v5). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+
+**Changes in v5** (agreed Oct 25, 2026):
+
+- **Docstrings are reStructuredText** with Sphinx field lists, so a Sphinx documentation site can be built from them later (DOC-4). Generated reference documentation is also written as reStructuredText (DOC-1).
+
+**Changes in v4** (agreed Oct 25, 2026):
+
+- **Pure Python.** ProphetoVol is a pure Python project distributed as a standard wheel, with no compilation and no obfuscation (§16.2). The v3 distribution-readiness requirements are removed: the license-check hook, the compilable core and the compile boundary. DIST-1 now states the pure Python wheel; DIST-2 and DIST-3 are retired.
 
 **Changes in v3** (agreed Oct 25, 2026):
 
@@ -59,7 +67,8 @@ There is **no AI in Phase 1**. Later phases add an AI layer that, given a reques
 - Holding AM-settled contracts to expiration (no settlement-value source exists yet; §8.6).
 - Data frequencies other than end of day.
 - Equities and corporate actions; underlyings other than cash-settled European index options.
-- Multiple users, remote deployment, databases other than DuckDB, and the protected trial build itself (§16.2 only keeps it possible).
+- Multiple users, remote deployment, and databases other than DuckDB.
+- Licensing, trial expiry, code compilation or obfuscation (§16.2).
 
 ## 3. Users & Primary Tasks
 
@@ -789,10 +798,10 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 ## 14. Schemas & Documentation (AI-Readiness)
 
-- **DOC-1** **One definition per configurable item.** Every spec element, registry implementation's parameters, stress definition, run configuration and result snapshot is a pydantic model with a description on every field. That single definition drives validation, the OpenAPI document, the GUI forms, the JSON Schemas returned by the registries (REG-3), and the generated reference documentation. Documentation is never written separately from the schema.
+- **DOC-1** **One definition per configurable item.** Every spec element, registry implementation's parameters, stress definition, run configuration and result snapshot is a pydantic model with a description on every field. That single definition drives validation, the OpenAPI document, the GUI forms, the JSON Schemas returned by the registries (REG-3), and the generated reference documentation (written as reStructuredText, ready for Sphinx). Documentation is never written separately from the schema.
 - **DOC-2** Descriptions state units, sign conventions, defaults and interactions (for example, that `cooldown_trading_days` does not delay a roll, or that `days` in a condition is measured in its `unit`). They are written so a reader with no other context, including a later AI agent, can configure the item correctly.
 - **DOC-3** The conventions (§5.4) are published as a single document generated from the conventions module.
-- **DOC-4** Public modules, classes and functions have docstrings in one style (Google or NumPy, chosen once). A README covers install, the demo, importing data, publishing a spec and running a backtest. A documentation site is later work (as FB-10 in the profiling tool).
+- **DOC-4** Public modules, classes and functions have **reStructuredText docstrings with Sphinx field lists** (`:param name:`, `:type name:`, `:returns:`, `:rtype:`, `:raises ExceptionType:`), used consistently, so Sphinx autodoc can render them without extensions. A README covers install, the demo, importing data, publishing a spec and running a backtest. A Sphinx documentation site is later work; Phase 1 writes docstrings and generated reference documentation ready for it.
 
 ## 15. Audit
 
@@ -834,7 +843,6 @@ src/prophetovol/
   stress/      stress definitions, scenario types, evaluator, modes
   runs/        BacktestService, RunCoordinator, pre-flight, jobs
   results/     snapshot models, statistics, export
-  licensing/   license-check hook (no-op in Phase 1; §16.2)
   server/      FastAPI app, local security, static serving
   cli/         click commands
   testdata/    synthetic data generator, demo
@@ -842,13 +850,9 @@ frontend/      React + TypeScript app
 tests/
 ```
 
-### 16.2 Distribution readiness
+### 16.2 Distribution
 
-A protected, time-limited trial build is planned (roadmap). Phase 1 does not build it, but must not prevent it:
-
-- **DIST-1** **A license-check hook** runs when the service starts (for `serve`, the CLI and library use). In Phase 1 it always passes. A later build replaces it with a real check without changes elsewhere.
-- **DIST-2** **The core is compilable.** The engine, pricing, stress, selectors, conditions and statistics (the intellectual property) must be compilable to native extension modules with Cython or Nuitka. In those packages: no reliance on reading source code at run time (`inspect.getsource` and similar), no generating code at run time, and no behavior that depends on `__file__` paths within the package.
-- **DIST-3** **The compile boundary follows the architecture.** The pure engine library (ARC-2) sits behind interfaces the service calls. FastAPI routes and the pydantic models that FastAPI introspects stay plain Python, since compilation can interfere with annotation introspection.
+- **DIST-1** **A standard pure Python wheel.** Phase 1 is distributed as the wheel `python -m build` produces: Python source plus the built front end's static files. Nothing is compiled to native code and nothing is obfuscated. There is no license check or trial expiry. (IDs DIST-2 and DIST-3, used in v3 for compilation, are retired.)
 
 ## 17. Testing
 
@@ -915,7 +919,7 @@ A protected, time-limited trial build is planned (roadmap). Phase 1 does not bui
 - Trading-time or event-weighted clocks (calendar time only).
 - Equities, corporate actions, American exercise, underlyings without a cash-settled European index option chain.
 - Multiple users, authentication, remote deployment, and databases other than DuckDB.
-- The protected trial build, license enforcement and code compilation (§16.2 keeps them possible).
+- Licensing, trial expiry, code compilation and obfuscation (§16.2).
 - A documentation site.
 
 ## 20. Open Items
@@ -936,7 +940,7 @@ Each milestone ends usable on its own, with a demo.
 
 | Milestone | Delivers |
 | --- | --- |
-| **M1 Data foundation** | Package skeleton, `BacktestService`, `StorageAdapter` with the DuckDB adapter and contract suite, reference data (underlyings, data sources, calendar), ingest into market snapshots, validation and quality reports, overlap and commit, versions, delete and purge, coverage, synthetic data generator, data CLI commands, persisted jobs, audit log, license-check hook |
+| **M1 Data foundation** | Package skeleton, `BacktestService`, `StorageAdapter` with the DuckDB adapter and contract suite, reference data (underlyings, data sources, calendar), ingest into market snapshots, validation and quality reports, overlap and commit, versions, delete and purge, coverage, synthetic data generator, data CLI commands, persisted jobs, audit log |
 | **M2 Engine core** | Spec model and validation, registries with the Phase 1 implementations, time-to-expiry calculation, the step loop, selection, entries, triggers, rolls, expiration and settlement, hedging, sizing, fills, accounting and invariants, position and portfolio snapshots and events, run lifecycle and pre-flight, spec and run CLI commands, golden tests, Appendix B acceptance tests |
 | **M3 Stress & analytics** | Stress definitions, the underlying slide, Black-76 revaluation, the three modes, stress snapshots, aggregate statistics, export |
 | **M4 Server & GUI** | `prophetovol serve`, local security, the HTTP API and OpenAPI, the GUI (Home, Data, Strategies, Stress, New run, Run page, Jobs), `prophetovol demo`, end-to-end tests |

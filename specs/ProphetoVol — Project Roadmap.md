@@ -1,8 +1,8 @@
 # ProphetoVol — Project Roadmap
 
-Oct 25, 2026 · @Chuck · v3 (ProphetoVol naming; Phase 1 requirements agreed)
+Oct 25, 2026 · @Chuck · v5 (Phase 1 requirements and implementation plan agreed)
 
-> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v3, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
+> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v5, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
 >
 > **Everything about Phases 2 and later is roadmap, not yet specified.** It records the design discussion so far, so later phases start with the reasoning that shaped them. Nothing in those sections is being implemented. Phases may be reordered, merged or dropped, and each gets its own agreed requirements specification and implementation plan before it is built.
 
@@ -35,18 +35,18 @@ These held throughout the discussion and should carry into every phase.
 
 | Phase | Theme | Main deliverables | Status |
 | --- | --- | --- | --- |
-| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements agreed (v3); implementation plan in review |
+| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v5) and implementation plan (v2) agreed; Phase 0 next |
 | **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Roadmap — not yet specified |
 | **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Roadmap — not yet specified |
 | **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Roadmap — not yet specified |
 | **5** | Portfolio construction & walk-forward | Constructor framework, objective and constraints, trading-cost-aware rebalancing, the daily walk-forward loop, process analytics | Roadmap — not yet specified |
 | **6** | Research agent & scenario tools | Experiment ledger, regime analysis, sentinel positions, realized-vs-implied scenario grid, research agent | Roadmap — not yet specified |
-| **Trial** | Trial distribution | Time-limited, protected wheel for prospective clients | Roadmap — not yet specified |
+| **Trial** | Trial distribution | Time-limited, protected wheel for prospective clients | Not planned; Phase 1 ships a standard pure Python wheel |
 | **Later** | Hosted & commercial | Multi-user hosting, other databases, vendor-hosted data, MCP server, more underlyings | Ideas |
 
 ## 4. Phase 1 — Deterministic Backtester (being built)
 
-Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v3, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
+Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v5, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
 
 - **Data:** upload of ivolatility files; validation and quality reports; overlap handling (replace, add new dates only, cancel); data versions; delete and purge; coverage; trading calendar; settlement-source plug-in point.
 - **Strategies:** legs with expiration and strike selectors (delta, at the money as 50 delta, forward, references to other legs); entry schedules; triggers (condition, scope, action) for rolls and closes; expiration handling; delta-hedge bands; sizing by contracts or notional.
@@ -54,7 +54,7 @@ Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v3, agr
 - **Engine:** a pure, point-in-time step loop; same-step execution (the close, for end-of-day data); fill models and costs; accounting with reconciliation invariants; AM-settled contracts always closed on their last trading day.
 - **Stress:** an underlying slide revalued with Black-76 at sticky strike; modes Monitor, Scale to limit and Halt run.
 - **Results:** position, structure and portfolio snapshots at every step, stress snapshots, events, and aggregate statistics (annualized from the frequency's periods per year).
-- **Platform:** the data profiling tool's stack; persisted jobs; audit of actor, channel, software versions and rejected attempts; a license-check hook and a compilable core, so a protected trial build is possible later (§10).
+- **Platform:** the data profiling tool's stack; persisted jobs; audit of actor, channel, software versions and rejected attempts; distributed as a standard pure Python wheel, with no compilation, obfuscation or license check (Phase 1 v4).
 
 ## 5. Phase 2 — AI Test Assistant (roadmap — not yet specified)
 
@@ -251,6 +251,8 @@ A second agent, separate from the chat assistant, with tools to create an experi
 
 ## 10. Trial Distribution (roadmap — not yet specified)
 
+> **Not planned.** Phase 1 ships a standard pure Python wheel, with no compilation, obfuscation or license check (Phase 1 requirements v4, DIST-1), and nothing in Phase 1 is shaped around the options below. This section is kept as a record of the options discussed, should a protected trial ever be wanted.
+
 **Goal:** give a prospective client the proof of concept as a wheel that stops working after a trial period (for example 14 or 30 days), without handing over readable source code. The hosted application remains the long-term answer to both problems; this is a short-term workaround.
 
 **What is realistic.** Any check that runs on the client's machine can be defeated by a determined, skilled person, and so can any obfuscation. The aim is to make copying and extending the code expensive and clearly against the trial agreement, not impossible. A signed trial agreement that forbids reverse engineering is part of the protection, not an afterthought.
@@ -260,7 +262,7 @@ A second agent, separate from the chat assistant, with tools to create an experi
 Options, from simplest to strongest:
 
 1. **Expiry baked into an obfuscated build.** PyArmor can generate obfuscated code that stops working after a number of days or on a date (`pyarmor gen -e 30 ...` or `-e 2026-12-31`), optionally checking an internet time server instead of the local clock, and optionally bound to one machine's hardware identifiers. One build per client, at the time of sending.
-2. **A signed license file** (recommended). The application checks, at start-up, a small license file holding the client's name, an expiry date and optional limits, signed with a private key that stays with Chuck; the public key is inside the compiled code. One build serves every client; each client gets their own license file; extending a trial is a new file, not a new build. Detecting a clock set backwards (recording the latest time seen) closes the easiest workaround. The Phase 1 license-check hook (DIST-1) is where this plugs in.
+2. **A signed license file** (recommended). The application checks, at start-up, a small license file holding the client's name, an expiry date and optional limits, signed with a private key that stays with Chuck; the public key is inside the compiled code. One build serves every client; each client gets their own license file; extending a trial is a new file, not a new build. Detecting a clock set backwards (recording the latest time seen) closes the easiest workaround. Phase 1 has no license-check hook; one would be added with this work.
 3. **Online activation** through a licensing service (for example Keygen or Cryptlex): the application checks in with a server. The strongest control (licenses can be revoked), but it needs a network connection and an account with a vendor.
 
 "14 days of use" (counting days the program actually ran) needs locally stored state that a user can reset; "14 days from issue" (a calendar expiry date) is simpler and more robust, and is the suggested meaning.
@@ -342,7 +344,7 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 **Platform**
 - Same stack and design as the data profiling tool (FastAPI back end, Python computation, React front end). No shared libraries between the two projects: profiler code may be copied and adapted where that is quicker.
 - Names: product ProphetoVol; package and CLI `prophetovol`; developed on Python 3.12.
-- A free trial is wanted eventually: a wheel that expires (14 or 30 days) with the code not readable. Phase 1 keeps this possible with a license-check hook and a compilable core.
+- **Phase 1 is pure Python:** a standard wheel, with no compilation, obfuscation or license check (Phase 1 v4). A protected trial build (§10) is a possible later project, not planned.
 - DuckDB now; designed to support other databases. Trino not needed.
 
 ## 13. Open Questions
@@ -362,7 +364,7 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 | 10 | Whether the objective needs multi-horizon stress in its denominator | 5 |
 | 11 | How hindsight is handled for LLM decisions on historical dates | 5, 6 |
 | 12 | Agent memory, and how it is isolated between runs | 6 |
-| 13 | Trial mechanism: signed license file vs PyArmor per-client builds vs online activation; Cython vs Nuitka | Trial |
+| 13 | Trial mechanism: signed license file vs PyArmor per-client builds vs online activation; Cython vs Nuitka | Trial (not planned) |
 | 14 | Trial length and meaning (14 or 30 days; calendar days from issue suggested) | Trial |
 
 ## 14. Lessons Carried Over from the Data Profiling Tool
