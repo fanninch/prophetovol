@@ -1,0 +1,5 @@
+# What ships with the package: the package itself (editable) and its
+# dependencies, which are declared once, in pyproject.toml. Run from the
+# repository's root folder:
+#     pip install -r requirements.txt
+-e .

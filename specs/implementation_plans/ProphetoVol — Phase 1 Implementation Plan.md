@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: v3, for review: updated for requirements v6 and Phase 0's findings. Phase 0 done (Oct 25, 2026); Phase 1 next once this version is agreed.** · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Phase 0 done; Phase 1 in progress.** · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -86,7 +86,7 @@ tests/
   realdata/                    # optional, skipped unless PROPHETOVOL_VENDOR_DATA is set (TEST-10)
 ```
 
-**Vendor data never enters the repository** (INT-52). Real files stay in a folder outside it, named by the `PROPHETOVOL_VENDOR_DATA` environment variable. The `.gitignore` also excludes the usual vendor file patterns as a second line of defence.
+**Vendor data never enters the repository** (INT-52). Real files stay in a folder outside it, named by the `PROPHETOVOL_VENDOR_DATA` environment variable, with one subfolder per underlying (for example `spx/`), so more underlyings can be added beside SPX. The `.gitignore` also excludes the usual vendor file patterns as a second line of defence.
 
 ## 4. Design Across Milestones
 
@@ -468,7 +468,7 @@ Run on Oct 25, 2026 (Windows 11, Intel i7-13700KF with 24 threads, 64 GB RAM, Py
 
 **Outcome: the design stands, with one change to market data access (§15.3).** All three performance checks pass by a wide margin. **The real data does not fit several requirements**, though: older symbols, more option roots, Saturday expirations, the vendor's clock convention, and a vendor methodology change in June 2018. These need a requirements revision, agreed with you before Phase 1 (§15.8).
 
-**Data used.** The vendor folder holds SPX from Jan 3, 2007 to Aug 30, 2024: 70 CSV files in 22 folders (the vendor caps a download at about 150 MB, so a year comes in up to five files, newest date first). In total 35.5M rows, 6.5 GB of CSV, about 1.4 GB as Parquet. Rows per year grow from 0.23M (2007) to 4.3M (2021). ⚠ The `PROPHETOVOL_VENDOR_DATA` variable is set to `D:\prophetovol_vendor_files`, which does not exist. The files are in `D:\propheto_vendor_data\spx`, which Phase 0 read directly.
+**Data used.** The vendor folder holds SPX from Jan 3, 2007 to Aug 30, 2024: 70 CSV files in 22 folders (the vendor caps a download at about 150 MB, so a year comes in up to five files, newest date first). In total 35.5M rows, 6.5 GB of CSV, about 1.4 GB as Parquet. Rows per year grow from 0.23M (2007) to 4.3M (2021). During Phase 0 the `PROPHETOVOL_VENDOR_DATA` variable pointed to a folder that did not exist, so Phase 0 read `D:\propheto_vendor_data\spx` directly. The variable now names `D:\propheto_vendor_data`, with one subfolder per underlying.
 
 ### 15.1 Installs (check 7)
 
@@ -589,3 +589,20 @@ The original list, for reference:
 ## 16. Implementation Notes
 
 Recorded per phase: what was built, what changed from the plan, and test counts.
+
+**Phase 1 (repository foundation), Oct 25, 2026**
+
+- **Files:** `.gitignore`, `pyproject.toml`, `requirements.txt`, `build_requirements.txt`, `README.md`, the `src/prophetovol/` package tree of §3, and `tests/` (`conftest.py`, `unit/`, `meta/`, `packaging/`).
+- **`.gitignore`** covers Python build output, environments and editors (`.venv/`, `.idea/`), the front end's build output and the built SPA, and local data as a second defence for INT-52 (`*.duckdb`, `.prophetovol/`, `vendor_data/`, `data_download*.csv`, `*.parquet` outside `tests/`).
+- **`pyproject.toml`:** name `prophetovol`, version single-sourced from `prophetovol.__version__` (0.1.0), `requires-python >=3.11`, console script `prophetovol = prophetovol.cli:main`, pytest markers `slow` and `realdata`. Dependencies use **the Phase 0 versions as lower bounds and the next major version as the upper bound** (for example `duckdb>=2.0,<3`), rather than exact pins, so the wheel installs alongside other packages while staying within tested majors.
+- **`core/`:**
+  - `errors.py`: the exception hierarchy of §4.11, with `ValidationFailed` carrying located `ValidationIssue`s
+  - `context.py`: `Channel` and `CallContext` (actor = operating-system user)
+  - `home.py`: `resolve_home` (`--home`, then `PROPHETOVOL_HOME`, then `~/.prophetovol`; nothing created)
+  - `versions.py`: `SoftwareVersions` and `software_versions()` (RUN-30's list, plus pydantic)
+  - `log.py`: `configure_logging` (named `log.py` so it is never confused with the standard `logging` module)
+- **CLI:** the `prophetovol` group with `--home` and `--version` (prints ProphetoVol's and the libraries' versions). Commands arrive in later phases. Click help text ends at `\f`, so reST fields stay out of `--help`.
+- **Every planned subpackage exists** with a docstring-only `__init__.py`; no licensing package (requirements v4).
+- **Meta-tests** (`tests/meta/test_documentation.py`): every pydantic field has a description (DOC-1); every public module, class, function and method has a docstring, and every parameter is documented with `:param name:` (DOC-4). The second is stricter than "has a docstring": it enforces the reStructuredText field-list style.
+- **Changed from the plan:** the wheel test installs the wheel with `--no-deps` into an empty target folder and imports it from there, with dependencies taken from the test environment, instead of building a whole new environment, which would need network access during tests. It still proves the wheel is complete and pure Python (`py3-none-any`, `Root-Is-Purelib: true`, no native files, no tests or specs inside).
+- **Tests:** 27, all passing in about 3 seconds (unit 23, meta 2, packaging 2).

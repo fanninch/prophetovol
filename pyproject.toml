@@ -1,0 +1,68 @@
+# The package metadata and the one list of its dependencies. requirements.txt
+# and build_requirements.txt only point here.
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prophetovol"
+dynamic = ["version"]
+description = """\
+    Deterministic backtesting of index options on end-of-day vendor data: \
+    versioned data and strategies, a point-in-time engine, stress tests and statistics."""
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+# Lower bounds are the versions tested in Phase 0 of the Phase 1 implementation
+# plan (§15.1); upper bounds stop at the next major version.
+# FastAPI, uvicorn and python-multipart serve `prophetovol serve` (the GUI and the API).
+dependencies = [
+    "duckdb>=2.0,<3",
+    "ibis-framework[duckdb]>=12.0,<13",
+    "pyarrow>=26.0,<27",
+    "numpy>=2.5,<3",
+    "scipy>=1.18,<2",
+    "pydantic>=2.14,<3",
+    "pyyaml>=6.0,<7",
+    "click>=8.5,<9",
+    "exchange_calendars>=4.13,<5",
+    "fastapi>=0.162,<1",
+    "uvicorn>=0.54,<1",
+    "python-multipart>=0.0.32,<1",
+]
+
+[project.optional-dependencies]
+# Testing and building.
+dev = [
+    "pytest>=9.1,<10",
+    "pytest-cov>=7.1,<8",
+    "httpx>=0.28,<1",
+    "build>=1.6,<2",
+    "setuptools>=84",
+    "wheel>=0.48",
+]
+
+[project.scripts]
+prophetovol = "prophetovol.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "prophetovol.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: takes more than a few seconds (for example building the wheel)",
+    "realdata: needs vendor files named by PROPHETOVOL_VENDOR_DATA; skipped otherwise",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::FutureWarning",
+]

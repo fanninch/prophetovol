@@ -1,0 +1,5 @@
+# Everything to work on the package: what ships, plus testing and building
+# (the `dev` extra). The dependencies are declared once, in pyproject.toml.
+# Run from the repository's root folder:
+#     pip install -r build_requirements.txt
+-e .[dev]
