@@ -1,8 +1,8 @@
 # ProphetoVol — Project Roadmap
 
-Oct 25, 2026 · @Chuck · v5 (Phase 1 requirements and implementation plan agreed)
+Oct 25, 2026 · @Chuck · v6 (Phase 1 requirements v6 after Phase 0)
 
-> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v5, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
+> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
 >
 > **Everything about Phases 2 and later is roadmap, not yet specified.** It records the design discussion so far, so later phases start with the reasoning that shaped them. Nothing in those sections is being implemented. Phases may be reordered, merged or dropped, and each gets its own agreed requirements specification and implementation plan before it is built.
 
@@ -35,7 +35,7 @@ These held throughout the discussion and should carry into every phase.
 
 | Phase | Theme | Main deliverables | Status |
 | --- | --- | --- | --- |
-| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v5) and implementation plan (v2) agreed; Phase 0 next |
+| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements agreed (v6); Phase 0 done; implementation plan v3 in review |
 | **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Roadmap — not yet specified |
 | **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Roadmap — not yet specified |
 | **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Roadmap — not yet specified |
@@ -46,7 +46,7 @@ These held throughout the discussion and should carry into every phase.
 
 ## 4. Phase 1 — Deterministic Backtester (being built)
 
-Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v5, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
+Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
 
 - **Data:** upload of ivolatility files; validation and quality reports; overlap handling (replace, add new dates only, cancel); data versions; delete and purge; coverage; trading calendar; settlement-source plug-in point.
 - **Strategies:** legs with expiration and strike selectors (delta, at the money as 50 delta, forward, references to other legs); entry schedules; triggers (condition, scope, action) for rolls and closes; expiration handling; delta-hedge bands; sizing by contracts or notional.
@@ -111,7 +111,7 @@ Computed at ingest from the market snapshots, one market-context snapshot per st
 
 **Dream state:** intraday prices; dealer gamma estimates; signed customer flow; news and sentiment with strict timestamps; positioning data.
 
-The vendor's "stock price for iv" is the per-series forward (each series has its own, since futures exist only quarterly), so it supplies forward and carry directly.
+From Jun 25, 2018 the vendor's "stock price for iv" is the per-series forward (each series has its own, since futures exist only quarterly), so it supplies forward and carry directly. Before that date it is one price per date, and Phase 1 derives each expiration's forward from put-call parity (Phase 1 requirements v6, DATA-14).
 
 ### 6.2 Conditions on market context
 
@@ -305,7 +305,7 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 - No preloaded vendor database assumed: users upload raw files, and everything is calculated from them.
 - Uploads detect overlap by underlying and date range and ask whether to replace.
 - A separate data module handles versioning and deletion.
-- "Stock price for iv" is the vendor's per-series forward.
+- "Stock price for iv" is the vendor's per-series forward from Jun 25, 2018, and one price per date before; earlier forwards are derived from put-call parity on the strikes nearest the money, one per expiration (Phase 1 v6).
 - The `*` flag's meaning is being confirmed; tracked, otherwise ignored.
 - The vendor does not supply SET values; AM-settled contracts cannot be held to expiration.
 

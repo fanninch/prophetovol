@@ -1,6 +1,16 @@
 # ProphetoVol — Phase 1 Requirements Specification
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v5). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v6). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+
+**Changes in v6** (agreed Oct 25, 2026), from the real vendor data examined in Phase 0 of the implementation plan (SPX, 2007 to Aug 2024):
+
+- **Contract identity and symbols.** Older files use five-character OPRA codes, which are not unique on a date. Every row gets a normalized OSI-style `osi_symbol` and `root`; the vendor's symbol and root are kept. A contract is identified by `(underlying, root, expiration, strike, option_type)` (DATA-2, DATA-13, DATA-20, RES-1).
+- **Historical roots** with their settlement styles, normalized to `SPX` (AM) and `SPXW` (PM) (REF-1).
+- **Settlement date and last trading day are derived.** An AM expiration dated on a non-trading day (the Saturday-dated monthlies before 2015) settles on the trading day before it and is force-closed on the trading day before that, normally the Thursday (CONV-3, SPEC-15, SPEC-51).
+- **Time to expiry uses exchange clock time**, ignoring daylight-saving changes, which matches the vendor exactly (CONV-1, REF-6).
+- **Derived columns are computed once at ingest** and stored next to the vendor's values (DATA-13).
+- **Forwards.** Until Jun 22, 2018 the vendor supplies one underlying price per date instead of a forward per expiration. For those dates the forward is derived per expiration from put-call parity on the strikes nearest the money (DATA-14). The vendor's deltas are used as given in both periods.
+- **One import may contain several CSV files** or a folder of them (DATA-3, DATA-4, INT-40).
 
 **Changes in v5** (agreed Oct 25, 2026):
 
@@ -166,13 +176,16 @@ BacktestService (single owner of all storage access)
 
 These meanings apply everywhere (specs, results, documentation). They are kept in one conventions module and are documented alongside the schemas (§14).
 
-- **CONV-1** **Time to expiry** is the model input: a year fraction computed from timestamps, in calendar time:
+- **CONV-1** **Time to expiry** is the model input: a year fraction in calendar time, measured on the **exchange's clock**:
 
-  `time_to_expiry_years = (expiry_timestamp − as_of) / 365 days`
+  `time_to_expiry_years = (expiry_local − as_of_local) / 365 days`
 
-  computed to the minute. This matches the convention found in the vendor's greeks (§7.2). For people, it is also shown as fractional **calendar days to expiry** (`days_to_expiry = time_to_expiry_years × 365`), so a one-day PM-settled weekly at the 16:15 snapshot shows 0.99 days, not 1.
-- **CONV-2** **Trading days to expiry** is the number of trading days after the as-of date, up to and including the expiration date. It is used where a rule is stated in trading days.
-- **CONV-3** **Expiry timestamps** come from the underlying's root configuration: for SPX, 09:30 ET on the expiration date for AM-settled roots and 16:00 ET for PM-settled roots (§7.1).
+  where `as_of_local` and `expiry_local` are exchange-local date-times (America/New_York for SPX) without time zone, and the difference is taken to the minute. A daylight-saving change between them is therefore ignored. This is the vendor's convention, confirmed on real data: from Jun 25, 2018 it reproduces the vendor's greeks to the minute, including across DST changes (§7.2). For people, it is also shown as fractional **calendar days to expiry** (`days_to_expiry = time_to_expiry_years × 365`), so a one-day PM-settled weekly at the 16:15 snapshot shows 0.99 days, not 1. Both are stored per row at ingest (DATA-13).
+- **CONV-2** **Trading days to expiry** is the number of trading days after the as-of date, up to and including the settlement date (CONV-3). It is used where a rule is stated in trading days.
+- **CONV-3** **Settlement date, expiry and last trading day** come from the expiration date, the root's settlement style (§7.1) and the trading calendar (§7.3):
+  - **Settlement date:** the last trading day on or before the expiration date. It is the expiration date itself except for dates that are not trading days, such as the Saturday-dated SPX monthlies before 2015, which settled on the Friday before.
+  - **Expiry:** the settlement date at 09:30 ET for AM-settled roots and at 16:00 ET for PM-settled roots. It is stored both as an instant (`expiry_timestamp`) and as exchange clock time (`expiry_local`).
+  - **Last trading day:** the trading day before the settlement date for AM-settled roots (normally the Thursday), and the settlement date for PM-settled roots.
 - **CONV-4** **Delta targets are absolute values.** "A 25-delta put" means a put whose delta is −0.25; a spec writes `target: 0.25` for both calls and puts.
 - **CONV-5** **At the money** means the 50-delta option of the leg's own type (call or put), not the strike nearest to spot. The strike nearest the series forward is available as a separate selector (§8.3).
 - **CONV-6** **Trades execute at the step** at which the triggering condition is observed. For end-of-day data, that is the close.
@@ -215,25 +228,34 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
   `symbol, exchange, date, adjusted close, option symbol, expiration, strike, call/put, style, ask, bid, mean price, iv, volume, open interest, stock price for iv, *, delta, vega, gamma, theta, rho`
 
-- **DATA-2** Dates in `date` and `expiration` are `MM/DD/YYYY`. The column named `*` is a flag that is either empty or `*`.
-- **DATA-3** One file may contain several dates and one underlying. A file with more than one value of `symbol` is rejected.
-- **DATA-4** Accepted uploads are `.csv` files and `.zip` archives containing one or more such CSVs. The maximum uncompressed size per import is configurable, default 2 GB. (A year of SPX is roughly 750 MB of CSV.)
+- **DATA-2** Dates in `date` and `expiration` are `MM/DD/YYYY`. The column named `*` is a flag that is either empty or `*`. `option symbol` comes in two formats: five-character OPRA codes (a three-character root followed by month and strike codes, used until Feb 11, 2010), and OSI symbols (a root padded to six characters, `YYMMDD`, `C` or `P`, and the strike × 1000 in eight digits). Five-character codes are not unique: in the real data the same code names different contracts on the same date.
+- **DATA-3** One import contains one underlying and any number of dates, from one or more files. An import whose files contain more than one value of `symbol` is rejected.
+- **DATA-4** An import accepts one or more `.csv` files, a folder of them, or `.zip` archives containing them. The vendor delivers a year in up to five files (about 150 MB each), so a year is normally one import of several files. The maximum uncompressed size per import is configurable, default 2 GB. (A year of SPX is up to about 650 MB of CSV.)
 
 ### 6.2 Upload & ingest
 
 - **DATA-10** Upload streams the file to a temporary file on the server; it is never held whole in memory. Ingest runs as a background job (§13.3) with progress reported as rows and dates processed.
 - **DATA-11** Ingest parses, validates (§6.3) and normalizes the rows into market snapshots, then writes them to Parquet partitioned by underlying and month (§6.9) under a new `import_id`. Nothing becomes visible to runs until the user commits the import (§6.4).
-- **DATA-12** The file's SHA-256 hash is recorded. Uploading a file whose hash matches an existing import is reported to the user, who may cancel.
-- **DATA-13** **Normalization rules:**
-  - **Timestamps.** Each vendor `date` becomes a snapshot as-of timestamp using the data source's timing (§7.2): for `ivolatility_eod`, option quotes, IV, greeks and the forward are as of 16:15 ET, and the index level is as of 16:00 ET. Both times are stored.
-  - **Expiry timestamp.** Each contract's `expiry_timestamp` is its expiration date at the expiry time of its root (CONV-3).
+- **DATA-12** Each file's SHA-256 hash is recorded with the import. A file whose hash matches a file of an existing import is reported to the user, who may cancel.
+- **DATA-13** **Normalization rules.** Vendor values are stored as given (apart from the null rules below), and every value the engine needs that is derived from them is **computed once at ingest and stored in its own column** next to them (Appendix A), so runs never re-derive it:
+  - **Timestamps.** Each vendor `date` becomes a snapshot as-of time using the data source's timing (§7.2): for `ivolatility_eod`, option quotes, IV, greeks and the forward are as of 16:15 ET, and the index level is as of 16:00 ET. Each is stored as an instant (`as_of`, `index_as_of`), and the option snapshot time also as exchange clock time (`as_of_local`).
+  - **Symbols and roots.** `vendor_symbol` and `vendor_root` keep the vendor's symbol and the root parsed from it (the first three characters of a five-character code; the characters before the date in an OSI symbol, trimmed). `root` is the normalized root and `settlement_style` (`AM` or `PM`) the settlement style, both from the underlying's root configuration (§7.1); a vendor root with no configuration is an error. `osi_symbol` is the OSI-format symbol built from `root`, the expiration date as given, the option type and the strike, so contracts of every year are named the same way.
+  - **Expiry.** `settlement_date`, `expiry_timestamp`, `expiry_local` and `last_trading_date` follow CONV-3.
+  - **Time to expiry.** `time_to_expiry_years`, `days_to_expiry` (CONV-1) and `trading_days_to_expiry` (CONV-2).
   - `iv` of `-1` is stored as null.
-  - Greeks are stored as given, except that on a contract's expiration date all greeks and `iv` are stored as null. The vendor reports them as 0 and −1 on that day, and they must not be used.
-  - `root` is parsed from the option symbol (the characters before the date, trimmed): for SPX data, `SPX` or `SPXW`.
-  - `settlement_style` (`AM` or `PM`) is derived from `root` using the underlying's root configuration (§7.1). A root with no configuration is an error.
+  - Greeks are stored as given, except that on a contract's settlement date all greeks and `iv` are stored as null. The vendor reports them as 0 and −1 on that day, and they must not be used. Deltas are used as given in both vendor periods, although before Jun 25, 2018 they are discounted (call delta − put delta ≈ 0.994 at two to four months, against 1.000 later); the difference is documented, not corrected.
   - `vendor_mid` keeps the vendor's `mean price` as given. The engine computes its own mid from bid and ask (§9.3) and never uses `vendor_mid` for pricing, because the vendor shows 0 when the bid is 0.
-  - `forward` keeps `stock price for iv`, the vendor's per-series forward (each expiration has its own, since index futures exist only quarterly). It is ignored on a series' expiration date (§9.3).
+  - `vendor_forward` keeps `stock price for iv` as given; `forward` and its companions are derived by DATA-14.
+  - `vendor_methodology` records which vendor period a row belongs to: `single_price` before the data source's `per_series_forward_from` date (§7.2), `per_series_forward` from it.
   - `vendor_flag` is `true` where the `*` column is `*`. Its meaning is not yet confirmed; it is stored and displayed, and drives no behavior in Phase 1 (§20).
+- **DATA-14** **The forward** used by the engine (the `forward` selector, SPEC-22, and stress revaluation, STR-20) is one value per underlying, as-of date, root and expiration:
+  - **From the data source's `per_series_forward_from` date** (Jun 25, 2018 for `ivolatility_eod`), `stock price for iv` is the vendor's per-series forward, and `forward` is that value (`forward_source = vendor`). The vendor's IV and greeks were computed with it.
+  - **Before that date** the vendor supplies a single underlying price per date for every expiration, so the forward is derived from **put-call parity on the strikes nearest the money, as one forward for the whole expiration** (`forward_source = parity`). At each strike with a valid call and put quote (ENG-20) and both bids above zero, the mids satisfy `C − P = D · (F − K)`. The strikes are the six with the smallest `|C − P|` (configurable; three either side of the money). A least-squares line `C − P = a + b·K` over them gives the discount factor `D = −b` and the forward `F = a / D`. No strike gets a forward of its own.
+  - **A fit is valid** when it uses at least two strikes, `C − P` changes sign across them (they bracket the money), and `0 < D ≤ 1.05`. Otherwise the vendor's single price is used, `forward_source = vendor_single_price`, with a quality warning (DATA-20).
+  - The parity forward, its discount factor and the number of strikes used are stored for every expiration of every date (`parity_forward`, `parity_discount`, `parity_strikes`), including dates after `per_series_forward_from`, where they serve as a check against the vendor's forward.
+  - Only that date's quotes are used, so the forward is point-in-time and deterministic.
+  - The forward is not used on a series' settlement date (ENG-23).
+  - *Evidence (Phase 0):* against the vendor's per-series forwards from Jun 2018, this method's median difference is 0.2–1 basis point for expirations up to a year, and valid fits exist for over 99.9% of pre-June-2018 expirations.
 
 ### 6.3 Validation & quality report
 
@@ -243,14 +265,16 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 | --- | --- |
 | Required columns missing or misnamed | Error |
 | Unparseable value in a required field (date, strike, expiration, call/put, bid, ask) | Error |
-| Duplicate `(date, option symbol)` within the file | Error |
-| More than one underlying in the file | Error |
-| Unknown option root for the underlying | Error |
+| Duplicate contract `(date, root, expiration, strike, call/put)` within the import | Error |
+| The same vendor option symbol for different contracts on one date (older five-character codes) | Count only (informational) |
+| More than one underlying in the import | Error |
+| Unknown vendor option root for the underlying | Error |
 | `style` other than `E` | Error (Phase 1 supports European options only) |
 | Crossed quote (bid > ask) | Warning |
 | Zero ask, or zero bid and ask | Warning |
 | `iv` of −1 on a date other than the contract's expiration | Warning |
-| Missing `forward` | Warning |
+| Missing `stock price for iv` | Warning |
+| No valid parity forward where one is needed (the vendor's single price is used, DATA-14) | Warning |
 | A trading day in the file's date range missing from the file (per the trading calendar, §7.3) | Warning |
 | A date not in the trading calendar (a holiday or weekend) | Warning |
 | Contracts for a date far below that date's neighbors (configurable ratio, default below 50% of the median of the 5 surrounding dates) | Warning |
@@ -301,17 +325,28 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 ### 7.1 Underlyings
 
-- **REF-1** An underlying's configuration holds: symbol, description, contract multiplier, exercise style, the exchange time zone, and, per option root, the settlement style and expiry time. Phase 1 ships:
+- **REF-1** An underlying's configuration holds: symbol, description, contract multiplier, exercise style, the exchange time zone, the expiry time per settlement style, and, per vendor option root, its settlement style and normalized root. Normalizing maps every AM-settled root to `SPX` and every PM-settled root to `SPXW`, so strategies select from today's two roots in every year. Phase 1 ships:
 
   ```yaml
   symbol: SPX
   multiplier: 100
   exercise_style: european
   timezone: America/New_York
+  expiry_times: {AM: "09:30", PM: "16:00"}
   roots:
-    SPX:  {settlement_style: AM, expiry_time: "09:30"}
-    SPXW: {settlement_style: PM, expiry_time: "16:00"}
+    SPX:   {settlement_style: AM, normalized_root: SPX}    # standard monthlies (all years)
+    SPXW:  {settlement_style: PM, normalized_root: SPXW}   # weeklies, dailies, end of month, quarterlies (Dec 2010 on)
+    SPXPM: {settlement_style: PM, normalized_root: SPXW}   # PM-settled SPX (May 2010 – Apr 2011)
+    SPXQ:  {settlement_style: PM, normalized_root: SPXW}   # quarterlies (Apr 2011 – Jul 2014)
+    # five-character-code roots, 2007 – May 2010
+    JXA: {settlement_style: PM, normalized_root: SPXW}     # weeklies; likewise JXB, JXD, JXE
+    SZQ: {settlement_style: PM, normalized_root: SPXW}     # quarterlies; likewise SAQ, SLQ, QSE, SQP, QZQ, QSZ, SKQ, SQG
+    SZP: {settlement_style: AM, normalized_root: SPX}      # monthlies by strike range; likewise SXY, SPT, SXZ, SPQ, SXB,
+                                                           # SXM, SPZ, SYG, SZT, SPB, SYU, SXG, SZJ, SZV, SVP, SYZ, SPL,
+                                                           # SPV, SZU, SZD, SYV, SXJ
   ```
+
+  The shipped file lists every root individually. The settlement styles of the `JX*` weeklies, `SPXPM` and the old quarterlies are PM by the owner's knowledge of the products. The vendor's greeks for `JX*` and `SPXPM` were computed as if they expired at 09:30 (a difference of 6½ hours of time to expiry, which is recorded and not corrected) (§20).
 
 - **REF-2** Underlying configurations are editable through the service (as versioned definitions), so another index (for example NDX or RUT) can be added by configuration.
 
@@ -325,10 +360,18 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   timezone: America/New_York
   option_snapshot_time: "16:15"   # quotes, IV, greeks, forward
   index_snapshot_time:  "16:00"   # adjusted close
-  time_to_expiry_convention: act_365_to_minute
+  time_to_expiry_convention: act_365_exchange_clock_to_minute
+  per_series_forward_from: 2018-06-25   # before this date, `stock price for iv` is one price per date (DATA-14)
+  parity_strikes: 6                     # strikes nearest the money used for parity forwards (DATA-14)
   ```
 
-- **REF-6** The timing was inferred from the sample files: solving the vendor's vega for time to expiry, at the vendor's IV and forward, gives calendar time over 365 days, short of whole days by 15 minutes for PM-settled series and by about 6¾ hours for AM-settled series, at every maturity tested. That matches a 16:15 ET snapshot with expiries at 16:00 and 09:30 ET. This is to be confirmed with the vendor (§20). The configuration, not code, holds these values.
+- **REF-6** **The timing is confirmed on real data** (Phase 0 of the implementation plan, SPX 2007 – Aug 2024):
+  - From Jun 25, 2018, Black-76 on the vendor's forward, undiscounted, at CONV-1's time to expiry, reproduces the vendor's call deltas with a median error of 0.000001.
+  - The vendor's time to expiry is calendar time over 365 days, 15 minutes short of whole days for PM-settled series (16:15 to 16:00) and 6¾ hours short for AM-settled series (16:15 to 09:30).
+  - Across a daylight-saving change the vendor's time differs by exactly 0 minutes from exchange clock time and by 60 minutes from absolute time, hence CONV-1.
+  - Before Jun 25, 2018, the vendor's vega and gamma show the same calendar convention, with Saturday-dated monthlies expiring on the Friday morning.
+
+  The configuration, not code, holds these values.
 
 ### 7.3 Trading calendar
 
@@ -337,7 +380,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 ### 7.4 Settlement sources
 
-- **REF-20** Settlement is resolved through the settlement-source registry by settlement style. Phase 1 ships one source, `pm_index_close`, which settles PM-settled contracts at intrinsic value against the index level at expiry (the `adjusted close` on the expiration date).
+- **REF-20** Settlement is resolved through the settlement-source registry by settlement style. Phase 1 ships one source, `pm_index_close`, which settles PM-settled contracts at intrinsic value against the index level at expiry (the `adjusted close` on the settlement date).
 - **REF-21** No settlement source exists for AM-settled contracts in Phase 1, because the vendor data contains no AM settlement value (SET) and the vendor does not supply one. AM-settled contracts are therefore never held to expiration (§8.6). A future source that loads SET values from a user-uploaded table plugs in here without engine changes (roadmap).
 
 ## 8. Strategy Specification
@@ -361,7 +404,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - `ratio`: a positive integer (contracts of this leg per unit of the structure)
   - `expiration`: an expiration selector
   - `strike`: a strike selector
-  - `roots`: optional list of allowed option roots (default: all roots of the underlying)
+  - `roots`: optional list of allowed normalized option roots, `SPX` or `SPXW` for SPX (default: all roots of the underlying; REF-1)
   - `hold_to_expiration`: boolean, default `false` (§8.6)
 - **SPEC-3** Legs may refer to other legs (by `id`) in their selectors. References must form no cycle. Legs are resolved in dependency order.
 - **SPEC-4** **Selection is atomic.** If any leg cannot be selected at a step, the structure is not opened at that step, and an event records which leg failed and why.
@@ -378,16 +421,16 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **SPEC-14** **Expiration filters** (for every selector that takes `filter`):
   - `standard_monthly_only`: only the standard monthly expiration (third Friday, or the exchange-adjusted date)
   - `weekdays`: allowed weekdays of the expiration date (for example `[FRI]`)
-  - `roots`: allowed option roots
+  - `roots`: allowed normalized option roots
   - `settlement_styles`: `AM`, `PM`, or both
-- **SPEC-15** An expiration is never eligible at or after its expiry timestamp, and an AM-settled expiration is never eligible on or after its last trading day (the trading day before the expiration date).
+- **SPEC-15** An expiration is never eligible at or after its expiry timestamp, and an AM-settled expiration is never eligible on or after its last trading day (CONV-3: the trading day before the settlement date, which for a Saturday-dated expiration is normally the Thursday).
 
 ### 8.3 Strike selectors
 
 - **SPEC-20** `delta`: the strike in the chosen expiration whose absolute delta is nearest `target` (CONV-4).
   - Parameters: `target`; `tolerance` (default 0.05 absolute delta; outside it, no match); `tie_break`: `further_otm` (default) or `nearer_otm`.
 - **SPEC-21** `atm`: equivalent to `delta` with `target: 0.50` (CONV-5).
-- **SPEC-22** `forward`: the strike nearest the series forward (the vendor's `stock price for iv` for that expiration). Parameter: `tolerance_points` (default: the series' strike spacing).
+- **SPEC-22** `forward`: the strike nearest the series forward (`forward`, DATA-14: the vendor's per-series forward, or the parity forward before the vendor supplied one). Parameter: `tolerance_points` (default: the series' strike spacing).
 - **SPEC-23** `same_strike_as`: the referenced leg's strike, which must be listed in this leg's expiration. Parameters: `leg`; `tolerance_points` (default 0, meaning exactly the same strike).
 - **SPEC-24** `strike_offset`: the referenced leg's strike plus an offset, choosing the nearest listed strike. Parameters: `leg`; `points` or `percent` (one of them, signed); `tolerance_points` (default: the series' strike spacing).
 - **SPEC-25** **No match.** When a selector finds no eligible contract within tolerance, the outcome follows `on_no_match`: `skip_entry` (default) or `nearest_any` (the nearest eligible contract regardless of tolerance, with a warning event).
@@ -440,14 +483,14 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 ### 8.6 Expiration & settlement
 
 - **SPEC-50** **PM-settled legs** held to their expiry settle at intrinsic value against the index level at expiry (`pm_index_close`, REF-20). Settlement is a cash flow with no fill-model cost.
-- **SPEC-51** **AM-settled legs are force-closed** at the last step of their last trading day (the trading day before the expiration date) through the fill model, as an ordinary closing trade, with a `forced_close_am` event. This applies whether or not any trigger would have fired. If the contract has no valid quote at that step, it is closed at its last valid mark, with no fill-model cost (commission still applies), the position snapshot is flagged `forced_close_stale`, and a warning event is recorded. A forced close is never retried at a later step (ENG-41), because there is no later step at which the contract can be closed or settled.
+- **SPEC-51** **AM-settled legs are force-closed** at the last step of their last trading day (CONV-3: the trading day before the settlement date; for the Saturday-dated monthlies before 2015, which settled on the Friday morning, that is the Thursday, the last day with reliable data for them) through the fill model, as an ordinary closing trade, with a `forced_close_am` event. This applies whether or not any trigger would have fired. If the contract has no valid quote at that step, it is closed at its last valid mark, with no fill-model cost (commission still applies), the position snapshot is flagged `forced_close_stale`, and a warning event is recorded. A forced close is never retried at a later step (ENG-41), because there is no later step at which the contract can be closed or settled.
 - **SPEC-52** **Validation rejects** a leg with `hold_to_expiration: true` whose allowed roots include an AM-settled root, with the message: *"AM-settled contracts cannot be held to expiration: no AM settlement source is configured. Restrict this leg to PM-settled roots, or add a closing trigger."*
 - **SPEC-53** **Validation warns** when a leg can select an AM-settled root and no trigger would close it before its last trading day (no `leg_days_to_expiry_at_or_below` or `structure_min_days_to_expiry_at_or_below` that fires at least one trading day before expiry). The warning explains that the engine will force-close the leg.
 - **SPEC-54** `expiry_handling` sets what happens to the rest of the structure when a leg settles or is force-closed:
   - `close_structure` (default): close the remaining legs and the hedge at the same step.
   - `keep_remaining`: keep the remaining legs open.
   - `roll_leg`: re-select the expired leg as a leg roll.
-- **SPEC-55** **PM-settled legs whose expiration date has no step are force-closed early.** When a run skips missing trading days (`allow_missing_days`, RUN-11) and a PM-settled leg's expiration date is one of them, there is no index level to settle against. The leg is force-closed at the last step before its expiration date through the fill model, with a `forced_close_missing_expiry` event, following SPEC-51's rule when that step has no valid quote. The engine knows which days are missing from the run's step schedule, fixed at pre-flight; this reads no future market data. Closing early is preferred to settling against a substitute index level, which would add profit or loss that never existed. `expiry_handling` applies as for any forced close.
+- **SPEC-55** **PM-settled legs whose expiration date has no step are force-closed early.** When a run skips missing trading days (`allow_missing_days`, RUN-11) and a PM-settled leg's settlement date (CONV-3) is one of them, there is no index level to settle against. The leg is force-closed at the last step before its settlement date through the fill model, with a `forced_close_missing_expiry` event, following SPEC-51's rule when that step has no valid quote. The engine knows which days are missing from the run's step schedule, fixed at pre-flight; this reads no future market data. Closing early is preferred to settling against a substitute index level, which would add profit or loss that never existed. `expiry_handling` applies as for any forced close.
 
 ### 8.7 Delta hedging
 
@@ -488,7 +531,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   2. **Settle.** Settle PM-settled legs whose expiry is at or before *t* (SPEC-50).
   3. **Mark.** Mark every open position (§9.3).
   4. **Evaluate triggers** for each open structure (§8.5), producing at most one action each.
-  5. **Forced closes.** Add closes for AM-settled legs whose last trading day is *t*'s date (SPEC-51) and for PM-settled legs whose expiration date has no step (SPEC-55), and apply `expiry_handling` (SPEC-54).
+  5. **Forced closes.** Add closes for AM-settled legs whose last trading day is *t*'s date (SPEC-51) and for PM-settled legs whose settlement date has no step (SPEC-55), and apply `expiry_handling` (SPEC-54).
   6. **Evaluate entries** under the entry schedule (§8.4) and build orders for new structures and for the opening sides of rolls.
   7. **Stress gate.** Size the opening orders (§8.8), then apply the stress mode to them (§10.4). Closing orders are never gated.
   8. **Execute and hedge.** Fill all orders at *t* (§9.5), then rebalance hedges (§8.7).
@@ -507,7 +550,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **ENG-20** A quote is **valid** when `ask > 0`, `bid ≥ 0` and `ask ≥ bid`. The mid is `(bid + ask) / 2`.
 - **ENG-21** **Marking.** A position is marked at the mid of its valid quote. If the quote is invalid or the contract is absent from the market snapshot, the last valid mark is carried forward, the position snapshot is flagged `stale_mark`, and a data-issue event is recorded. After a configurable number of consecutive stale steps (`stale_mark_warning_steps`, default 5), a warning event is recorded at each further stale step.
 - **ENG-22** **Settled and force-closed legs** take their settlement value or fill price as the final mark.
-- **ENG-23** **The series forward** (`stock price for iv`) is used for the `forward` selector and for stress pricing (§10.3). It is ignored on a series' expiration date.
+- **ENG-23** **The series forward** (`forward`, DATA-14) is used for the `forward` selector and for stress pricing (§10.3). It is ignored on a series' settlement date.
 - **ENG-24** **Greeks** are the vendor's values at the step. The engine computes greeks itself only for stress pricing (§10.3).
 - **ENG-25** **Two times in one snapshot.** For `ivolatility_eod`, option marks are as of 16:15 ET and the index level as of 16:00 ET. In Phase 1 the hedge trades at the 16:00 index level while options trade at 16:15 quotes. This is a documented simplification (§18), not modeled.
 
@@ -626,7 +669,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - every trading day in the range has an active market snapshot for the underlying
   - each snapshot's chain is non-empty and has the fields the spec's selectors require
   - the configuration is valid
-- **RUN-11** Pre-flight returns all problems at once. Missing trading days block the run unless `allow_missing_days` is `true`, in which case those days are skipped and the next step's snapshots are flagged. A missing day that is an expiration date is reported with a warning that PM-settled legs expiring on it will be closed early (SPEC-55). Other errors always block; warnings never do. Pre-flight fixes the run's step schedule.
+- **RUN-11** Pre-flight returns all problems at once. Missing trading days block the run unless `allow_missing_days` is `true`, in which case those days are skipped and the next step's snapshots are flagged. A missing day that is a settlement date is reported with a warning that PM-settled legs expiring on it will be closed early (SPEC-55). Other errors always block; warnings never do. Pre-flight fixes the run's step schedule.
 - **RUN-12** Pre-flight is available on its own (a readiness check) without starting a run.
 
 ### 11.3 Lifecycle
@@ -660,9 +703,9 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 ### 12.1 Position snapshots
 
 - **RES-1** One position snapshot per security held or traded at each step, including the step at which it closes or settles. Fields:
-  - identity: `run_id`, `step`, `as_of`, `structure_id`, `leg_id` (or `hedge`), `option_symbol`, `root`, `settlement_style`, `expiration`, `expiry_timestamp`, `strike`, `option_type`
+  - identity: `run_id`, `step`, `as_of`, `structure_id`, `leg_id` (or `hedge`), `osi_symbol`, `root`, `vendor_symbol`, `vendor_root`, `settlement_style`, `expiration`, `settlement_date`, `last_trading_date`, `expiry_timestamp`, `strike`, `option_type`. A contract is identified by `(underlying, root, expiration, strike, option_type)`, which `osi_symbol` encodes (DATA-2); the vendor symbol is never used as an identifier.
   - position: signed `quantity`; time to expiry as `time_to_expiry_years`, `days_to_expiry` (fractional calendar days) and `trading_days_to_expiry`
-  - prices: `mark`, `mark_source` (`mid`, `stale`, `fill`, `settlement`), `bid`, `ask`, `iv`, `index_level`, `forward`
+  - prices: `mark`, `mark_source` (`mid`, `stale`, `fill`, `settlement`), `bid`, `ask`, `iv`, `index_level`, `forward`, `forward_source`
   - values: `market_value`, `cash_flow`, `fees`, `period_pnl`, `cumulative_pnl`
   - per-contract vendor greeks: `delta`, `gamma`, `vega`, `theta`
   - dollar greeks (CONV-7): `dollar_delta`, `dollar_gamma_1pct`, `dollar_vega`, `dollar_theta`
@@ -777,7 +820,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 - **INT-40** The CLI (`click`) is a thin client of the service. Minimum commands:
   - `prophetovol serve`
-  - `prophetovol data import <file> [--commit replace|add-new|ask]`, `prophetovol data list`, `prophetovol data coverage [--underlying]`, `prophetovol data quality <import_id>`, `prophetovol data delete --underlying --from --to`, `prophetovol data purge ...`
+  - `prophetovol data import <file-or-folder>... [--commit replace|add-new|ask]` (several files or folders make one import, DATA-4), `prophetovol data list`, `prophetovol data coverage [--underlying]`, `prophetovol data quality <import_id>`, `prophetovol data delete --underlying --from --to`, `prophetovol data purge ...`
   - `prophetovol spec validate <file>`, `prophetovol spec publish <file>`, `prophetovol spec list`, `prophetovol spec show <id>[@version]`, `prophetovol spec export <id>[@version]`
   - `prophetovol stress validate|publish|list|show`
   - `prophetovol registry list [<type>]`, `prophetovol registry show <type> <name>`
@@ -793,6 +836,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - strike grids, implied vols from a simple skew model
   - Black-76 prices and greeks computed with the same time convention as the vendor (CONV-1, REF-5), bid-ask spreads from a spread model
   - expiration-day conventions (IV of −1 and zero greeks), and a configurable share of crossed quotes and flagged rows
+  - optionally, the older vendor conventions: five-character option codes (including the same code used for two contracts on a date), historical roots, Saturday-dated AM monthlies, and a single underlying price per date with discounted deltas
 - **INT-51** `prophetovol demo` creates a demo home: generated data imported and committed, the Appendix B specs published, the default stress definition, and one completed run of each spec.
 - **INT-52** Vendor data is licensed and must never be committed to the repository. Tests depend only on synthetic data; optional local tests can run against real files supplied through an environment variable (§17).
 
@@ -859,7 +903,7 @@ tests/
 - **TEST-1** **Golden engine tests** with small hand-checkable synthetic chains, each with expected results computed by hand. At least:
   - a long PM-settled call held to expiry and settled at intrinsic value
   - a short AM-settled call force-closed on its last trading day, with a valid quote and with no valid quote (closed at the last valid mark)
-  - a PM-settled leg whose expiration date is a skipped missing day, force-closed at the step before (SPEC-55)
+  - a PM-settled leg whose settlement date is a skipped missing day, force-closed at the step before (SPEC-55)
   - a profit target and a stop in dollars per unit, including after a leg roll (SPEC-46)
   - a leg roll on a delta trigger
   - a structure roll on a time-to-expiry trigger, in calendar days and in trading days
@@ -873,8 +917,13 @@ tests/
 - **TEST-2** **Invariant tests** (ENG-33) on many seeded synthetic runs.
 - **TEST-3** **Determinism test:** two runs of the same inputs produce identical stored results.
 - **TEST-4** **Point-in-time test:** any engine access past the step's as-of time raises an error (ARC-3).
-- **TEST-5** **Time-convention tests:** time to expiry is computed to the minute from as-of and expiry timestamps (CONV-1), including AM-settled expiries at 09:30 and PM-settled expiries at 16:00. Black-76 at the computed time reproduces the synthetic generator's greeks exactly, and, in the optional real-data tests (TEST-10), the vendor's vega within a stated tolerance.
-- **TEST-6** **Ingest tests** reproducing the quirks found in the real samples: IV of −1 and zero greeks on expiration day, `mean price` of 0 when the bid is 0, crossed quotes and zero asks, both roots sharing an expiration date, the `*` column, and MM/DD/YYYY dates.
+- **TEST-5** **Time-convention tests:** time to expiry is computed to the minute on the exchange clock (CONV-1), including AM-settled expiries at 09:30, PM-settled expiries at 16:00, as-of and expiry on opposite sides of a daylight-saving change, and Saturday-dated expirations settling on the Friday (CONV-3). Black-76 at the computed time reproduces the synthetic generator's greeks exactly. In the optional real-data tests (TEST-10), from Jun 25, 2018, it reproduces the vendor's call deltas with a median absolute error below 0.00001.
+- **TEST-6** **Ingest tests** reproducing the quirks found in the real data:
+  - IV of −1 and zero greeks on the settlement date; `mean price` of 0 when the bid is 0; crossed quotes and zero asks; both roots sharing an expiration date; the `*` column; MM/DD/YYYY dates
+  - five-character codes, including one code naming two contracts on a date; every historical root mapped to its normalized root and settlement style; `osi_symbol` built for both formats
+  - Saturday-dated expirations with their settlement and last trading dates
+  - the single-price period, with parity forwards fitted per expiration (and the fallback when a fit is invalid), and the per-series period, with the vendor's forward used
+  - an import of several files
 - **TEST-7** **Adapter contract suite** (DATA-84).
 - **TEST-8** **Validation tests** for every spec rule, including SPEC-52, SPEC-53 and explicit time units, and the YAML round trip (SPEC-81).
 - **TEST-9** **API tests** against a real service with temporary directories, covering every endpoint; **front-end unit tests**; **end-to-end browser tests** (Playwright) of tasks T1 to T9.
@@ -901,7 +950,7 @@ tests/
 - Stress revaluation is instantaneous, sticky strike, Black-76 with a configurable discount rate defaulting to 0.
 - Time to expiry is calendar time over 365 days, to the minute, matching the vendor (REF-6).
 - AM-settled contracts are always closed on their last trading day, at the last valid mark if the quote that day is invalid.
-- PM-settled contracts whose expiration date is a skipped missing day are closed at the step before it.
+- PM-settled contracts whose settlement date is a skipped missing day are closed at the step before it.
 - The hedge is fractional; profit and loss triggers are in dollars per structure unit.
 - The vendor `*` flag drives no behavior.
 - The default fill model is `cross_spread`; the default commission is 0 and should be set by the user.
@@ -927,12 +976,14 @@ tests/
 | # | Item | Status |
 | --- | --- | --- |
 | 1 | Meaning of the vendor `*` flag | Being confirmed with ivolatility; stored, no behavior (DATA-13) |
-| 2 | Vendor timing convention (16:15 ET snapshot; 16:00 and 09:30 ET expiries; calendar time over 365 days) | Inferred from the samples (REF-6); confirm with ivolatility |
-| 3 | SPXW contracts on third Fridays | Expected in other files; no design impact |
+| 2 | Vendor timing convention (16:15 ET snapshot; 16:00 and 09:30 ET expiries; calendar time over 365 days, exchange clock) | **Confirmed on real data in v6** (REF-6); confirming with ivolatility is optional |
+| 3 | SPXW contracts on third Fridays | **Resolved in v6:** across 2007 – Aug 2024 no two roots list the same date, expiration, strike and type; the contract key includes the root regardless (DATA-2) |
 | 4 | AM settlement values | Not supplied by the vendor; settlement-source plug-in point kept (REF-21) |
 | 5 | Product, package and CLI names | **Resolved in v3:** ProphetoVol; package and CLI `prophetovol` (ARC-7) |
 | 6 | Performance targets | To be confirmed in the implementation plan (NFR-1) |
 | 7 | Default commission and fill model | Defaults in RUN-1; the user should set realistic values |
+| 8 | Settlement styles of the historical roots (`JX*` weeklies, `SPXPM`, old quarterlies) | PM, by the owner's knowledge of the products (REF-1). The vendor's greeks treat `JX*` and `SPXPM` as expiring at 09:30. To be revisited if a run shows issues |
+| 9 | Normalizing every root to `SPX` or `SPXW` | Adopted in v6 to be tried in practice; to be revisited if it causes issues (REF-1) |
 
 ## 21. Milestones
 
@@ -953,7 +1004,7 @@ Each milestone ends usable on its own, with a demo.
 | `exchange` | `exchange` | string | Stored only |
 | `date` | `as_of` | timestamp | The date at the data source's option snapshot time (16:15 ET); `as_of_date` is also stored |
 | `adjusted close` | `index_level` | float | As of the index snapshot time (16:00 ET); the PM settlement value on expiration dates |
-| `option symbol` | `option_symbol` | string | With `as_of`, the natural key; `root` parsed from it |
+| `option symbol` | `vendor_symbol` | string | As given; five-character codes (to Feb 11, 2010) or OSI. Not an identifier (DATA-2) |
 | `expiration` | `expiration` | date | MM/DD/YYYY |
 | `strike` | `strike` | float | |
 | `call/put` | `option_type` | `call` / `put` | From `C` / `P` |
@@ -964,17 +1015,30 @@ Each milestone ends usable on its own, with a demo.
 | `iv` | `iv` | float, nullable | −1 stored as null |
 | `volume` | `volume` | integer | |
 | `open interest` | `open_interest` | integer | |
-| `stock price for iv` | `forward` | float, nullable | The vendor's per-series forward; ignored on expiration day |
+| `stock price for iv` | `vendor_forward` | float, nullable | As given: one price per date before Jun 25, 2018; the per-series forward from then |
 | `*` | `vendor_flag` | boolean | Meaning unconfirmed |
-| `delta` | `delta` | float, nullable | Null on expiration day |
-| `vega` | `vega` | float, nullable | Per one vol point; null on expiration day |
-| `gamma` | `gamma` | float, nullable | Null on expiration day |
-| `theta` | `theta` | float, nullable | Per calendar day; null on expiration day |
-| `rho` | `rho` | float, nullable | Null on expiration day |
+| `delta` | `delta` | float, nullable | Null on the settlement date; discounted before Jun 25, 2018 (DATA-13) |
+| `vega` | `vega` | float, nullable | Per one vol point; null on the settlement date |
+| `gamma` | `gamma` | float, nullable | Null on the settlement date |
+| `theta` | `theta` | float, nullable | Per calendar day; null on the settlement date |
+| `rho` | `rho` | float, nullable | Null on the settlement date |
+| (derived) | `as_of_local` | local date-time | The date at the option snapshot time on the exchange clock, without time zone (CONV-1) |
 | (derived) | `index_as_of` | timestamp | The date at the index snapshot time (16:00 ET) |
-| (derived) | `root` | string | `SPX`, `SPXW` |
+| (derived) | `vendor_root` | string | Parsed from the vendor symbol (DATA-13) |
+| (derived) | `root` | string | Normalized root, `SPX` or `SPXW` (REF-1) |
 | (derived) | `settlement_style` | `AM` / `PM` | From the underlying's root configuration |
-| (derived) | `expiry_timestamp` | timestamp | Expiration date at the root's expiry time (CONV-3) |
+| (derived) | `osi_symbol` | string | OSI-format symbol from `root`, expiration, option type and strike; with `as_of`, identifies the row |
+| (derived) | `settlement_date` | date | Last trading day on or before the expiration date (CONV-3) |
+| (derived) | `expiry_timestamp` | timestamp | Settlement date at the expiry time of the settlement style (CONV-3) |
+| (derived) | `expiry_local` | local date-time | The same on the exchange clock, without time zone (CONV-1) |
+| (derived) | `last_trading_date` | date | CONV-3 |
+| (derived) | `time_to_expiry_years` | float | CONV-1 |
+| (derived) | `days_to_expiry` | float | CONV-1 |
+| (derived) | `trading_days_to_expiry` | integer | CONV-2 |
+| (derived) | `forward` | float, nullable | The forward the engine uses (DATA-14); null on the settlement date |
+| (derived) | `forward_source` | `vendor` / `parity` / `vendor_single_price` | DATA-14 |
+| (derived) | `parity_forward`, `parity_discount`, `parity_strikes` | float, float, integer | The parity fit for the expiration on that date (DATA-14) |
+| (derived) | `vendor_methodology` | `single_price` / `per_series_forward` | The vendor period of the row (DATA-13) |
 | (derived) | `import_id` | string | The import that supplied the data |
 
 ## Appendix B — Example Strategies
@@ -1125,13 +1189,15 @@ stress_mode: monitor
 | As-of | The timestamp a snapshot describes. |
 | Snapshot | The complete state of something as of a step: market, position, portfolio or stress. |
 | Frequency | How often a run steps. Phase 1: `end_of_day`. |
-| Time to expiry | The model input: years from the as-of timestamp to the expiry timestamp, calendar time over 365 days. |
+| Time to expiry | The model input: years from the as-of time to the expiry, calendar time over 365 days, measured on the exchange clock (daylight-saving changes ignored). |
 | Days to expiry | Time to expiry in fractional calendar days, for people. |
-| Trading days to expiry | Trading days after the as-of date up to and including the expiration date. |
-| AM-settled | Settles on a special opening value on expiration day, at 09:30 ET; for SPX, the `SPX` root monthlies. Last trading day is the day before expiration. |
-| PM-settled | Settles on the index close at 16:00 ET on expiration day; for SPX, the `SPXW` root. |
+| Trading days to expiry | Trading days after the as-of date up to and including the settlement date. |
+| AM-settled | Settles on a special opening value at 09:30 ET on the settlement date; for SPX, the `SPX` root monthlies (and older roots normalized to `SPX`). Last trading day is the trading day before the settlement date. |
+| PM-settled | Settles on the index close at 16:00 ET on the settlement date; for SPX, the `SPXW` root (and older roots normalized to `SPXW`). |
+| Settlement date | The last trading day on or before the expiration date; differs from it for the Saturday-dated monthlies before 2015. |
+| Normalized root | `SPX` (AM-settled) or `SPXW` (PM-settled), the root a vendor root maps to (REF-1). |
 | SET | The AM settlement value of the S&P 500 index. Not available in Phase 1. |
-| Forward | The vendor's per-series forward (`stock price for iv`). |
+| Forward | The forward of one expiration on one date: the vendor's per-series forward (`stock price for iv`) from Jun 25, 2018, and before that a forward fitted from put-call parity on the strikes nearest the money (DATA-14). |
 | Structure | One instance of a strategy's legs, opened together and managed together. |
 | Unit | One structure with each leg at its ratio. |
 | Sticky strike | Each contract keeps its own implied vol when the index moves. |
