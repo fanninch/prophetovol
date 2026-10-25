@@ -606,3 +606,28 @@ Recorded per phase: what was built, what changed from the plan, and test counts.
 - **Meta-tests** (`tests/meta/test_documentation.py`): every pydantic field has a description (DOC-1); every public module, class, function and method has a docstring, and every parameter is documented with `:param name:` (DOC-4). The second is stricter than "has a docstring": it enforces the reStructuredText field-list style.
 - **Changed from the plan:** the wheel test installs the wheel with `--no-deps` into an empty target folder and imports it from there, with dependencies taken from the test environment, instead of building a whole new environment, which would need network access during tests. It still proves the wheel is complete and pure Python (`py3-none-any`, `Root-Is-Purelib: true`, no native files, no tests or specs inside).
 - **Tests:** 27, all passing in about 3 seconds (unit 23, meta 2, packaging 2).
+
+**Phase 2 (conventions, time, calendar and registries), Oct 25, 2026**
+
+- **`core/types.py`:** `OptionType`, `SettlementStyle`, `Frequency`.
+- **`core/conventions.py`:** `CONVENTIONS`, the nine conventions as published text (the source for DOC-3's generated document, with v6's wording); `DAYS_PER_YEAR`, `MINUTES_PER_YEAR`; the dollar-greek formulas of CONV-7.
+- **`pricing/time.py`:**
+  - `minutes_to_expiry` and `time_to_expiry_years`: exchange-clock minutes over 525,600 (CONV-1). They accept only naive local date-times, so instants cannot be passed by mistake. Seconds are floored.
+  - `days_to_expiry`, `local_datetime`, `to_instant`
+  - `expiry_dates`: settlement date, last trading day, `expiry_local` and `expiry_timestamp` (CONV-3)
+  - `trading_days_to_expiry` (CONV-2)
+  - They take any calendar matching the small `SessionCalendar` protocol.
+- **`reference/calendar.py`:** `TradingCalendar` over `exchange_calendars` `XNYS` for a fixed range, **1990-01-02 to 2040-12-31**, held as a sorted array, so lookups are binary searches and never depend on today's date. Dates outside the range raise `ConfigurationError`. `nyse_calendar()` shares one instance per process; `version` is the package version (REF-11).
+- **`reference/models.py`:** `RootConfig`, `Underlying` and `DataSource` (all frozen, unknown keys rejected). `Underlying` checks that both settlement styles have an expiry time, and that every normalized root is itself a listed root that normalizes to itself with the same settlement style. `root()` raises `ConfigurationError("unknown option root …")` for an unlisted vendor root.
+- **`reference/defaults/`:** `SPX.yaml` with all **40 vendor roots** of Phase 0 (24 AM → `SPX`, 16 PM → `SPXW`), and `ivolatility_eod.yaml`. Loaded with `importlib.resources`; declared as package data and checked in the wheel test, including loading the root table from the installed wheel.
+- **`registry/mechanism.py`:** `Registry`, `Implementation`, `ImplementationInfo`, `RegistryInfo`. **REG-2 is enforced at registration**: lower-snake-case unique names, a non-empty description and version, and a description on every parameter field.
+- **`registry/catalog.py`:** registries are created there, empty; `all_registries()` and `get_registry()` first import the built-in implementation modules, so listings are complete. Phase 2 creates `settlement_source`; later phases add the other REG-1 kinds as their implementations arrive.
+- **`reference/settlement.py`:** `pm_index_close` (intrinsic value against the index close on the settlement date) and `settlement_source_for()`, which raises for AM-settled contracts with REF-21's explanation. Its parameter model is in `registry/params/settlement.py`.
+- **Changed from the plan:** `tzdata` added as a dependency. Python's `zoneinfo` has no time zone database of its own on Windows, and `tzdata` was only present through pandas.
+- **Tests:** 89, all passing in about 3 seconds (unit 85, meta 2, packaging 2). New:
+  - TEST-5, first part: PM weekly 0.99 days, AM next-morning expiry, both 2024 DST changes (clock time, which differs from instants by exactly 60 minutes), aware date-times rejected
+  - Saturday-dated AM monthly (settles Friday, closes Thursday), including Good Friday 2008 (settles Thursday, closes Wednesday)
+  - trading days across Independence Day and Labor Day
+  - the calendar's 4,446 sessions from 2007-01-03 to 2024-08-30, matching the vendor files, and the unscheduled closures of 2012, 2018 and 2025
+  - every historical root's mapping, and the underlying validation rules
+  - registry rules and settlement values

@@ -34,6 +34,8 @@ def test_wheel_is_pure_python(wheel):
         names = zf.namelist()
         assert not [n for n in names if n.endswith((".pyd", ".so", ".c", ".dll"))]
         assert "prophetovol/__init__.py" in names and "prophetovol/cli/__init__.py" in names
+        assert "prophetovol/reference/defaults/underlyings/SPX.yaml" in names
+        assert "prophetovol/reference/defaults/data_sources/ivolatility_eod.yaml" in names
         meta = zf.read("prophetovol-0.1.0.dist-info/METADATA").decode()
         entry_points = zf.read("prophetovol-0.1.0.dist-info/entry_points.txt").decode()
         wheel_info = zf.read("prophetovol-0.1.0.dist-info/WHEEL").decode()
@@ -50,6 +52,8 @@ def test_wheel_installs_and_imports_from_a_clean_folder(wheel, tmp_path):
                     "--disable-pip-version-check", "--target", str(target), str(wheel)], check=True)
     # Dependencies come from the test environment; the package itself must come from the wheel.
     code = (f"import sys; sys.path.insert(0, {str(target)!r}); import prophetovol, prophetovol.cli; "
-            "print(prophetovol.__file__); print(prophetovol.__version__)")
+            "from prophetovol.reference.defaults import default_underlyings; "
+            "print(prophetovol.__file__); print(prophetovol.__version__); print(len(default_underlyings()['SPX'].roots))")
     out = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True).stdout.split()
     assert Path(out[0]).is_relative_to(target) and out[1] == "0.1.0"
+    assert out[2] == "40"  # the shipped root table loads from the installed wheel

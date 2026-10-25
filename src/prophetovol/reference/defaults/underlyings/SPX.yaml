@@ -1,0 +1,56 @@
+# SPX: S&P 500 index options (REF-1, requirements v6).
+# Every vendor option root found in the ivolatility files from 2007 to Aug 2024 is listed,
+# with its settlement style and the normalized root strategies select from: SPX for every
+# AM-settled root and SPXW for every PM-settled root. A root not listed here fails ingest.
+symbol: SPX
+description: S&P 500 index options (European, cash-settled)
+multiplier: 100
+exercise_style: european
+timezone: America/New_York
+expiry_times: {AM: "09:30", PM: "16:00"}
+roots:
+  # Current roots (OSI symbols)
+  SPX:   {settlement_style: AM, normalized_root: SPX,  note: "Standard monthlies, all years (Saturday-dated until Feb 2015)"}
+  SPXW:  {settlement_style: PM, normalized_root: SPXW, note: "Weeklies, dailies, end-of-month and quarterlies, Dec 2010 on"}
+  SPXPM: {settlement_style: PM, normalized_root: SPXW, note: "PM-settled SPX, May 2010 to Apr 2011 (vendor greeks assume 09:30)"}
+  SPXQ:  {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, Apr 2011 to Jul 2014"}
+  # Five-character OPRA-code roots, 2007 to May 2010 (OSI from Feb 12, 2010 to May 2010)
+  # Weeklies (vendor greeks assume 09:30)
+  JXA: {settlement_style: PM, normalized_root: SPXW, note: "Weeklies, 2007-2010"}
+  JXB: {settlement_style: PM, normalized_root: SPXW, note: "Weeklies, 2007-2010"}
+  JXD: {settlement_style: PM, normalized_root: SPXW, note: "Weeklies, 2007-2010"}
+  JXE: {settlement_style: PM, normalized_root: SPXW, note: "Weeklies, 2007-2010"}
+  # Quarterlies
+  SZQ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  SAQ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  SLQ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  QSE: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  SQP: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  QZQ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2008-2010"}
+  QSZ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2008-2010"}
+  SKQ: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2007-2010"}
+  SQG: {settlement_style: PM, normalized_root: SPXW, note: "Quarterlies, 2009-2010"}
+  # Monthlies by strike range (Saturday-dated, AM-settled on the Friday before)
+  SZP: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SXY: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPT: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SXZ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPQ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SXB: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SXM: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPZ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SYG: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SZT: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPB: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SYU: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2008-2010"}
+  SXG: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SZJ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SZV: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SVP: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SYZ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPL: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SPV: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2008-2010"}
+  SZU: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2009-2010"}
+  SZD: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2009-2010"}
+  SYV: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2007-2010"}
+  SXJ: {settlement_style: AM, normalized_root: SPX, note: "Monthlies, 2009-2010"}

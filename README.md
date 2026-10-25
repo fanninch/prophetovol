@@ -30,6 +30,19 @@ prophetovol --version
 ProphetoVol keeps its catalog, results and market data in a home directory, chosen in this order:
 `--home DIR`, then the `PROPHETOVOL_HOME` environment variable, then `~/.prophetovol`.
 
+## Reference data and conventions
+
+The package ships the SPX underlying and the `ivolatility_eod` data source as YAML
+(`src/prophetovol/reference/defaults/`). SPX lists every option root found in the vendor files
+since 2007, each mapped to its settlement style and to one of today's two roots: `SPX` (AM-settled)
+or `SPXW` (PM-settled). A root that is not listed fails ingest rather than being guessed.
+
+Time to expiry follows the vendor's convention: calendar minutes on the exchange clock (daylight
+saving ignored) over the minutes in 365 days. An expiration dated on a non-trading day (the
+Saturday-dated monthlies before 2015) settles on the trading day before it; AM-settled contracts
+last trade the trading day before they settle. The full list of conventions is in
+`prophetovol.core.conventions`.
+
 ## Tests
 
 ```bash
