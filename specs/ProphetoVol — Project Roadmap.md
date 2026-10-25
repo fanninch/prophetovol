@@ -1,9 +1,10 @@
-# Options Backtester — Project Plan & Roadmap (Draft)
+# ProphetoVol — Project Roadmap
 
-Oct 25, 2026 · @Chuck · v2 (snapshot naming, time-to-expiry convention, trial distribution)
+Oct 25, 2026 · @Chuck · v3 (ProphetoVol naming; Phase 1 requirements agreed)
 
-> **Status: DRAFT — context record, not agreed requirements.**
-> This document records the design discussion so far, so that later phases start with the reasoning that shaped them. Only Phase 1 has a requirements specification (*Options Backtester — Phase 1 Requirements Specification*). Everything about Phases 2 and later here is a working draft: phases may be reordered, merged or dropped, and each will get its own requirements specification and implementation plan before it is built.
+> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v3, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
+>
+> **Everything about Phases 2 and later is roadmap, not yet specified.** It records the design discussion so far, so later phases start with the reasoning that shaped them. Nothing in those sections is being implemented. Phases may be reordered, merged or dropped, and each gets its own agreed requirements specification and implementation plan before it is built.
 
 ## 1. Vision
 
@@ -34,18 +35,18 @@ These held throughout the discussion and should carry into every phase.
 
 | Phase | Theme | Main deliverables | Status |
 | --- | --- | --- | --- |
-| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | Requirements drafted |
-| **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Draft |
-| **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Draft |
-| **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Draft |
-| **5** | Portfolio construction & walk-forward | Constructor framework, objective and constraints, trading-cost-aware rebalancing, the daily walk-forward loop, process analytics | Draft |
-| **6** | Research agent & scenario tools | Experiment ledger, regime analysis, sentinel positions, realized-vs-implied scenario grid, research agent | Draft |
-| **Trial** | Trial distribution | Time-limited, protected wheel for prospective clients | Draft |
+| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements agreed (v3); implementation plan in review |
+| **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Roadmap — not yet specified |
+| **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Roadmap — not yet specified |
+| **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Roadmap — not yet specified |
+| **5** | Portfolio construction & walk-forward | Constructor framework, objective and constraints, trading-cost-aware rebalancing, the daily walk-forward loop, process analytics | Roadmap — not yet specified |
+| **6** | Research agent & scenario tools | Experiment ledger, regime analysis, sentinel positions, realized-vs-implied scenario grid, research agent | Roadmap — not yet specified |
+| **Trial** | Trial distribution | Time-limited, protected wheel for prospective clients | Roadmap — not yet specified |
 | **Later** | Hosted & commercial | Multi-user hosting, other databases, vendor-hosted data, MCP server, more underlyings | Ideas |
 
-## 4. Phase 1 — Deterministic Backtester
+## 4. Phase 1 — Deterministic Backtester (being built)
 
-Fully specified in the Phase 1 requirements specification. In brief:
+Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v3, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
 
 - **Data:** upload of ivolatility files; validation and quality reports; overlap handling (replace, add new dates only, cancel); data versions; delete and purge; coverage; trading calendar; settlement-source plug-in point.
 - **Strategies:** legs with expiration and strike selectors (delta, at the money as 50 delta, forward, references to other legs); entry schedules; triggers (condition, scope, action) for rolls and closes; expiration handling; delta-hedge bands; sizing by contracts or notional.
@@ -55,7 +56,7 @@ Fully specified in the Phase 1 requirements specification. In brief:
 - **Results:** position, structure and portfolio snapshots at every step, stress snapshots, events, and aggregate statistics (annualized from the frequency's periods per year).
 - **Platform:** the data profiling tool's stack; persisted jobs; audit of actor, channel, software versions and rejected attempts; a license-check hook and a compilable core, so a protected trial build is possible later (§10).
 
-## 5. Phase 2 — AI Test Assistant (draft)
+## 5. Phase 2 — AI Test Assistant (roadmap — not yet specified)
 
 **Goal:** given a request or a statement, the AI decides what to test, builds the specifications, runs them, and explains the results, using only the deterministic tool.
 
@@ -77,7 +78,7 @@ The original feature idea: the user describes a strategy in jargon or leg by leg
 
 The user states a hypothesis or a question ("does selling 25-delta puts work better when vol is high?"); the agent designs a set of runs (variations of a spec, date ranges, stress settings), runs them, and reports what the results show and how strong the evidence is.
 
-- **Agent tools** (thin wrappers over service operations): describe available data; validate a draft spec (returning missing, defaulted and conflicting fields); start a run; check status; fetch results and statistics; compare runs.
+- **Agent tools** (thin wrappers over service operations): describe available data; validate an unpublished spec (returning missing, defaulted and conflicting fields); start a run; check status; fetch results and statistics; compare runs.
 - **The AI sets configuration from documentation:** for example, it chooses the stress mode (Monitor, Scale to limit, Halt run) from the schema descriptions. Phase 1's field-level descriptions exist for this reason.
 - **Overfitting guardrails** apply as soon as the agent can run many variations: every run tagged with the experiment it belongs to, runs never deleted, and the number of variations tried reported alongside any result (see Phase 6).
 
@@ -87,7 +88,7 @@ The user states a hypothesis or a question ("does selling 25-delta puts work bet
 - **Run comparison** views and API.
 - **An MCP server** over the same tool surface is a cheap addition once the tools exist.
 
-## 6. Phase 3 — Market Context, Richer Rules and Risk (draft)
+## 6. Phase 3 — Market Context, Richer Rules and Risk (roadmap — not yet specified)
 
 ### 6.1 Market-context snapshots (step 1a of the research loop)
 
@@ -133,7 +134,7 @@ Each period's P&L split into delta, gamma, vega and theta, with an unexplained r
 
 A user-uploaded SET table, as a second settlement source, would allow AM-settled contracts to be held to expiration. The vendor does not supply SET values; Cboe publishes them.
 
-## 7. Phase 4 — Forecasting (draft)
+## 7. Phase 4 — Forecasting (roadmap — not yet specified)
 
 Step 1b and 1c of the research loop.
 
@@ -165,7 +166,7 @@ Building realistic synthetic surfaces is hard and error-prone (arbitrage, tails)
 
 A worked example of the kind of view later forecasters should express: after a fall that bids call vol up relative to puts, the call-wing shock tends to partly unwind, and further declines lift those calls less than the first did. A trader sells calls with a delta hedge into that move and may roll them down into higher vol even at a loss. This is a conditional view of surface dynamics, measured against the static baseline, and history can quantify it (how much of a call-wing shock unwound over 1, 5 and 22 days, and how that changed when the index kept falling): the sentinel idea applied to points on the surface.
 
-## 8. Phase 5 — Portfolio Construction & Walk-Forward (draft)
+## 8. Phase 5 — Portfolio Construction & Walk-Forward (roadmap — not yet specified)
 
 ### 8.1 The research loop
 
@@ -215,7 +216,7 @@ In addition to Phase 1's statistics: forecast accuracy, construction efficiency 
 
 An optimized book is not made of named structures, so P&L is grouped by the date each position was opened and by tenor bucket.
 
-## 9. Phase 6 — Research Agent & Scenario Tools (draft)
+## 9. Phase 6 — Research Agent & Scenario Tools (roadmap — not yet specified)
 
 ### 9.1 Scenario engine (realized-vs-implied grid)
 
@@ -248,7 +249,7 @@ A second agent, separate from the chat assistant, with tools to create an experi
 - **The leak data controls can't remove:** the model's training includes text written after most historical dates, so on a run date in February 2020 it already knows a crash came in March. LLM decisions or forecasts on dates before the model's training cutoff are labeled *may contain hindsight*. Options considered: model-only historical runs, disguised data (dates removed, levels rescaled; this helps but doesn't eliminate the problem), restricting to periods after the training cutoff (clean but short).
 - **Memory isolation:** if the agent gets memory, a run must not see anything learned in later runs, or in runs over later dates.
 
-## 10. Trial Distribution (draft)
+## 10. Trial Distribution (roadmap — not yet specified)
 
 **Goal:** give a prospective client the proof of concept as a wheel that stops working after a trial period (for example 14 or 30 days), without handing over readable source code. The hosted application remains the long-term answer to both problems; this is a short-term workaround.
 
@@ -316,6 +317,9 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 - **Snapshot nomenclature:** results are position, portfolio and stress snapshots taken at steps with an as-of timestamp, not "daily rows"; nothing assumes daily data except the frequency setting.
 - **Time to expiry** is a year fraction computed from timestamps, matching the vendor's convention; selectors and conditions state their units (calendar days, trading days, nth expiration).
 - P&L attribution by greek is wanted as a later add-on.
+- **Profit and loss triggers are in dollars per structure unit,** not percentages: no denominator (entry premium, notional, stress loss) is well defined for every structure, notably ratios and near-zero-premium spreads (Phase 1 v3).
+- **No guessed values at expiry:** an AM-settled leg with no valid quote on its last trading day closes at its last valid mark; a PM-settled leg whose expiration day is missing from the data closes at the step before. Closing early is preferred to inventing profit or loss (Phase 1 v3).
+- The delta hedge is fractional (Phase 1 v3).
 
 **Stress**
 - A stress module that builds stress grids and attaches them to runs; Phase 1 implements only the underlying slide; vol shocks and surface changes come later.
@@ -336,7 +340,8 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 - Walk-forward evaluation rather than holding out years.
 
 **Platform**
-- Same stack and design as the data profiling tool (FastAPI back end, Python computation, React front end).
+- Same stack and design as the data profiling tool (FastAPI back end, Python computation, React front end). No shared libraries between the two projects: profiler code may be copied and adapted where that is quicker.
+- Names: product ProphetoVol; package and CLI `prophetovol`; developed on Python 3.12.
 - A free trial is wanted eventually: a wheel that expires (14 or 30 days) with the code not readable. Phase 1 keeps this possible with a license-check hook and a compilable core.
 - DuckDB now; designed to support other databases. Trino not needed.
 
@@ -345,8 +350,8 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 | # | Question | Phase |
 | --- | --- | --- |
 | 1 | Meaning of the vendor `*` flag | 1 (tracked) |
-| 2 | Product, package and CLI names (candidate: ProphetoVol, under the Propheto brand) | 1 |
-| 2a | Confirm the vendor's timing convention (16:15 ET snapshot; 16:00 and 09:30 ET expiries; calendar time over 365 days) | 1 |
+| 2 | ~~Product, package and CLI names~~ **Resolved:** ProphetoVol; package and CLI `prophetovol` | 1 |
+| 2a | Confirm the vendor's timing convention (16:15 ET snapshot; 16:00 and 09:30 ET expiries; calendar time over 365 days); also checked against real files in the implementation plan's Phase 0 | 1 |
 | 3 | Default commission and fill model values | 1 |
 | 4 | Order of Phases 2 and 3 (AI first, or market context first) | Planning |
 | 5 | Should market-context snapshots be shown as a display before conditions use them? | 3 |
