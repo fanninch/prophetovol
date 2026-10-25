@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environments and editors
+.venv/
+venv/
+.idea/
+.vscode/
+.env
+
+# Front end (M4)
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+# The built SPA, produced by `npm run build` into the package
+src/prophetovol/server/static/
+
+# Local data. Vendor data is licensed and never enters the repository (INT-52);
+# these patterns are a second line of defence behind keeping it outside the tree.
+*.duckdb
+*.duckdb.wal
+.prophetovol/
+vendor_data/
+data_download*.csv
+*.parquet
+!tests/**/*.parquet
