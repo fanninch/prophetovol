@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v2). Phase 0 next.** · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v5, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: v3, for review: updated for requirements v6 and Phase 0's findings. Phase 0 done (Oct 25, 2026); Phase 1 next once this version is agreed.** · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -119,7 +119,7 @@ logs/               server log
 
 **Results** (`results.duckdb`): `position_snapshots`, `portfolio_snapshots`, `stress_snapshots`, `trades`, `structures`, `events`, `run_statistics`, `run_monthly_pnl`, all keyed by `run_id`. Structure snapshots are a view (RES-11).
 
-**Market snapshots** are Parquet files, one per import per month partition (DATA-80), with the normalized columns of Appendix A, sorted by `(as_of, expiration, option_type, strike)` with one row group per as-of date, so a read for one date touches one row group. A run reads only active versions: a join of the files' `(as_of, import_id)` against `data_versions` where the state is `active` (DATA-80).
+**Market snapshots** are Parquet files, one per import per month partition (DATA-80), with the vendor columns and every derived column of Appendix A, sorted by `(as_of, root, expiration, option_type, strike)` in row groups of about 20,000 rows. A row is identified by `(underlying, as_of, root, expiration, strike, option_type)`, which `osi_symbol` encodes (DATA-2). A run reads only active versions: a join of the files' `(as_of, import_id)` against `data_versions` where the state is `active` (DATA-80).
 
 **Ingest writes files under the new `import_id` before anything is active** (DATA-11). Commit, replace, add-new-only, delete and invalidation only change rows in `data_versions` and `runs`, inside one catalog transaction, so they are atomic (DATA-32). Discard deletes the import's files. Purge deletes files whose versions are all superseded or deleted, and rewrites a file without the purged dates when only some of its dates are purgeable (as after add-new-only).
 
@@ -129,22 +129,26 @@ logs/               server log
 
 ### 4.3 Ingest pipeline (DATA-10 to DATA-21)
 
-1. **Receive.** The file is streamed into `uploads/` in chunks, never held in memory, while its SHA-256 is computed (DATA-10, DATA-12). Zip archives are read member by member (DATA-4). The uncompressed size limit (default 2 GB) is checked as data arrives.
-2. **Parse.** DuckDB reads the CSV with every column as text and an explicit header check (DATA-1), so an unparseable value becomes a counted error with examples rather than a failed read.
-3. **Validate.** Each check in DATA-20 is one SQL aggregate per check per date, with up to five example rows. The results form a `QualityReport` (pydantic) stored on the import. Any error stops the import before anything is written.
-4. **Normalize** (DATA-13), in SQL:
-   - `as_of` = the date at 16:15 America/New_York; `index_as_of` = the date at 16:00. Both are stored as UTC timestamps; ET is used only for display.
-   - `root` is parsed from the option symbol; `settlement_style` and `expiry_timestamp` come from the underlying's root configuration.
-   - `iv = -1` becomes null; on a contract's expiration date `iv` and the greeks become null; the `forward` is kept but marked unusable on that date.
-5. **Write** Parquet per month partition under the new `import_id`, with versions in state `staged`. Progress is reported per partition (rows and dates done), and cancellation is checked between partitions (INT-24).
+1. **Receive.** One import takes one or more CSV files, folders of them, or zip archives (DATA-3, DATA-4). Each file is streamed into `uploads/` in chunks, never held in memory, while its SHA-256 is computed (DATA-10, DATA-12). The uncompressed size limit (default 2 GB per import) is checked as data arrives.
+2. **Parse.** DuckDB reads all the import's CSVs together with every column as text and an explicit header check (DATA-1), so an unparseable value becomes a counted error with examples rather than a failed read. (Phase 0: 4M rows read in about 6 seconds.)
+3. **Validate.** Each check in DATA-20 is one SQL aggregate per check per date, with up to five example rows. Duplicates are checked on the contract key, not the vendor symbol. The results form a `QualityReport` (pydantic) stored on the import. Any error stops the import before anything is written.
+4. **Normalize and derive** (DATA-13, DATA-14), in SQL, joining two small tables built in Python: the **root table** from the underlying's configuration (vendor root → normalized root, settlement style) and a **calendar table** of trading days from `XNYS` covering the import's dates and expirations.
+   - **Times:** `as_of` = the date at 16:15 America/New_York and `index_as_of` = the date at 16:00, stored as UTC instants; `as_of_local` = the same 16:15 as exchange clock time without time zone.
+   - **Symbols:** `vendor_root` is parsed from either symbol format (first three characters of a five-character code; the characters before the date in OSI, trimmed); `root`, `settlement_style` come from the root table; `osi_symbol` is built from `root`, expiration, type and strike.
+   - **Expiry** (CONV-3): `settlement_date` = the last trading day on or before the expiration date (calendar table); `expiry_timestamp` and `expiry_local` = the settlement date at 09:30 (AM) or 16:00 (PM); `last_trading_date` = the previous trading day for AM, the settlement date for PM.
+   - **Time to expiry:** `time_to_expiry_years` = whole minutes between `as_of_local` and `expiry_local`, over 525,600 (exchange clock, CONV-1); `days_to_expiry`; `trading_days_to_expiry` from the calendar table.
+   - **Nulls:** `iv = -1` becomes null; on a contract's settlement date `iv` and the greeks become null.
+   - **Forwards** (DATA-14): `vendor_forward` as given; `vendor_methodology` from the data source's `per_series_forward_from`; the **parity fit** per `(as_of, root, expiration)` (pairs with valid quotes and both bids above zero, the six strikes with the smallest `|C − P|` by window ranking, `regr_slope`/`regr_intercept` for `D` and `F`, the validity checks), giving `parity_forward`, `parity_discount`, `parity_strikes`; then `forward` and `forward_source` (vendor from the cut-over date; parity before it; the vendor's single price when the fit is invalid, counted as a quality warning). `forward` is null on the settlement date.
+5. **Write** Parquet **one month partition at a time** under the new `import_id`, with versions in state `staged`. Phase 0 showed that a single sorted write of a year runs out of memory at a 1 GB limit while per-partition writes do not. Progress is reported per partition (rows and dates done), and cancellation is checked between partitions (INT-24).
 6. **Stop for review.** The import waits for the user's commit choice (DATA-30, DATA-31): the quality report and the overlap are shown first.
 
 ### 4.4 Reference data and time
 
-- **Underlyings and data sources** (REF-1, REF-5) are versioned definitions, seeded from YAML shipped in the package. SPX ships with roots `SPX` (AM, 09:30) and `SPXW` (PM, 16:00); Phase 0 checks whether older files contain other roots (§5, check 6).
+- **Underlyings and data sources** (REF-1, REF-5) are versioned definitions, seeded from YAML shipped in the package. SPX ships with every vendor root found in 2007 – 2024 (Phase 0, §15.6), each mapped to its settlement style and normalized root (`SPX` for AM, `SPXW` for PM). `ivolatility_eod` ships with its snapshot times, the exchange-clock time convention, `per_series_forward_from: 2018-06-25` and `parity_strikes: 6`.
 - **The trading calendar** wraps `exchange_calendars` `XNYS` behind a small `TradingCalendar` interface: sessions in a range, next and previous session, trading days between two dates, and the package version for provenance (REF-11).
 - **Conventions** (§5.4 of the requirements) live in `core/conventions.py` with their documentation, and the published conventions document is generated from it (DOC-3).
-- **Time to expiry** (CONV-1) is `(expiry_timestamp − as_of)` in whole minutes, divided by 525,600 (minutes in 365 days). Both are absolute instants, so a daylight-saving change between them changes the result by an hour. Phase 0 checks that this matches the vendor across DST changes (§5, check 5); if the vendor uses wall-clock time instead, the requirements are revised with you.
+- **Time to expiry** (CONV-1) is `(expiry_local − as_of_local)` in whole minutes, divided by 525,600 (minutes in 365 days), on the **exchange clock**, so a daylight-saving change between them is ignored. Phase 0 confirmed that this is the vendor's convention (§15.7). It is computed once at ingest and stored with each row; the same function in `pricing/time.py` is used by ingest (through SQL with identical arithmetic, checked by a test) and by the synthetic generator.
+- **Settlement date, expiry and last trading day** (CONV-3) come from the expiration date, the settlement style and the calendar, and are stored at ingest.
 - **Trading days to expiry** (CONV-2) and **trading days held** come from the calendar, never from step counts (ENG-4).
 
 ### 4.5 Registries (REG-1 to REG-4)
@@ -157,10 +161,11 @@ logs/               server log
 
 The run-time target (a single-structure spec over 10 years in under 60 seconds) leaves about **24 ms per step** for everything: reading data, selecting, marking, stress and recording. One new database query per step may not fit in that, so data access is split in two:
 
-- **`MarketDataProvider`** (service side, not in the engine) loads the run's data ahead in chunks (for example a month of steps at a time) through Ibis into Arrow. It reads only the columns the engine uses and only the expirations the spec's selectors can reach, plus those of contracts already held (NFR-1, third bullet).
-- **`MarketDataView`** (given to the engine) is bound to the current step's as-of time. Every access method takes or implies an as-of time and **raises `PointInTimeError`** for anything stamped after it. The engine never receives the provider, only a view per step. Loading future data into the provider's memory is not a violation; the engine reading it would be, and the guard and TEST-4 prevent that.
+- **`MarketDataProvider`** (service side, not in the engine) loads the run's data ahead in **chunks of three months of steps**. For each chunk the adapter supplies the paths of that chunk's partition files, and the provider reads them with one Ibis expression: the active versions as a small in-memory semi-join, only the columns the engine uses, and only the expirations the spec's selectors can reach plus those of contracts already held (NFR-1, third bullet). The result arrives in Arrow, sorted by as-of time, with the offsets of each step's rows precomputed.
+- **`MarketDataView`** (given to the engine) is bound to the current step's as-of time and holds a **zero-copy slice** of that step's rows. Every access method takes or implies an as-of time and **raises `PointInTimeError`** for anything stamped after it. The engine never receives the provider, only a view per step. Loading future data into the provider's memory is not a violation; the engine reading it would be, and the guard and TEST-4 prevent that.
+- The engine reads the stored derived columns (time to expiry, trading days to expiry, settlement and last trading dates, forward) and never re-derives them.
 
-Phase 0 measures both per-step queries and chunked loading on real data before this is built (§5, check 2).
+Phase 0 measured this on ten real years (§15.3): **1.2 ms per step**, against 52–56 ms for one query per step.
 
 ### 4.7 The engine (ARC-2, ENG-1 to ENG-43)
 
@@ -253,10 +258,10 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
 ### Phase 2: Conventions, time, calendar and registries
 
 - `core/conventions.py` (CONV-1 to CONV-9), with each convention's documentation.
-- `pricing/time.py`: time to expiry in years and in fractional calendar days (CONV-1); expiry timestamps from root configuration (CONV-3).
-- `reference/`: `Underlying` and `DataSource` models with the shipped YAML (REF-1, REF-5); `TradingCalendar` (REF-10, REF-11); the settlement-source registry with `pm_index_close` (REF-20).
+- `pricing/time.py`: time to expiry in years and in fractional calendar days on the exchange clock (CONV-1); settlement date, expiry and last trading day from the expiration date, settlement style and calendar (CONV-3).
+- `reference/`: `Underlying` (with the full historical root table) and `DataSource` models with the shipped YAML (REF-1, REF-5); `TradingCalendar` (REF-10, REF-11); the settlement-source registry with `pm_index_close` (REF-20).
 - `registry/mechanism.py`: `Registry`, implementation metadata, discovery with JSON Schemas (REG-2, REG-3).
-- **Tests** (TEST-5, first part): time to expiry to the minute for AM (09:30) and PM (16:00) expiries from a 16:15 snapshot, a one-day PM weekly showing 0.99 days, DST changes per the Phase 0 finding; trading days to expiry across weekends and holidays; calendar edge cases; registry listing and schemas.
+- **Tests** (TEST-5, first part): time to expiry to the minute for AM (09:30) and PM (16:00) expiries from a 16:15 snapshot; a one-day PM weekly showing 0.99 days; as-of and expiry on opposite sides of the March and November DST changes (clock time, not instants); a Saturday-dated AM monthly settling Friday 09:30 with Thursday as its last trading day, and the same when the Friday is a holiday; trading days to expiry across weekends and holidays; every vendor root mapping to its settlement style and normalized root; registry listing and schemas.
 
 ### Phase 3: Storage adapter and catalog
 
@@ -274,16 +279,22 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
 
 ### Phase 5: Synthetic data generator
 
-- `testdata/generator.py` (INT-50): a seeded index path; listed expirations with an AM-settled monthly root (`SPX`, third Fridays and exchange-adjusted dates) and a PM-settled root (`SPXW`, weeklies and dailies); strike grids; implied vols from a simple skew-and-term model; Black-76 prices and greeks at the vendor's time convention; bid-ask spreads from a spread model; expiration-day conventions (IV −1, zero greeks, `mean price` 0 when the bid is 0); a configurable share of crossed quotes, zero asks and flagged rows. Output is the exact 22-column vendor CSV (DATA-1).
+- `testdata/generator.py` (INT-50): a seeded index path; listed expirations with an AM-settled monthly root (`SPX`, third Fridays and exchange-adjusted dates) and a PM-settled root (`SPXW`, weeklies and dailies); strike grids; implied vols from a simple skew-and-term model; Black-76 prices and greeks at the vendor's time convention; bid-ask spreads from a spread model; expiration-day conventions (IV −1, zero greeks, `mean price` 0 when the bid is 0); a configurable share of crossed quotes, zero asks and flagged rows. Output is the exact 22-column vendor CSV (DATA-1), split into several files like the vendor's downloads. An **older-conventions mode** produces five-character codes (including one code used for two contracts on a date), historical roots, Saturday-dated AM monthlies, and a single underlying price per date with discounted deltas (INT-50), so every ingest rule can be tested without vendor data.
 - `testdata/golden.py`: tiny hand-checkable chains (a few strikes, two or three expirations, round numbers), used by M2's golden tests.
 - `prophetovol testdata generate` (a developer command beyond INT-40; §13, decision 8).
 - **Tests:** determinism for a seed; the file parses as vendor format; greeks reproduce Black-76 at CONV-1 exactly (TEST-5, second part); each quirk appears at its configured rate.
 
 ### Phase 6: Ingest, normalization, validation and quality reports
 
-- `data/ingest.py`: the pipeline of §4.3 (DATA-1 to DATA-4, DATA-10 to DATA-13), with progress and cancellation; duplicate-hash detection (DATA-12).
+- `data/ingest.py`: the pipeline of §4.3 (DATA-1 to DATA-4, DATA-10 to DATA-13), imports of several files, folders or zips, with progress and cancellation; duplicate-hash detection per file (DATA-12).
+- `data/derive.py`: the derived columns (DATA-13) and the parity forwards (DATA-14) as SQL over the root and calendar tables.
 - `data/validation.py`: every DATA-20 check with its severity, counts per date and examples; the `QualityReport` model, stored permanently (DATA-21).
-- **Tests** (TEST-6): every normalization rule; IV −1 and zero greeks on expiration day stored as null; `mean price` 0 kept as `vendor_mid` only; crossed quotes and zero asks warned; both roots sharing an expiration date; the `*` column; MM/DD/YYYY; every check triggered by a crafted file; multi-symbol and unknown-root rejection; zip with several CSVs; the size limit; cancellation between partitions leaving nothing staged.
+- **Tests** (TEST-6):
+  - every normalization rule and derived column; IV −1 and zero greeks on the settlement date stored as null; `mean price` 0 kept as `vendor_mid` only; crossed quotes and zero asks warned; both roots sharing an expiration date; the `*` column; MM/DD/YYYY
+  - both symbol formats, the same five-character code for two contracts on a date (counted, not rejected), `osi_symbol` for both, every historical root normalized
+  - Saturday-dated expirations with their settlement and last trading dates; time to expiry from SQL equal to `pricing/time.py` for every row
+  - parity forwards on a synthetic chain with a known forward and discount factor (exact recovery), an invalid fit falling back with a warning, the vendor's forward used from the cut-over date
+  - every check triggered by a crafted file; multi-symbol and unknown-root rejection; an import of several files and of a folder; zip with several CSVs; the size limit; cancellation between partitions leaving nothing staged
 
 ### Phase 7: Overlap, commit, versions, delete, purge, invalidation and coverage
 
@@ -296,11 +307,11 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
 
 ### Phase 8: Data CLI, documentation and checkpoint 1
 
-- CLI (INT-40, data part): `prophetovol data import <file> [--commit replace|add-new|ask]`, `data list`, `data coverage [--underlying]`, `data quality <import_id>`, `data delete --underlying --from --to`, `data purge …`, `registry list [<type>]`, `registry show <type> <name>`, `jobs list|show|cancel`, `docs generate`.
+- CLI (INT-40, data part): `prophetovol data import <file-or-folder>... [--commit replace|add-new|ask]`, `data list`, `data coverage [--underlying]`, `data quality <import_id>`, `data delete --underlying --from --to`, `data purge …`, `registry list [<type>]`, `registry show <type> <name>`, `jobs list|show|cancel`, `docs generate`.
 - README: install, generating test data, importing, coverage, deleting and purging.
-- Optional real-data tests (TEST-10, ingest part): ingest a real year and check counts, quirks and coverage, without storing anything in the repository.
+- Optional real-data tests (TEST-10, ingest part): ingest real years from both vendor periods (for example 2008 and 2023) and check counts, quirks, coverage, the derived columns, parity forwards against the vendor's after Jun 2018, and the vendor's deltas reproduced from the stored time to expiry (TEST-5), without storing anything in the repository.
 - **Tests:** each command on generated data through click's test runner; the `ask` commit flow; the locked-home message.
-- **Checkpoint 1 (demo with you):** import a real year through the CLI, read the quality report, resolve an overlap, view coverage, delete and purge a range.
+- **Checkpoint 1 (demo with you):** import real years from both vendor periods through the CLI (each a single import of its several files), read the quality reports, resolve an overlap, view coverage, delete and purge a range.
 
 ### M1 test summary
 
@@ -355,7 +366,7 @@ Delivers requirements §13 (server, API, GUI, demo) and TEST-9. Detailed with yo
 | TIME-1 to TIME-3, CONV-1 to CONV-9 | 2; applied throughout 9–18 |
 | VER-1 to VER-4 | 7 (data versions); 9 (specs); 14 (runs); 16 (stress) |
 | REG-1 to REG-4 | 2 (mechanism); 9, 11–13, 16 (implementations) |
-| DATA-1 to DATA-21 (format, ingest, validation) | 6; 0 (speed) |
+| DATA-1 to DATA-21 (format, ingest, derived columns, parity forwards, validation) | 6; 2 (time and expiry functions); 0 (speed, data findings) |
 | DATA-30 to DATA-70 (overlap, versions, delete, purge, invalidation, coverage) | 7 |
 | DATA-80 to DATA-84 (storage, Ibis, adapter, contract suite) | 3, 7, 14 |
 | REF-1 to REF-21 | 2; 0 (timing, roots) |
@@ -403,12 +414,12 @@ Delivers requirements §13 (server, API, GUI, demo) and TEST-9. Detailed with yo
 
 The requirements leave the targets to this plan. Agreed Oct 25, 2026; Phase 0's measurements show whether the design meets them:
 
-| Target | Value | Measured in |
+| Target | Value | Phase 0 measurement |
 | --- | --- | --- |
-| Ingest one year of SPX (~750 MB CSV) | under 5 minutes on this laptop | Phase 0, Phase 8 |
-| Single-structure spec over 10 years, data local | under 60 seconds (≈ 24 ms per step) | Phase 0 (data access), Phase 15 (whole run) |
-| Market data read per step | ≤ 8 ms average | Phase 0 |
-| GUI first content | within 1 second (NFR-2) | Phase 24 |
+| Ingest one year of SPX (up to ~650 MB CSV) | under 5 minutes | 13–21 s (before the derived columns of v6, which add a few seconds); confirmed again in Phase 8 |
+| Single-structure spec over 10 years, data local | under 60 seconds (≈ 24 ms per step) | data access 1.2 ms per step; whole run measured in Phase 15 |
+| Market data read per step | ≤ 8 ms average | 1.2 ms (3-month chunks) |
+| GUI first content | within 1 second (NFR-2) | measured in Phase 24 |
 
 ## 13. Design Decisions Made in This Plan
 
@@ -429,13 +440,21 @@ Confirmed Oct 25, 2026, with decision 9 changed from Google style to reStructure
 13. **Copied and adapted from the profiler** (no shared code): the local security module, the JSON encoding of non-finite numbers, the reader-cursor pattern, the job runner's structure, and in M4 the front-end shell (layout, jobs panel, paged table). Everything else is written fresh.
 14. **Run ids are random** (UUID4). They are excluded from determinism comparisons, which compare everything else.
 
+Added in v3, from Phase 0:
+
+15. **Market data is read in three-month chunks from the chunk's own partition files**, with zero-copy per-step slices (§4.6, §15.3).
+16. **Derived columns and parity forwards are computed in SQL at ingest**, over a root table and a calendar table built in Python (§4.3). A test checks that the SQL time-to-expiry arithmetic equals `pricing/time.py` row by row.
+17. **Partitions are written one at a time** at ingest (§4.3, §15.2).
+
 ## 14. Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| R1: per-step data access too slow for the 60-second target. | Phase 0 measures two approaches on real data; the design (§4.6) already allows chunked loading; a failure comes back to you before building. |
-| R2: the vendor's time convention differs from the inference (DST, rounding to the minute). | Phase 0 check 5 on real data either side of DST changes; any difference becomes a requirements change agreed with you. |
-| R3: older files contain option roots or quirks the requirements don't cover. | Phase 0 check 6 inventories them across 2008 and 2024; the optional real-data suite keeps checking. |
+| R1: per-step data access too slow for the 60-second target. | **Retired by Phase 0:** 1.2 ms per step with the §4.6 design. |
+| R2: the vendor's time convention differs from the inference. | **Resolved by Phase 0:** exchange clock time (requirements v6, CONV-1); TEST-5 and the real-data suite keep checking. |
+| R3: older files contain option roots or quirks the requirements don't cover. | **Resolved by Phase 0** for 2007 – Aug 2024 (requirements v6). Newer files with a new root fail ingest with "unknown root" rather than guessing. |
+| R3a: normalizing roots to `SPX`/`SPXW` merges two vendor roots into one contract key on some date. | Not seen in 2007 – 2024 (the key is unique even without the root); the duplicate-contract check rejects it if it ever happens, and requirements open item 9 records the choice for review. |
+| R3b: parity forwards are poor where quotes are sparse (early years, long-dated expirations). | Validity checks with a fallback to the vendor's price, counted in the quality report; `parity_strikes` and `forward_source` are stored so poor fits can be found; checked on real data in Phase 8. |
 | R4: floating-point drift breaks invariants on long runs. | Tolerance of 1e-6 dollars; per-step sums from the same records; invariant tests on many seeded runs. |
 | R5: hand-checked golden tests are slow to write and easy to get wrong. | Tiny chains with round numbers; each expected value derived in a comment beside the assertion; reviewed with you at checkpoint 2. |
 | R6: the spec model's discriminated unions become hard to read in schemas and forms. | Built from the registries so they stay consistent; M4's form design is detailed with you before it starts. |
@@ -445,7 +464,127 @@ Confirmed Oct 25, 2026, with decision 9 changed from Google style to reStructure
 
 ## 15. Phase 0 Findings
 
-To be recorded when Phase 0 runs.
+Run on Oct 25, 2026 (Windows 11, Intel i7-13700KF with 24 threads, 64 GB RAM, Python 3.12.2, DuckDB 2.0.0, Ibis 12.0.0). The scratch scripts were not added to the repository.
+
+**Outcome: the design stands, with one change to market data access (§15.3).** All three performance checks pass by a wide margin. **The real data does not fit several requirements**, though: older symbols, more option roots, Saturday expirations, the vendor's clock convention, and a vendor methodology change in June 2018. These need a requirements revision, agreed with you before Phase 1 (§15.8).
+
+**Data used.** The vendor folder holds SPX from Jan 3, 2007 to Aug 30, 2024: 70 CSV files in 22 folders (the vendor caps a download at about 150 MB, so a year comes in up to five files, newest date first). In total 35.5M rows, 6.5 GB of CSV, about 1.4 GB as Parquet. Rows per year grow from 0.23M (2007) to 4.3M (2021). ⚠ The `PROPHETOVOL_VENDOR_DATA` variable is set to `D:\prophetovol_vendor_files`, which does not exist. The files are in `D:\propheto_vendor_data\spx`, which Phase 0 read directly.
+
+### 15.1 Installs (check 7)
+
+All §2.1 packages installed into `.venv` on Python 3.12.2, to be pinned in `pyproject.toml` in Phase 1:
+
+| Package | Version | Package | Version |
+| --- | --- | --- | --- |
+| duckdb | 2.0.0 | fastapi | 0.162.0 |
+| ibis-framework | 12.0.0 | starlette | 1.10.0 |
+| pyarrow | 26.0.0 | uvicorn | 0.54.0 |
+| numpy | 2.5.4 | python-multipart | 0.0.32 |
+| scipy | 1.18.1 | pytest | 9.1.1 |
+| pydantic | 2.14.1 | pytest-cov | 7.1.0 |
+| PyYAML | 6.0.3 | httpx | 0.28.1 |
+| click | 8.5.0 | build | 1.6.1 |
+| exchange_calendars | 4.13.2 | setuptools | 84.2.1 |
+| pandas (via exchange_calendars) | 3.1.0 | wheel | 0.48.0 |
+
+### 15.2 Ingest speed (check 1): passes
+
+The §4.3 pipeline (read as text, every DATA-20 check as one aggregate per date with examples, normalization, Parquet per month partition) on real years:
+
+| Year | CSV | Rows | DuckDB memory limit | Total time | Peak working set |
+| --- | --- | --- | --- | --- | --- |
+| 2023 | 596 MB, 5 files | 4.04M | 2 GB | 13.3 s | 1.18 GB |
+| 2021 (largest) | 635 MB, 5 files | 4.29M | 1 GB | 18.2 s | 1.23 GB |
+| 2021 | 635 MB | 4.29M | 512 MB | 20.8 s | 0.81 GB |
+
+About 15–25 times faster than the 5-minute target. Reading all 35.5M rows as text takes 4 seconds. ⚠ **Partitions must be written one at a time**: a single sorted `COPY … PARTITION_BY` of a whole year ran out of memory at a 1 GB limit, and per-partition writes fixed it. This is also what the plan wants, for progress and cancellation.
+
+Quality report for 2023 as an example: 37,189 zero asks, 310 crossed quotes, 625,954 vendor-flagged rows (15%), and no other findings. The `*` flag is set on 15–30% of rows in every year.
+
+### 15.3 Market data read speed (check 2): passes, with a design change
+
+Ten real years (Jul 2014 – Aug 2024, 2,560 steps) in the planned layout, reading the columns a 45-day selector needs within its expiry window (about 6,400 contracts per step), with the active-version filter:
+
+| Approach | Per step |
+| --- | --- |
+| (a) one Ibis query per step over the partitioned dataset | 52–56 ms: **fails** (the whole budget is 24 ms) |
+| (b) one Ibis query per month over the partitioned dataset, filtered per step | 7.9 ms: at the limit |
+| (c) **one Ibis query per chunk over the chunk's own partition files**, zero-copy slices per step | **2.2 ms** (1-month chunks), **1.2 ms** (3-month), 1.05 ms (12-month) |
+
+**Design change to §4.6:** the `MarketDataProvider` gets the partition file paths for each chunk from the adapter, reads them with one Ibis expression (active versions as a small in-memory semi-join), and the view hands out `pyarrow` zero-copy slices by precomputed date offsets. **Chunks of three months**: ten years of data access then take about 3 seconds of the 60-second budget. ⚠ DuckDB infers the hive partition columns as an integer `year` and a *string* `month` (because of the zero padding). The adapter reads by path and does not rely on these inferred columns.
+
+### 15.4 Reads during writes (check 3): passes
+
+A worker thread wrote 122 Parquet partitions with throttled job-progress updates, committed an activation of 2,560 data versions (held open 0.5 s), and wrote 1.5M result rows in one transaction (held open 0.5 s). Meanwhile three reader threads on cursors (one through Ibis) listed imports and jobs, counted versions by state and counted results:
+
+- no errors; **no reader ever saw a partial activation or partial results**
+- plain cursor reads: median 2.9 ms, p95 5.3 ms, max 22 ms; the Ibis reader: median 6.9 ms, max 413 ms (first call)
+- ⚠ with progress throttled to twice a second, the final update (120 of 122) was skipped: progress must always be written at completion (§4.8 already says so).
+
+### 15.5 Calendar (check 4): passes
+
+The files have exactly the 4,446 `XNYS` sessions from Jan 3, 2007 to Aug 30, 2024: none missing, none extra, including the unscheduled closures.
+
+### 15.6 Option symbols and roots (check 6): requirements change needed
+
+- **Symbol formats.** Until Feb 11, 2010, option symbols are **five-character OPRA codes** (for example `QSZLH`: root `QSZ`, then month and strike letters). From Feb 12, 2010 they are OSI (`SPXW  240830C01400000`). DATA-13's root parsing covers only OSI.
+- **Old codes are not unique.** In 2007–2010, 641 `(date, option symbol)` pairs (1,944 rows) name *different* contracts: different expirations, strikes, even a call and a put. DATA-20's duplicate check would reject those years. **The key `(date, expiration, strike, call/put)` is unique across all 35.5M rows**, with or without the root.
+- **Roots.** Beyond `SPX` and `SPXW` (33.9M rows), 1.5M rows (2007 to Jul 2014) use other roots:
+
+  | Roots | Period | Expirations | Settlement implied by the vendor's greeks |
+  | --- | --- | --- | --- |
+  | 24 old monthly roots (`SZP SXY SPT SXZ SPQ SXB SPX SXM SPZ SYG SZT SPB SYU SXG SZJ SZV SVP SYZ SPL SPV SZU SZD SYV SXJ`) | 2007 – May 2010 | Saturdays | AM, on the Friday before |
+  | 9 old quarterly roots (`SZQ SAQ SLQ QSE SQP QZQ QSZ SKQ SQG`) | 2007 – May 2010 | weekdays | PM (about 16:00) |
+  | `JXA JXB JXD JXE` (weeklies) | 2007 – May 2010 | Thursdays and Fridays | AM (about 09:30) |
+  | `SPXPM` | May 2010 – Apr 2011 | weekdays | AM (about 09:30), despite the name |
+  | `SPXQ` (quarterlies) | Apr 2011 – Jul 2014 | weekdays | PM (about 16:00) |
+
+- **Saturday expirations.** Until Feb 2015, standard monthly expirations are dated on the **Saturday** after the third Friday. The vendor's greeks put their expiry at about **09:30 on the Friday before**. CONV-3 (expiry at 09:30 on the expiration date) and SPEC-15/SPEC-51 (last trading day = the trading day before the expiration date, which would be the settlement Friday itself) are wrong for those contracts.
+
+### 15.7 The vendor's time convention (check 5): requirements change needed
+
+Measured two ways: from the vendor's call deltas (precise, valid from June 2018) and from the vega/gamma ratio (about ±15 minutes, valid for every year).
+
+- **From Jun 25, 2018 the convention is confirmed to the minute:** Black-76 on the vendor's forward, undiscounted, at the convention's time to expiry, reproduces the vendor's call deltas with a **median error of 0.000001** (1.36M contracts). Vendor time to expiry × 365 = calendar days − 0.010, which is the 15 minutes from a 16:15 snapshot to a 16:00 PM expiry; AM expiries sit at 09:30.
+- **Daylight saving: the vendor uses wall-clock time.** For expirations whose as-of time and expiry fall on opposite sides of a DST change (5,294 cases), the vendor's time differs by exactly 60 minutes from absolute-instant time and by 0 minutes from wall-clock time. CONV-1 must say time to expiry is the difference of **exchange-local clock times** (DST ignored), not of instants.
+- **The vendor changed methodology on Jun 25, 2018.** Up to Jun 22, 2018:
+  - `stock price for iv` is **one price per date for every expiration**, not a per-series forward. It equals the index close in most 2007–2010 rows, and mostly differs slightly from it after 2011.
+  - **Deltas are discounted**: call delta − put delta at the same strike is about 0.994 at 60–120 days (exactly 1.000 from Jun 2018).
+  - The vega/gamma ratio still shows calendar time over 365 days, with the Saturday expiries above at the Friday morning.
+
+  This affects the `forward` selector (SPEC-22), the forward used for stress revaluation (STR-20, ENG-23), and, slightly, hedging and delta selection on discounted deltas (SPEC-27, SPEC-61).
+
+### 15.8 Requirements changes needed before Phase 1
+
+**Resolved in requirements v6** (Oct 25, 2026), as follows:
+- **1:** adopted, with a normalized OSI-style symbol for every year.
+- **2:** `JX*`, `SPXPM` and the old quarterlies are PM-settled; AM roots normalize to `SPX` and PM roots to `SPXW`, to be tried and revisited if it causes issues.
+- **3:** settlement on the trading day before a non-trading expiration date, with the forced close on the trading day before that (normally Thursday).
+- **4:** exchange clock time, with all derived values stored in their own columns at ingest.
+- **5:** option (a), one parity forward per expiration from the strikes nearest the money, used before Jun 25, 2018, with the vendor's forward from then and vendor deltas as given.
+- **6:** adopted.
+
+**Parity check** (run after Phase 0, before writing v6). One forward per (date, expiration) from the strikes nearest the money, compared with the vendor's per-series forwards from Jun 25, 2018 (65,043 expirations):
+
+| Strikes used | Median gap | p95 | p99 | Implausible discount factors before Jun 2018 |
+| --- | --- | --- | --- | --- |
+| 2 (1 each side) | 1.12 bp | 25.3 bp | 81 bp | 2.3% |
+| 4 (2 each side) | 1.10 bp | 24.9 bp | 78 bp | 0.31% |
+| **6 (3 each side), both bids > 0** | **1.09 bp** | **24.6 bp** | **78 bp** | **0.06%** |
+
+By tenor (6 strikes): median 0.25 bp under 7 days, 0.31 bp at 7–30 days, 0.77 bp at 30–90 days, 0.98 bp at 90 days to a year, 8.5 bp beyond a year. Gaps above 10 bp cluster in 2020–2021 (about 25% of expirations under a year) and are absent in 2023–2024, which points to a vendor-side difference in those years rather than the method. The median implied rate (expirations over 30 days) is 2.8% after Jun 2018 and 0.9% before, which is plausible for each period.
+
+The original list, for reference:
+
+1. **Root parsing and contract identity** (DATA-13, DATA-20, RES-1): parse both symbol formats; identify a contract by `(underlying, expiration, strike, call/put)`, with root and option symbol stored but not used as the key; check duplicates on that key.
+2. **Root configuration** (REF-1): add the historical roots of §15.6 with their settlement styles. To confirm: are the `JX*` weeklies and `SPXPM` AM-settled, as the vendor's greeks treat them, or PM-settled, as `SPXPM`'s name suggests?
+3. **Saturday expirations** (CONV-3, SPEC-15, SPEC-51): an AM expiration dated on a non-trading day expires at 09:30 on the preceding trading day, and its last trading day is the trading day before that.
+4. **Wall-clock time to expiry** (CONV-1, TEST-5): the difference of exchange-local clock times over 365 days, matching the vendor across DST changes.
+5. **Data before Jun 25, 2018** (DATA-13, SPEC-22, STR-20, ENG-23): one underlying price instead of per-series forwards, and discounted deltas. Options:
+   - (a) derive each expiration's forward at ingest from put-call parity on that day's quotes, recorded with its source (point-in-time, deterministic)
+   - (b) use the vendor's single price as the forward for those dates, flagged
+   - (c) support only data from Jun 25, 2018 in Phase 1
+6. **Import of several files** (DATA-3, DATA-4, INT-40): a year arrives as up to five CSVs. Allow one import from several files or a folder, not only one file or a zip.
 
 ## 16. Implementation Notes
 
