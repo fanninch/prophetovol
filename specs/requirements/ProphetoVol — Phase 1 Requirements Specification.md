@@ -1,6 +1,23 @@
-# Options Backtester — Phase 1 Requirements Specification
+# ProphetoVol — Phase 1 Requirements Specification
 
-Oct 25, 2026 · @Chuck · **Status: Draft for review (v2)** · Companion document: *Options Backtester — Project Plan & Roadmap (Draft)* ("the project plan"), which records the later phases and the reasoning behind decisions made here.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v5). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+
+**Changes in v5** (agreed Oct 25, 2026):
+
+- **Docstrings are reStructuredText** with Sphinx field lists, so a Sphinx documentation site can be built from them later (DOC-4). Generated reference documentation is also written as reStructuredText (DOC-1).
+
+**Changes in v4** (agreed Oct 25, 2026):
+
+- **Pure Python.** ProphetoVol is a pure Python project distributed as a standard wheel, with no compilation and no obfuscation (§16.2). The v3 distribution-readiness requirements are removed: the license-check hook, the compilable core and the compile boundary. DIST-1 now states the pure Python wheel; DIST-2 and DIST-3 are retired.
+
+**Changes in v3** (agreed Oct 25, 2026):
+
+- **Names:** the product is **ProphetoVol**, the Python package and the CLI command are `prophetovol`, and the home directory is `~/.prophetovol` (ARC-7).
+- **Profit and loss triggers are in dollars per structure unit.** `structure_pnl_pct_at_or_above` and `structure_pnl_pct_at_or_below` are replaced by `structure_pnl_per_unit_at_or_above` and `structure_pnl_per_unit_at_or_below` (SPEC-41, SPEC-46). A percentage needs a denominator (entry premium, notional, or stress loss), and none of them is well defined for every structure.
+- **A forced close with no valid quote** closes at the last valid mark (SPEC-51, ENG-41).
+- **PM-settled legs whose expiration date has no step**, because a missing day is skipped, are force-closed at the last step before it (SPEC-55).
+- **The hedge is always fractional**; rounding applies to structure units only (SPEC-62, SPEC-72).
+- **Run results are written in one transaction** when the run ends, whatever its outcome (RUN-23).
 
 **Changes in v2:** daily, row-based names replaced by **snapshots** taken at **steps** with an **as-of** timestamp; time to expiry is a year fraction computed from timestamps, matching the vendor's convention; expiration selectors and conditions state their units (calendar days, trading days, or nth expiration); distribution-readiness constraints added (§16.2).
 
@@ -15,6 +32,8 @@ In Phase 1 a user can:
 3. **Define stress tests:** underlying price slides, evaluated at every step of a backtest, either reporting only or gating new trades.
 4. **Run backtests:** a strategy version over a date range, with a configuration (capital, fills, costs, stress mode), as a background job.
 5. **Review results:** position, structure and portfolio snapshots (P&L and greeks) at every step, stress snapshots, events, and aggregate statistics, all traceable to exact data, strategy, configuration and software versions.
+
+This document is agreed and is the definition of what Phase 1 builds. The roadmap's later phases are context only.
 
 There is **no AI in Phase 1**. Later phases add an AI layer that, given a request or a statement, chooses what to test and drives this same deterministic tool. Phase 1 must therefore expose every capability through documented, schema-described service operations (§14), so that later an agent can use them exactly as a person does.
 
@@ -48,7 +67,8 @@ There is **no AI in Phase 1**. Later phases add an AI layer that, given a reques
 - Holding AM-settled contracts to expiration (no settlement-value source exists yet; §8.6).
 - Data frequencies other than end of day.
 - Equities and corporate actions; underlyings other than cash-settled European index options.
-- Multiple users, remote deployment, databases other than DuckDB, and the protected trial build itself (§16.2 only keeps it possible).
+- Multiple users, remote deployment, and databases other than DuckDB.
+- Licensing, trial expiry, code compilation or obfuscation (§16.2).
 
 ## 3. Users & Primary Tasks
 
@@ -72,7 +92,7 @@ The primary user is an **options trader or researcher** who knows option structu
 browser (React + TypeScript SPA)
         │  HTTP/JSON (OpenAPI-documented REST API)
         ▼
-optbt serve ── API server (FastAPI on uvicorn)
+prophetovol serve ── API server (FastAPI on uvicorn)
         │        ├─ job runner (persisted jobs, progress, cancellation)
         │        └─ static file serving for the built SPA
         ▼
@@ -92,12 +112,12 @@ BacktestService (single owner of all storage access)
 ```
 
 - **ARC-1** `BacktestService` is the only component that opens storage. The CLI and the API server are thin clients: they translate input to service calls and results to output, and contain no domain logic. Capabilities missing from the service are added to the service, not to a client.
-- **ARC-2** The **engine is a pure library**. It receives a `MarketDataView`, a strategy specification, a run configuration and stress definitions, and returns results through a recorder interface. It performs no file, database or network access, so it can run in worker processes later (project plan, Phase 2) and be tested without storage.
+- **ARC-2** The **engine is a pure library**. It receives a `MarketDataView`, a strategy specification, a run configuration and stress definitions, and returns results through a recorder interface. It performs no file, database or network access, so it can run in worker processes later (roadmap, Phase 2) and be tested without storage.
 - **ARC-3** **Point-in-time access.** The engine reads market data only through `MarketDataView`, which is bound to the current step's as-of timestamp and raises an error for any request stamped after it. This guard is enforced in code and covered by tests (§17).
 - **ARC-4** **One writer.** DuckDB allows one read-write connection per file. The service owns the read-write connections; write jobs run one at a time; read requests are served during a running job through separate cursors (as in the profiling tool's GAP-8).
 - **ARC-5** **Registries.** Every extensible component type is a registry of named implementations (§5.4). Each implementation declares a name, a description and a parameter schema. Specs and configurations refer to implementations by name.
 - **ARC-6** **Single-user, local.** The server binds to `127.0.0.1` only, with the profiling tool's local security (§13.1). Remote deployment is out of scope.
-- **ARC-7** **Product naming is provisional.** This document uses the working names *Options Backtester*, Python package `options_backtester`, CLI command `optbt`, and home directory `~/.optbt`. They are placeholders to be confirmed (§20).
+- **ARC-7** **Names.** The product is *ProphetoVol*. The Python package (distribution and import name) and the CLI command are `prophetovol`. The home directory defaults to `~/.prophetovol`, overridable by `--home` or the `PROPHETOVOL_HOME` environment variable.
 
 ## 5. Domain Model
 
@@ -173,7 +193,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 | Expiration selectors | `target_days`, `trading_days_out`, `nth_expiration`, `same_as_leg`, `next_after_leg` | §8.2 |
 | Strike selectors | `delta`, `atm`, `forward`, `same_strike_as`, `strike_offset` | §8.3 |
 | Entry schedules | `once`, `when_flat`, `every_n_trading_days`, `weekdays` | §8.4 |
-| Trigger conditions | `leg_abs_delta_above`, `leg_abs_delta_below`, `leg_days_to_expiry_at_or_below`, `structure_min_days_to_expiry_at_or_below`, `structure_pnl_pct_at_or_above`, `structure_pnl_pct_at_or_below`, `trading_days_held_at_least` | §8.5 |
+| Trigger conditions | `leg_abs_delta_above`, `leg_abs_delta_below`, `leg_days_to_expiry_at_or_below`, `structure_min_days_to_expiry_at_or_below`, `structure_pnl_per_unit_at_or_above`, `structure_pnl_per_unit_at_or_below`, `trading_days_held_at_least` | §8.5 |
 | Trigger actions | `close`, `roll` | §8.5 |
 | Hedge rules | `none`, `band` | §8.7 |
 | Sizing methods | `contracts`, `notional` | §8.8 |
@@ -184,7 +204,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 | Constructors | `rules` (applies a `StrategySpec`) | §9.1 |
 
 - **REG-2** Every implementation declares a **name**, a **one-paragraph description**, a **pydantic parameter model** with a description on every field, and the **version** of its implementation. The version is recorded on runs.
-- **REG-3** Registries are discoverable through the service, the API and the CLI (`optbt registry list`, `optbt registry show <type> <name>`), returning the descriptions and JSON Schemas. This is what the GUI forms and, later, an agent read (§14).
+- **REG-3** Registries are discoverable through the service, the API and the CLI (`prophetovol registry list`, `prophetovol registry show <type> <name>`), returning the descriptions and JSON Schemas. This is what the GUI forms and, later, an agent read (§14).
 - **REG-4** Condition types are pluggable so that later phases can add conditions on market context and forecasts, written by people or defined by an agent. Phase 1 conditions read only the structure's own state and the calendar.
 
 ## 6. Data Module
@@ -318,7 +338,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 ### 7.4 Settlement sources
 
 - **REF-20** Settlement is resolved through the settlement-source registry by settlement style. Phase 1 ships one source, `pm_index_close`, which settles PM-settled contracts at intrinsic value against the index level at expiry (the `adjusted close` on the expiration date).
-- **REF-21** No settlement source exists for AM-settled contracts in Phase 1, because the vendor data contains no AM settlement value (SET) and the vendor does not supply one. AM-settled contracts are therefore never held to expiration (§8.6). A future source that loads SET values from a user-uploaded table plugs in here without engine changes (project plan).
+- **REF-21** No settlement source exists for AM-settled contracts in Phase 1, because the vendor data contains no AM settlement value (SET) and the vendor does not supply one. AM-settled contracts are therefore never held to expiration (§8.6). A future source that loads SET values from a user-uploaded table plugs in here without engine changes (roadmap).
 
 ## 8. Strategy Specification
 
@@ -404,8 +424,8 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 | `leg_abs_delta_below` | `leg`, `threshold` | \|delta\| < threshold |
 | `leg_days_to_expiry_at_or_below` | `leg`, `days`, `unit` | the leg's time to expiry ≤ `days`, measured in `unit`: `calendar_days` (default, fractional, CONV-1) or `trading_days` (CONV-2) |
 | `structure_min_days_to_expiry_at_or_below` | `days`, `unit` | the shortest time to expiry among open legs ≤ `days`, in `unit` |
-| `structure_pnl_pct_at_or_above` | `percent` | structure P&L since entry, as a percentage of the absolute entry premium, ≥ percent (a profit target) |
-| `structure_pnl_pct_at_or_below` | `percent` (negative) | that percentage ≤ percent (a stop) |
+| `structure_pnl_per_unit_at_or_above` | `amount` (dollars) | structure P&L per unit (SPEC-46) ≥ amount (a profit target) |
+| `structure_pnl_per_unit_at_or_below` | `amount` (dollars, negative) | structure P&L per unit ≤ amount (a stop) |
 | `trading_days_held_at_least` | `days` | trading days since the structure was opened ≥ days |
 
 - **SPEC-42** Conditions are evaluated at each step on that step's marks and vendor greeks. A condition that needs a null greek evaluates to false and records a warning event.
@@ -415,17 +435,19 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - `roll` with structure scope closes the structure and opens a new one with the spec's selectors and sizing (CONV-9). The new structure records the old one as its parent.
 - **SPEC-44** **One action per structure per step.** When several triggers fire at the same step, precedence is: structure `close`, then structure `roll`, then leg `close`, then leg `roll` (in the triggers' listed order within each). The chosen action and every other fired trigger are recorded in the event.
 - **SPEC-45** A roll whose opening side fails selection leaves the structure closed (for a structure roll) or the leg closed (for a leg roll), and records the failure.
+- **SPEC-46** **Structure P&L per unit** is the structure's cumulative P&L since it was opened, divided by its number of units `N` (SPEC-70, SPEC-71), in dollars. The cumulative P&L includes everything attributed to the structure: its option legs, its hedge and its fees, as in its structure snapshot (RES-11). A leg roll keeps the structure, so its P&L keeps accumulating. A structure roll opens a new structure, whose P&L starts at zero. Percentage profit and loss conditions are not provided, because no denominator (entry premium, notional or stress loss) is well defined for every structure. *Example:* a 10-unit iron butterfly with a profit target of `amount: 250` closes when the structure has made $2,500 or more.
 
 ### 8.6 Expiration & settlement
 
 - **SPEC-50** **PM-settled legs** held to their expiry settle at intrinsic value against the index level at expiry (`pm_index_close`, REF-20). Settlement is a cash flow with no fill-model cost.
-- **SPEC-51** **AM-settled legs are force-closed** at the last step of their last trading day (the trading day before the expiration date) through the fill model, as an ordinary closing trade, with a `forced_close_am` event. This applies whether or not any trigger would have fired.
+- **SPEC-51** **AM-settled legs are force-closed** at the last step of their last trading day (the trading day before the expiration date) through the fill model, as an ordinary closing trade, with a `forced_close_am` event. This applies whether or not any trigger would have fired. If the contract has no valid quote at that step, it is closed at its last valid mark, with no fill-model cost (commission still applies), the position snapshot is flagged `forced_close_stale`, and a warning event is recorded. A forced close is never retried at a later step (ENG-41), because there is no later step at which the contract can be closed or settled.
 - **SPEC-52** **Validation rejects** a leg with `hold_to_expiration: true` whose allowed roots include an AM-settled root, with the message: *"AM-settled contracts cannot be held to expiration: no AM settlement source is configured. Restrict this leg to PM-settled roots, or add a closing trigger."*
 - **SPEC-53** **Validation warns** when a leg can select an AM-settled root and no trigger would close it before its last trading day (no `leg_days_to_expiry_at_or_below` or `structure_min_days_to_expiry_at_or_below` that fires at least one trading day before expiry). The warning explains that the engine will force-close the leg.
 - **SPEC-54** `expiry_handling` sets what happens to the rest of the structure when a leg settles or is force-closed:
   - `close_structure` (default): close the remaining legs and the hedge at the same step.
   - `keep_remaining`: keep the remaining legs open.
   - `roll_leg`: re-select the expired leg as a leg roll.
+- **SPEC-55** **PM-settled legs whose expiration date has no step are force-closed early.** When a run skips missing trading days (`allow_missing_days`, RUN-11) and a PM-settled leg's expiration date is one of them, there is no index level to settle against. The leg is force-closed at the last step before its expiration date through the fill model, with a `forced_close_missing_expiry` event, following SPEC-51's rule when that step has no valid quote. The engine knows which days are missing from the run's step schedule, fixed at pre-flight; this reads no future market data. Closing early is preferred to settling against a substitute index level, which would add profit or loss that never existed. `expiry_handling` applies as for any forced close.
 
 ### 8.7 Delta hedging
 
@@ -439,7 +461,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
     It is expressed in deltas per one unit of the structure. For example, `0.03` is long 3 deltas per spread.
   - If the measure is outside `[lower, upper]` after the step's option trades, the hedge is traded so the measure equals `target`.
   - Hedging to flat at every step is `lower = upper = target = 0`.
-- **SPEC-62** **The hedge instrument** in Phase 1 is a synthetic position in the index itself, traded at the index level in the snapshot, with a configurable cost in basis points of traded notional (§11.1). Financing, dividends and margin on the hedge are not modeled (§18). Futures and ETF hedges are later work.
+- **SPEC-62** **The hedge instrument** in Phase 1 is a synthetic position in the index itself, traded at the index level in the snapshot, with a configurable cost in basis points of traded notional (§11.1). The hedge holding `h` is fractional (in index units) under either rounding setting; it is never rounded. Financing, dividends and margin on the hedge are not modeled (§18). Futures and ETF hedges are later work.
 - **SPEC-63** Hedging is evaluated at every step after option trades (§9.1, step 8), using that step's vendor deltas. Legs with a null delta (at expiry) count as zero delta after settlement.
 - **SPEC-64** When a structure closes, its hedge is closed at the same step.
 
@@ -447,7 +469,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 - **SPEC-70** `contracts`: open `quantity` units of the structure per entry; leg *i* trades `quantity × ratio_i` contracts.
 - **SPEC-71** `notional`: units = `notional / (S × m)`, where `S` is the index level at the entry step.
-- **SPEC-72** Rounding follows the run configuration (§11.1): `whole` (round down; if below 1, the entry is skipped with an event) or `fractional`.
+- **SPEC-72** Rounding of structure units follows the run configuration (§11.1): `whole` (round down; if below 1, the entry is skipped with an event) or `fractional`. It does not apply to the hedge (SPEC-62).
 - **SPEC-73** A structure roll re-sizes using the sizing method at the roll step; a leg roll keeps the leg's quantity.
 
 ### 8.9 Validation & authoring
@@ -466,7 +488,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   2. **Settle.** Settle PM-settled legs whose expiry is at or before *t* (SPEC-50).
   3. **Mark.** Mark every open position (§9.3).
   4. **Evaluate triggers** for each open structure (§8.5), producing at most one action each.
-  5. **Forced closes.** Add closes for AM-settled legs whose last trading day is *t*'s date (SPEC-51), and apply `expiry_handling` (SPEC-54).
+  5. **Forced closes.** Add closes for AM-settled legs whose last trading day is *t*'s date (SPEC-51) and for PM-settled legs whose expiration date has no step (SPEC-55), and apply `expiry_handling` (SPEC-54).
   6. **Evaluate entries** under the entry schedule (§8.4) and build orders for new structures and for the opening sides of rolls.
   7. **Stress gate.** Size the opening orders (§8.8), then apply the stress mode to them (§10.4). Closing orders are never gated.
   8. **Execute and hedge.** Fill all orders at *t* (§9.5), then rebalance hedges (§8.7).
@@ -511,7 +533,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - `mid`: fill at the mid
   - `cross_spread`: buy at the ask, sell at the bid
   - `mid_plus_fraction`: fill at the mid plus `fraction` of the half-spread against the trader (`fraction` from 0 to 1)
-- **ENG-41** An order for a contract with an invalid quote at *t* is not filled. Opening orders are dropped with an event. Closing orders are retried at the next step with a valid quote, and the position keeps its stale mark meanwhile, with events recorded.
+- **ENG-41** An order for a contract with an invalid quote at *t* is not filled. Opening orders are dropped with an event. Closing orders are retried at the next step with a valid quote, and the position keeps its stale mark meanwhile, with events recorded. Forced closes (SPEC-51, SPEC-55) are the exception: they are never retried, and close at the last valid mark instead.
 - **ENG-42** Commission is a configurable amount per contract per side. Hedge cost is a configurable number of basis points of traded notional.
 - **ENG-43** Opening trades at a price worse than the mid show a first-step loss against the mid mark; this is the intended way transaction cost becomes visible.
 
@@ -529,7 +551,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **STR-10** `underlying_slide` shocks the index by each of a list of percentage moves, instantaneously, with each contract keeping its own implied vol (sticky strike) and with no time decay.
   - Parameter: `moves_pct`, a list of signed percentages.
   - Default definition, shipped as `default_slide`: `[-20, -15, -10, -5, 5, 10, 15, 20]`, with no loss limit.
-- **STR-11** The scenario-type registry is the extension point for vol shocks, surface changes, joint scenarios and historical replays (project plan). Adding a type requires no engine change.
+- **STR-11** The scenario-type registry is the extension point for vol shocks, surface changes, joint scenarios and historical replays (roadmap). Adding a type requires no engine change.
 
 ### 10.3 Revaluation
 
@@ -604,7 +626,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - every trading day in the range has an active market snapshot for the underlying
   - each snapshot's chain is non-empty and has the fields the spec's selectors require
   - the configuration is valid
-- **RUN-11** Pre-flight returns all problems at once. Missing trading days block the run unless `allow_missing_days` is `true`, in which case those days are skipped and the next step's snapshots are flagged. Other errors always block; warnings never do.
+- **RUN-11** Pre-flight returns all problems at once. Missing trading days block the run unless `allow_missing_days` is `true`, in which case those days are skipped and the next step's snapshots are flagged. A missing day that is an expiration date is reported with a warning that PM-settled legs expiring on it will be closed early (SPEC-55). Other errors always block; warnings never do. Pre-flight fixes the run's step schedule.
 - **RUN-12** Pre-flight is available on its own (a readiness check) without starting a run.
 
 ### 11.3 Lifecycle
@@ -614,7 +636,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - Runs left `queued` or `running` by a previous process are marked `failed` with the reason `interrupted` when the catalog is next opened.
 - **RUN-21** Progress is reported as steps completed of steps total, with the current as-of time.
 - **RUN-22** Cancellation takes effect at the next step boundary. Results recorded up to that point are kept, and the run is marked `cancelled`.
-- **RUN-23** Results are written atomically per run: a failed run's partial results are kept, but marked as partial.
+- **RUN-23** **Results are written in one transaction when the run ends.** The engine keeps a run's output in memory and the service writes all of it atomically at the end, whatever the outcome: `completed`, `halted`, `cancelled` (results up to the last finished step, RUN-22) or `failed` (results up to the failure, marked *partial*). While a run is in progress only its progress (RUN-21) is visible, not its results. If the write itself fails, no results are stored and the run is marked `failed`.
 
 ### 11.4 Recorded provenance
 
@@ -644,7 +666,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - values: `market_value`, `cash_flow`, `fees`, `period_pnl`, `cumulative_pnl`
   - per-contract vendor greeks: `delta`, `gamma`, `vega`, `theta`
   - dollar greeks (CONV-7): `dollar_delta`, `dollar_gamma_1pct`, `dollar_vega`, `dollar_theta`
-  - `flags` (for example `stale_mark`, `vendor_flagged`, `missing_day_before`)
+  - `flags` (for example `stale_mark`, `forced_close_stale`, `vendor_flagged`, `missing_day_before`)
 - **RES-2** The hedge's position snapshot has `dollar_delta = h · S` and zero for the other greeks.
 
 ### 12.2 Portfolio snapshots
@@ -661,7 +683,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **RES-20** Every event has a sequence number, step, as-of time, type, `structure_id` where relevant, a message, and structured details. Types include:
   - `entry`, `entry_skipped`
   - `trigger_fired` (with every condition that fired), `roll`, `close`
-  - `settlement`, `forced_close_am`
+  - `settlement`, `forced_close_am`, `forced_close_missing_expiry`
   - `hedge_trade`
   - `stress_scaled`, `stress_skipped`, `stress_halted`, `stress_would_have_acted`, `stress_breach`
   - `selection_failed`, `stale_mark`, `order_not_filled`, `condition_null_greek`
@@ -693,7 +715,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
 ### 13.1 Server & local security
 
-- **INT-1** `optbt serve [--home DIR] [--port N] [--no-browser]` starts the API server and the GUI, binds to `127.0.0.1`, chooses a free port if none is given, and opens the browser.
+- **INT-1** `prophetovol serve [--home DIR] [--port N] [--no-browser]` starts the API server and the GUI, binds to `127.0.0.1`, chooses a free port if none is given, and opens the browser.
 - **INT-2** Local security follows the profiling tool:
   - loopback only
   - requests whose `Host` or `Origin` header is not the server's own are rejected
@@ -754,13 +776,13 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 ### 13.5 CLI
 
 - **INT-40** The CLI (`click`) is a thin client of the service. Minimum commands:
-  - `optbt serve`
-  - `optbt data import <file> [--commit replace|add-new|ask]`, `optbt data list`, `optbt data coverage [--underlying]`, `optbt data quality <import_id>`, `optbt data delete --underlying --from --to`, `optbt data purge ...`
-  - `optbt spec validate <file>`, `optbt spec publish <file>`, `optbt spec list`, `optbt spec show <id>[@version]`, `optbt spec export <id>[@version]`
-  - `optbt stress validate|publish|list|show`
-  - `optbt registry list [<type>]`, `optbt registry show <type> <name>`
-  - `optbt run preflight ...`, `optbt run start --spec <id>@<v> [--stress <id>@<v> ...] --config <file>`, `optbt run list`, `optbt run show <run_id>`, `optbt run export <run_id> --format csv|parquet`, `optbt run cancel <run_id>`
-  - `optbt demo` (§13.6)
+  - `prophetovol serve`
+  - `prophetovol data import <file> [--commit replace|add-new|ask]`, `prophetovol data list`, `prophetovol data coverage [--underlying]`, `prophetovol data quality <import_id>`, `prophetovol data delete --underlying --from --to`, `prophetovol data purge ...`
+  - `prophetovol spec validate <file>`, `prophetovol spec publish <file>`, `prophetovol spec list`, `prophetovol spec show <id>[@version]`, `prophetovol spec export <id>[@version]`
+  - `prophetovol stress validate|publish|list|show`
+  - `prophetovol registry list [<type>]`, `prophetovol registry show <type> <name>`
+  - `prophetovol run preflight ...`, `prophetovol run start --spec <id>@<v> [--stress <id>@<v> ...] --config <file>`, `prophetovol run list`, `prophetovol run show <run_id>`, `prophetovol run export <run_id> --format csv|parquet`, `prophetovol run cancel <run_id>`
+  - `prophetovol demo` (§13.6)
 - **INT-41** While the server is running, the CLI cannot open the same home directory (one DuckDB writer). Both report this clearly and name the remedy, as in the profiling tool.
 
 ### 13.6 Synthetic data & demo
@@ -771,15 +793,15 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - strike grids, implied vols from a simple skew model
   - Black-76 prices and greeks computed with the same time convention as the vendor (CONV-1, REF-5), bid-ask spreads from a spread model
   - expiration-day conventions (IV of −1 and zero greeks), and a configurable share of crossed quotes and flagged rows
-- **INT-51** `optbt demo` creates a demo home: generated data imported and committed, the Appendix B specs published, the default stress definition, and one completed run of each spec.
+- **INT-51** `prophetovol demo` creates a demo home: generated data imported and committed, the Appendix B specs published, the default stress definition, and one completed run of each spec.
 - **INT-52** Vendor data is licensed and must never be committed to the repository. Tests depend only on synthetic data; optional local tests can run against real files supplied through an environment variable (§17).
 
 ## 14. Schemas & Documentation (AI-Readiness)
 
-- **DOC-1** **One definition per configurable item.** Every spec element, registry implementation's parameters, stress definition, run configuration and result snapshot is a pydantic model with a description on every field. That single definition drives validation, the OpenAPI document, the GUI forms, the JSON Schemas returned by the registries (REG-3), and the generated reference documentation. Documentation is never written separately from the schema.
+- **DOC-1** **One definition per configurable item.** Every spec element, registry implementation's parameters, stress definition, run configuration and result snapshot is a pydantic model with a description on every field. That single definition drives validation, the OpenAPI document, the GUI forms, the JSON Schemas returned by the registries (REG-3), and the generated reference documentation (written as reStructuredText, ready for Sphinx). Documentation is never written separately from the schema.
 - **DOC-2** Descriptions state units, sign conventions, defaults and interactions (for example, that `cooldown_trading_days` does not delay a roll, or that `days` in a condition is measured in its `unit`). They are written so a reader with no other context, including a later AI agent, can configure the item correctly.
 - **DOC-3** The conventions (§5.4) are published as a single document generated from the conventions module.
-- **DOC-4** Public modules, classes and functions have docstrings in one style (Google or NumPy, chosen once). A README covers install, the demo, importing data, publishing a spec and running a backtest. A documentation site is later work (as FB-10 in the profiling tool).
+- **DOC-4** Public modules, classes and functions have **reStructuredText docstrings with Sphinx field lists** (`:param name:`, `:type name:`, `:returns:`, `:rtype:`, `:raises ExceptionType:`), used consistently, so Sphinx autodoc can render them without extensions. A README covers install, the demo, importing data, publishing a spec and running a backtest. A Sphinx documentation site is later work; Phase 1 writes docstrings and generated reference documentation ready for it.
 
 ## 15. Audit
 
@@ -796,9 +818,9 @@ The stack follows the data profiling tool's current state.
 
 | Layer | Choice |
 | --- | --- |
-| Language | Python 3.11+ |
+| Language | Python 3.11+ (developed and tested on 3.12) |
 | Package metadata | `pyproject.toml` `[project]` table, the single source of dependencies; no `setup.py` |
-| Layout | src layout: `src/options_backtester/` |
+| Layout | src layout: `src/prophetovol/` |
 | Requirements files | `requirements.txt` = `-e .`; `build_requirements.txt` = `-e .[dev]` |
 | Dependencies | DuckDB, Ibis (`ibis-framework[duckdb]`), PyArrow, NumPy, SciPy, pydantic, PyYAML, click, FastAPI, uvicorn, python-multipart, `exchange_calendars` |
 | `dev` extra | pytest, pytest-cov, httpx, build, setuptools, wheel, Playwright |
@@ -810,7 +832,7 @@ The stack follows the data profiling tool's current state.
 **Suggested package layout:**
 
 ```
-src/options_backtester/
+src/prophetovol/
   core/        domain models, conventions, time and snapshot types, schemas
   registry/    registry mechanism and the built-in implementations
   data/        DataManager: ingest, validation, versions, coverage
@@ -821,7 +843,6 @@ src/options_backtester/
   stress/      stress definitions, scenario types, evaluator, modes
   runs/        BacktestService, RunCoordinator, pre-flight, jobs
   results/     snapshot models, statistics, export
-  licensing/   license-check hook (no-op in Phase 1; §16.2)
   server/      FastAPI app, local security, static serving
   cli/         click commands
   testdata/    synthetic data generator, demo
@@ -829,19 +850,17 @@ frontend/      React + TypeScript app
 tests/
 ```
 
-### 16.2 Distribution readiness
+### 16.2 Distribution
 
-A protected, time-limited trial build is planned (project plan). Phase 1 does not build it, but must not prevent it:
-
-- **DIST-1** **A license-check hook** runs when the service starts (for `serve`, the CLI and library use). In Phase 1 it always passes. A later build replaces it with a real check without changes elsewhere.
-- **DIST-2** **The core is compilable.** The engine, pricing, stress, selectors, conditions and statistics (the intellectual property) must be compilable to native extension modules with Cython or Nuitka. In those packages: no reliance on reading source code at run time (`inspect.getsource` and similar), no generating code at run time, and no behavior that depends on `__file__` paths within the package.
-- **DIST-3** **The compile boundary follows the architecture.** The pure engine library (ARC-2) sits behind interfaces the service calls. FastAPI routes and the pydantic models that FastAPI introspects stay plain Python, since compilation can interfere with annotation introspection.
+- **DIST-1** **A standard pure Python wheel.** Phase 1 is distributed as the wheel `python -m build` produces: Python source plus the built front end's static files. Nothing is compiled to native code and nothing is obfuscated. There is no license check or trial expiry. (IDs DIST-2 and DIST-3, used in v3 for compilation, are retired.)
 
 ## 17. Testing
 
 - **TEST-1** **Golden engine tests** with small hand-checkable synthetic chains, each with expected results computed by hand. At least:
   - a long PM-settled call held to expiry and settled at intrinsic value
-  - a short AM-settled call force-closed on its last trading day
+  - a short AM-settled call force-closed on its last trading day, with a valid quote and with no valid quote (closed at the last valid mark)
+  - a PM-settled leg whose expiration date is a skipped missing day, force-closed at the step before (SPEC-55)
+  - a profit target and a stop in dollars per unit, including after a leg roll (SPEC-46)
   - a leg roll on a delta trigger
   - a structure roll on a time-to-expiry trigger, in calendar days and in trading days
   - an expiration chosen by each expiration selector, including `nth_expiration` across a weekend and a holiday
@@ -881,13 +900,15 @@ A protected, time-limited trial build is planned (project plan). Phase 1 does no
 - No interest on cash, no margin model; capital is a configured figure (portfolio margin is the assumed regime for later risk work).
 - Stress revaluation is instantaneous, sticky strike, Black-76 with a configurable discount rate defaulting to 0.
 - Time to expiry is calendar time over 365 days, to the minute, matching the vendor (REF-6).
-- AM-settled contracts are always closed on their last trading day.
+- AM-settled contracts are always closed on their last trading day, at the last valid mark if the quote that day is invalid.
+- PM-settled contracts whose expiration date is a skipped missing day are closed at the step before it.
+- The hedge is fractional; profit and loss triggers are in dollars per structure unit.
 - The vendor `*` flag drives no behavior.
 - The default fill model is `cross_spread`; the default commission is 0 and should be set by the user.
 
 ## 19. Out of Scope (Phase 1)
 
-- AI and LLM features: the strategy-building chat, an agent choosing what to test, agent constructors (project plan, Phase 2 onward).
+- AI and LLM features: the strategy-building chat, an agent choosing what to test, agent constructors (roadmap, Phase 2 onward).
 - Market-context calculations and conditions on them; forecasts; optimizers; the walk-forward construction loop.
 - Stress scenario types other than underlying slides; limits other than maximum stress loss; drawdown-based risk budgets; greek and tenor budgets.
 - P&L attribution by greek.
@@ -898,7 +919,7 @@ A protected, time-limited trial build is planned (project plan). Phase 1 does no
 - Trading-time or event-weighted clocks (calendar time only).
 - Equities, corporate actions, American exercise, underlyings without a cash-settled European index option chain.
 - Multiple users, authentication, remote deployment, and databases other than DuckDB.
-- The protected trial build, license enforcement and code compilation (§16.2 keeps them possible).
+- Licensing, trial expiry, code compilation and obfuscation (§16.2).
 - A documentation site.
 
 ## 20. Open Items
@@ -909,7 +930,7 @@ A protected, time-limited trial build is planned (project plan). Phase 1 does no
 | 2 | Vendor timing convention (16:15 ET snapshot; 16:00 and 09:30 ET expiries; calendar time over 365 days) | Inferred from the samples (REF-6); confirm with ivolatility |
 | 3 | SPXW contracts on third Fridays | Expected in other files; no design impact |
 | 4 | AM settlement values | Not supplied by the vendor; settlement-source plug-in point kept (REF-21) |
-| 5 | Product, package and CLI names | Working names in ARC-7 (candidate: ProphetoVol) |
+| 5 | Product, package and CLI names | **Resolved in v3:** ProphetoVol; package and CLI `prophetovol` (ARC-7) |
 | 6 | Performance targets | To be confirmed in the implementation plan (NFR-1) |
 | 7 | Default commission and fill model | Defaults in RUN-1; the user should set realistic values |
 
@@ -919,10 +940,10 @@ Each milestone ends usable on its own, with a demo.
 
 | Milestone | Delivers |
 | --- | --- |
-| **M1 Data foundation** | Package skeleton, `BacktestService`, `StorageAdapter` with the DuckDB adapter and contract suite, reference data (underlyings, data sources, calendar), ingest into market snapshots, validation and quality reports, overlap and commit, versions, delete and purge, coverage, synthetic data generator, data CLI commands, persisted jobs, audit log, license-check hook |
+| **M1 Data foundation** | Package skeleton, `BacktestService`, `StorageAdapter` with the DuckDB adapter and contract suite, reference data (underlyings, data sources, calendar), ingest into market snapshots, validation and quality reports, overlap and commit, versions, delete and purge, coverage, synthetic data generator, data CLI commands, persisted jobs, audit log |
 | **M2 Engine core** | Spec model and validation, registries with the Phase 1 implementations, time-to-expiry calculation, the step loop, selection, entries, triggers, rolls, expiration and settlement, hedging, sizing, fills, accounting and invariants, position and portfolio snapshots and events, run lifecycle and pre-flight, spec and run CLI commands, golden tests, Appendix B acceptance tests |
 | **M3 Stress & analytics** | Stress definitions, the underlying slide, Black-76 revaluation, the three modes, stress snapshots, aggregate statistics, export |
-| **M4 Server & GUI** | `optbt serve`, local security, the HTTP API and OpenAPI, the GUI (Home, Data, Strategies, Stress, New run, Run page, Jobs), `optbt demo`, end-to-end tests |
+| **M4 Server & GUI** | `prophetovol serve`, local security, the HTTP API and OpenAPI, the GUI (Home, Data, Strategies, Stress, New run, Run page, Jobs), `prophetovol demo`, end-to-end tests |
 
 ## Appendix A — ivolatility Column Mapping
 
