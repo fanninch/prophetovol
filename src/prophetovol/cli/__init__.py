@@ -6,7 +6,10 @@ commands arrive in later phases.
 
 from __future__ import annotations
 
+import errno
 import logging
+import os
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +66,34 @@ def _logging(home):
         handler.close()
 
 
+def _stdout_closed(exc: OSError) -> bool:
+    """Whether an error means the reader of standard output went away (``prophetovol data list | head``).
+
+    Windows reports a closed pipe as ``EINVAL`` rather than ``EPIPE``, so that case is confirmed by
+    trying to flush standard output again.
+
+    :param exc: The error raised by the command.
+    :returns: True when output can no longer be written.
+    """
+    if isinstance(exc, BrokenPipeError):
+        return True
+    if exc.errno != errno.EINVAL:
+        return False
+    try:
+        sys.stdout.flush()
+    except OSError:
+        return True
+    return False
+
+
+def _silence_stdout() -> None:
+    """Point standard output at the null device, so Python's exit-time flush stays quiet."""
+    try:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+    except (OSError, ValueError):
+        pass
+
+
 class _CliGroup(click.Group):
     """Translate service errors once at the CLI boundary (NFR-3)."""
 
@@ -83,6 +114,12 @@ class _CliGroup(click.Group):
             except ValidationError as exc:
                 message = "; ".join(".".join(map(str, e["loc"])) + ": " + e["msg"] for e in exc.errors())
                 raise click.ClickException(message) from None
+            except OSError as exc:
+                if not _stdout_closed(exc):
+                    logging.getLogger("prophetovol.cli").exception("command failed")
+                    raise click.ClickException(f"Unexpected error. Details were logged to {log_file}.") from None
+                _silence_stdout()
+                raise click.exceptions.Exit(1) from None
             except Exception:
                 logging.getLogger("prophetovol.cli").exception("command failed")
                 raise click.ClickException(f"Unexpected error. Details were logged to {log_file}.") from None

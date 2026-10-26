@@ -345,6 +345,25 @@ class TestValidationWarnings:
                                 if v.as_of_date == datetime.strptime(thin, "%m/%d/%Y").date())
             assert "low_contract_count" in thin_version.quality_flags
 
+    def test_low_contract_ratio_is_configurable(self, tmp_path, small_files):
+        rows = [list(r) for r in small_files]
+        dates = sorted({r[2] for r in rows}, key=lambda s: datetime.strptime(s, "%m/%d/%Y"))
+        dip = dates[4]
+        dip_rows = [r for r in rows if r[2] == dip]
+        rows = [r for r in rows if r[2] != dip] + dip_rows[: len(dip_rows) * 4 // 5]  # about 80% of normal
+        path = write_csv(tmp_path / "dip.csv", rows)
+        dip_date = datetime.strptime(dip, "%m/%d/%Y").date()
+        with BacktestService.open(tmp_path / "home") as svc:
+            assert svc.data_source("ivolatility_eod").low_contract_ratio == 0.5
+            assert svc.quality_report(import_ok(svc, [path])).check("low_contract_count") is None
+            body = svc.data_source("ivolatility_eod").model_dump(mode="json") | {"low_contract_ratio": 0.9}
+            svc.publish_data_source(body, CTX)
+            check = svc.quality_report(import_ok(svc, [path])).check("low_contract_count")
+            assert check and [d.as_of_date for d in check.by_date] == [dip_date]
+            assert "below 90% of the median" in check.description
+            with pytest.raises(Exception, match="low_contract_ratio"):
+                svc.publish_data_source(body | {"low_contract_ratio": 1.5}, CTX)
+
 
 class TestInputs:
     def test_folder_files_and_zip_give_the_same_rows(self, tmp_path):

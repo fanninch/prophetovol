@@ -132,7 +132,7 @@ def ingest(ctx: JobContext, calendar: TradingCalendar, max_bytes: int = DEFAULT_
 
         ctx.progress(3, None, "deriving columns")
         derive.derive(con, underlying, source)
-        report.checks += validation.content_checks(con, sessions)
+        report.checks += validation.content_checks(con, sessions, source.low_contract_ratio)
         record.quality_report = report.model_dump(mode="json")
         storage.update_import(record)
         ctx.check_cancelled()
