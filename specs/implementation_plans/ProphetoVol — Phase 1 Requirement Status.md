@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 25, 2026 · @Chuck · **Up to date through plan Phase 5 and the internal conventions change (requirements v7).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
+Oct 25, 2026 · @Chuck · **Up to date through plan Phase 6 (ingest, normalization, validation and quality reports).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,11 +13,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 15 done, 50 partial, 157 not started.
+**222 requirements:** 27 done, 50 partial, 145 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
-| **M1 Data foundation** | 1–8 | **In progress:** phases 1–5 done (Oct 25, 2026); 6 (ingest), 7 (versions, delete, purge, coverage), 8 (data CLI, checkpoint 1) to go |
+| **M1 Data foundation** | 1–8 | **In progress:** phases 1–6 done (Oct 25–26, 2026); 7 (versions, delete, purge, coverage), 8 (data CLI, checkpoint 1) to go |
 | **M2 Engine core** | 9–15 | Not started |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
@@ -30,7 +30,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 3 | Storage adapter and catalog | Oct 25, 2026 |
 | 4 | Jobs and audit | Oct 25, 2026 |
 | 5 | Synthetic data generator | Oct 25, 2026 |
-| 6 | Ingest, normalization, validation and quality reports | — |
+| 6 | Ingest, normalization, validation and quality reports | Oct 26, 2026 |
 | 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | — |
 | 8 | Data CLI, documentation and checkpoint 1 | — |
 | 9–24 | M2–M4 (see the implementation plan, §7–§9) | — |
@@ -38,11 +38,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Area | Done | Partial | Not started |
 | --- | --- | --- | --- |
 | Architecture (§4) | 2 | 2 | 3 |
-| Time, steps and snapshots (§5.1) | 0 | 1 | 2 |
+| Time, steps and snapshots (§5.1) | 0 | 2 | 1 |
 | Versioning (§5.3) | 0 | 3 | 1 |
 | Conventions (§5.4) | 0 | 10 | 0 |
 | Registries (§5.5) | 1 | 2 | 1 |
-| Data module (§6) | 1 | 8 | 21 |
+| Data module (§6) | 11 | 8 | 11 |
 | Reference data (§7) | 7 | 1 | 0 |
 | Strategy specification (§8) | 0 | 0 | 50 |
 | Engine (§9) | 0 | 0 | 19 |
@@ -51,9 +51,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Results and analytics (§12) | 0 | 0 | 8 |
 | Interfaces (§13) | 4 | 6 | 15 |
 | Schemas and documentation (§14) | 0 | 4 | 0 |
-| Audit (§15) | 0 | 4 | 0 |
+| Audit (§15) | 1 | 3 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
-| Testing (§17) | 0 | 2 | 9 |
+| Testing (§17) | 1 | 2 | 8 |
 | Non-functional (§18) | 0 | 3 | 2 |
 
 ## Architecture (§4)
@@ -73,7 +73,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
 | TIME-1 | A run advances in steps with as-of timestamps; frequency is configuration | Not started |  | Phase 10, 13 (Frequency enum exists from 2) |  |
-| TIME-2 | Four snapshot kinds: market, position, portfolio, stress | Not started |  | Phase 6, 12, 16 |  |
+| TIME-2 | Four snapshot kinds: market, position, portfolio, stress | **Partial** | Phase 6 (market snapshots) | position and portfolio (12), stress (16) snapshots | `unit/test_ingest.py` |
 | TIME-3 | Time quantities are named by their units | **Partial** | Phase 2, 3 | applies to every later field; checked in each phase | `unit/test_time.py` |
 
 ## Versioning (§5.3)
@@ -89,16 +89,16 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| CONV-1 | Time to expiry: calendar minutes on the exchange clock over 365 days | **Partial** | Phase 2, internal conventions change (stated as ProphetoVol's own; IV rescaling rule in DATA-15) | stored per row at ingest (6); used by engine and stress (12-17) | `unit/test_time.py` |
-| CONV-2 | Trading days to expiry: after the as-of date through the settlement date | **Partial** | Phase 2 | stored at ingest (6); used by selectors and triggers (11, 13) | `unit/test_time.py` |
-| CONV-3 | Settlement date, expiry and last trading day (incl. Saturday-dated) | **Partial** | Phase 2 | stored at ingest (6); forced closes (13) | `unit/test_time.py` |
+| CONV-1 | Time to expiry: calendar minutes on the exchange clock over 365 days | **Partial** | Phase 2, internal conventions change (stated as ProphetoVol's own; IV rescaling rule in DATA-15) | stored per row at ingest from 6; used by engine and stress (12-17) | `unit/test_time.py` |
+| CONV-2 | Trading days to expiry: after the as-of date through the settlement date | **Partial** | Phase 2 | stored at ingest from 6; used by selectors and triggers (11, 13) | `unit/test_time.py` |
+| CONV-3 | Settlement date, expiry and last trading day (incl. Saturday-dated) | **Partial** | Phase 2 | stored at ingest from 6; forced closes (13) | `unit/test_time.py` |
 | CONV-4 | Delta targets are absolute values | **Partial** | Phase 2 (published text) | delta selectors (11) | `unit/test_conventions.py` |
 | CONV-5 | At the money means 50 delta of the leg's own type | **Partial** | Phase 2 (published text) | `atm` selector (11) | `unit/test_conventions.py` |
 | CONV-6 | Trades execute at the step where the trigger is observed | **Partial** | Phase 2 (published text) | engine (12-13) | `unit/test_conventions.py` |
 | CONV-7 | Dollar greek formulas | **Partial** | Phase 2 (formulas), internal conventions change (units from CONV-10) | position snapshots (12) | `unit/test_conventions.py` |
 | CONV-8 | Signs: positive quantity is long; positive cash flow is received | **Partial** | Phase 2 (published text) | accounting (12) | `unit/test_conventions.py` |
 | CONV-9 | A roll re-establishes the structure by default | **Partial** | Phase 2 (published text) | rolls (13) | `unit/test_conventions.py` |
-| CONV-10 | Internal price, IV and greek conventions (undiscounted forward delta, vega per point, theta per day) | **Partial** | Phase 5 (Black-76 in these conventions), internal conventions change (stated; vendor parameter removed) | snapshots produced in them by ingest (6) | `unit/test_black76.py`, `unit/test_conventions.py` |
+| CONV-10 | Internal price, IV and greek conventions (undiscounted forward delta, vega per point, theta per day) | **Partial** | Phase 5 (Black-76 in these conventions), internal conventions change (stated; vendor parameter removed) | snapshots produced in them by ingest from 6; used by selection, hedging and stress (11-17) | `unit/test_black76.py`, `unit/test_conventions.py` |
 
 ## Registries (§5.5)
 
@@ -113,18 +113,18 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| DATA-1 | Input is the 22-column ivolatility CSV | Not started |  | Phase 6 (column list in `data/ivolatility.py` from 5) |  |
-| DATA-2 | Date format, `*` flag, and both option symbol formats | Not started |  | Phase 6 (OSI symbol and root helpers in `data/ivolatility.py` from 5) |  |
-| DATA-3 | One underlying per import, from one or more files | Not started |  | Phase 6 |  |
-| DATA-4 | Imports accept several CSVs, folders or zips; size limit | Not started |  | Phase 6 |  |
-| DATA-10 | Uploads are streamed; ingest runs as a job with progress | Not started |  | Phase 6 (job infrastructure ready from 4) |  |
-| DATA-11 | Ingest validates and normalizes into staged Parquet under a new import id | **Partial** | Phase 3 (staged storage) | ingest pipeline (6) | `contract/test_adapter_contract.py` |
-| DATA-12 | Each file's SHA-256 is recorded; duplicate files are reported | **Partial** | Phase 3 (storage and lookup) | hashing on upload and reporting (6) | `contract/test_adapter_contract.py` |
-| DATA-13 | Normalization rules and derived columns computed at ingest | Not started |  | Phase 6 (including internal greeks recomputed before `internal_greeks_from`) |  |
-| DATA-14 | The forward: vendor per-series from 2018-06-25, parity fit before | Not started |  | Phase 6 |  |
-| DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | Not started |  | Phase 6 (the ivolatility adapter; `internal_greeks_from` configured from the internal conventions change) |  |
-| DATA-20 | Validation checks and the quality report | Not started |  | Phase 6 |  |
-| DATA-21 | Quality report viewable in GUI and CLI, kept permanently | Not started |  | Phase 6, 8 (CLI), 21 (GUI) |  |
+| DATA-1 | Input is the 22-column ivolatility CSV | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-2 | Date format, `*` flag, and both option symbol formats | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-3 | One underlying per import, from one or more files | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-4 | Imports accept several CSVs, folders or zips; size limit | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-10 | Uploads are streamed; ingest runs as a job with progress | **Partial** | Phase 6 (local files and zips, hashed in chunks; ingest as a job with progress) | HTTP upload streamed to the server (20) | `unit/test_ingest.py` |
+| DATA-11 | Ingest validates and normalizes into staged Parquet under a new import id | **Done** | Phase 3 (staged storage), 6 (ingest) |  | `unit/test_ingest.py`, `contract/test_adapter_contract.py` |
+| DATA-12 | Each file's SHA-256 is recorded; duplicate files are reported | **Done** | Phase 3 (storage and lookup), 6 (hashing and the file_already_imported finding) | cancelling is the commit choice (DATA-31, 7) | `unit/test_ingest.py` |
+| DATA-13 | Normalization rules and derived columns computed at ingest | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-14 | The forward: vendor per-series from 2018-06-25, parity fit before | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | **Done** | Phase 6 (the ivolatility adapter) | IV rescaling is not exercised: the only configured time convention equals CONV-1 | `unit/test_ingest.py` |
+| DATA-20 | Validation checks and the quality report | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-21 | Quality report viewable in GUI and CLI, kept permanently | **Partial** | Phase 6 (stored permanently; `quality_report` in the service) | CLI (8), GUI (21) | `unit/test_ingest.py` |
 | DATA-30 | Overlap with active data shown before commit | Not started |  | Phase 7 |  |
 | DATA-31 | Commit choices: replace, add new dates only, cancel | Not started |  | Phase 7 (cancel = discard, storage ready from 3) |  |
 | DATA-32 | Commit is atomic | Not started |  | Phase 7 |  |
@@ -299,11 +299,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | INT-11 | Paged lists with totals; nothing unbounded | **Partial** | Phase 3 (storage and service lists) | API (20) | `contract/test_adapter_contract.py` |
 | INT-12 | OpenAPI kept current by a test; generated TypeScript types | Not started |  | Phase 20 |  |
 | INT-13 | Non-finite floats encoded as strings | Not started |  | Phase 19 |  |
-| INT-20 | Ingest, commit, purge, runs, long pre-flight and exports run as jobs | **Partial** | Phase 4 (job infrastructure) | each operation as a job (6, 7, 10, 14, 18) | `unit/test_jobs.py` |
+| INT-20 | Ingest, commit, purge, runs, long pre-flight and exports run as jobs | **Partial** | Phase 4 (job infrastructure), 6 (ingest as a job) | commit and purge (7), long pre-flight (10), runs (14), exports (18) | `unit/test_jobs.py` |
 | INT-21 | Job fields and lifecycle | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py`, `unit/test_jobs.py` |
 | INT-22 | Jobs persisted in the catalog | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
 | INT-23 | Write jobs one at a time in submission order; reads stay responsive | **Done** | Phase 4 |  | `unit/test_jobs.py`, `contract/test_adapter_contract.py` |
-| INT-24 | Queued jobs cancellable; running jobs cancelled at safe points | **Partial** | Phase 4 (mechanism) | safe points in ingest (6) and runs (14) | `unit/test_jobs.py` |
+| INT-24 | Queued jobs cancellable; running jobs cancelled at safe points | **Partial** | Phase 4 (mechanism), 6 (safe points in ingest) | safe points in runs (14) | `unit/test_jobs.py`, `unit/test_ingest.py` |
 | INT-30 | GUI: Home | Not started |  | Phase 21 |  |
 | INT-31 | GUI: Data | Not started |  | Phase 21 |  |
 | INT-32 | GUI: Strategies | Not started |  | Phase 22 |  |
@@ -331,10 +331,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4 (definitions, imports, jobs, attempts) | commits, deletes, purges (7), runs (14) | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
-| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4 (mechanism; publishing, job cancel) | each new operation is audited as it is added | `unit/test_audit.py` |
+| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4 (definitions, imports, jobs, attempts), 6 (imports from ingest) | commits, deletes, purges (7), runs (14) | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
+| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4 (mechanism; publishing, job cancel), 6 (`data.import`) | each new operation is audited as it is added | `unit/test_audit.py` |
 | AUD-3 | Software versions recorded on every run | **Partial** | Phase 1 (collector) | recorded on runs (14) | `unit/test_core.py` |
-| AUD-4 | Content hashes for definitions and import files | **Partial** | Phase 3 (stored) | file hashing at upload (6); specs (9) | `contract/test_adapter_contract.py` |
+| AUD-4 | Content hashes for definitions and import files | **Done** | Phase 3 (stored), 6 (file hashing at ingest) | specs (9) get hashes through the same `save_definition` | `contract/test_adapter_contract.py`, `unit/test_ingest.py` |
 
 ## Distribution (§16.2)
 
@@ -350,8 +350,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | Not started |  | Phase 10 |  |
-| TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly) | SQL vs Python per row (6), vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py` |
-| TEST-6 | Ingest tests reproducing real-data quirks | Not started |  | Phase 6 (including recomputed greeks before `internal_greeks_from`) |  |
+| TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row) | vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py` |
+| TEST-6 | Ingest tests reproducing real-data quirks | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | TEST-7 | Adapter contract suite | **Partial** | Phase 3 (Phase 3 cases) | 7, 14 | `contract/test_adapter_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |
@@ -362,7 +362,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed in plan §12; ingest and data access measured) | confirmed in 8 (ingest) and 15 (whole run) |  |
+| NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s) | confirmed again in 8 (CLI); whole run in 15 |  |
 | NFR-2 | GUI responsiveness | Not started |  | Phase 21-24 |  |
 | NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages) | CLI (8) and API (19) presentation | `unit/test_core.py`, `unit/test_service.py` |
 | NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4 (immutable definitions, append-only attempts, discard only staged) | delete and purge with confirmation (7), runs (14) | `contract/test_adapter_contract.py`, `unit/test_duckdb_storage.py` |

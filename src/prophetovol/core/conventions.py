@@ -92,7 +92,8 @@ CONVENTIONS: tuple[Convention, ...] = (
         "Per contract: prices in index points per unit of the underlying (dollars are price × quantity × "
         "multiplier); implied volatility as a decimal, consistent with CONV-1's time to expiry; one forward per "
         "expiration and date; delta is the undiscounted Black-76 forward delta, N(d1) for a call and N(d1) − 1 "
-        "for a put, so call delta − put delta = 1; gamma is per point of the forward; vega is per volatility point; "
+        "for a put (for a call and a put at the same strike and implied vol, call delta − put delta = 1); gamma is per "
+        "point of the forward; vega is per volatility point; "
         "theta is per calendar day.",
     ),
 )

@@ -18,12 +18,15 @@ from prophetovol.core.context import CallContext, Channel
 from prophetovol.core.errors import ConfigurationError, ValidationFailed
 from prophetovol.core.home import resolve_home
 from prophetovol.core.paging import Page
-from prophetovol.core.records import AttemptRecord, DefinitionVersion, JobRecord, JobStatus
+from prophetovol.core.records import AttemptRecord, DataImport, DefinitionVersion, JobRecord, JobStatus
+from prophetovol.data import ingest as ingest_module
+from prophetovol.data.quality import QualityReport
+from prophetovol.data.receive import DEFAULT_MAX_IMPORT_BYTES, plan_inputs
 from prophetovol.reference.calendar import TradingCalendar, nyse_calendar
 from prophetovol.reference.defaults import default_data_sources, default_underlyings
 from prophetovol.reference.models import DataSource, Underlying
 from prophetovol.runs.audit import audited
-from prophetovol.runs.jobs import JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
+from prophetovol.runs.jobs import JobContext, JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
 from prophetovol.storage.adapter import StorageAdapter
 from prophetovol.storage.duckdb.adapter import DuckDBAdapter
 
@@ -50,6 +53,8 @@ class BacktestService:
         self._owner = owner
         self._runner: JobRunner | None = None
         self.recovered_jobs: list[str] = []
+        self.max_import_bytes = DEFAULT_MAX_IMPORT_BYTES
+        self.ingest_memory_limit = ingest_module.DEFAULT_MEMORY_LIMIT
 
     @classmethod
     def open(cls, home: str | os.PathLike[str] | None = None,
@@ -280,3 +285,74 @@ class BacktestService:
         :returns: A page of attempts.
         """
         return self.storage.page_attempts(offset, limit, operation)
+
+    # --- data (§6) ---------------------------------------------------------------------------
+
+    def job_handlers(self) -> dict[str, JobHandler]:
+        """The handler of every job kind this service runs, for :meth:`start_jobs`.
+
+        :returns: Handlers by job kind.
+        """
+        return {"ingest": self._ingest_job}
+
+    def _ingest_job(self, ctx: JobContext) -> dict[str, Any]:
+        """Run an import job (the ``ingest`` job kind).
+
+        :param ctx: The job's context.
+        :returns: The import's id, status and counts.
+        """
+        return ingest_module.ingest(ctx, self.calendar, self.max_import_bytes, self.ingest_memory_limit)
+
+    @audited("data.import")
+    def import_files(self, paths: list[str | os.PathLike[str]], context: CallContext,
+                     data_source: str = "ivolatility_eod", background: bool = False) -> JobRecord:
+        """Import vendor files: one or more CSV files, folders of them, or zip archives, as one import (DATA-3, DATA-4).
+
+        The files are validated, normalized and staged (DATA-10 to DATA-21); nothing becomes visible to runs
+        until the import is committed. The inputs are checked before any job starts, so a missing file or an
+        import over the size limit is refused at once.
+
+        :param paths: The files, folders and archives.
+        :param context: Who is importing, through which channel.
+        :param data_source: The data source the files are in.
+        :param background: Queue the import on the job runner and return at once (the server's way); otherwise
+            run it in the calling thread (the CLI's way).
+        :returns: The job; when it has finished, its result holds the ``import_id``.
+        :raises ValidationFailed: If an input is missing or unsupported, or the import is too large.
+        :raises NotFoundError: If the data source is not configured.
+        """
+        resolved = [str(Path(p).resolve()) for p in paths]
+        plan_inputs([Path(p) for p in resolved], self.max_import_bytes)
+        self.data_source(data_source)
+        params = {"paths": resolved, "data_source": data_source}
+        if background:
+            return self.submit_job("ingest", params, context)
+        return self.run_job("ingest", params, self._ingest_job, context)
+
+    def get_import(self, import_id: str) -> DataImport:
+        """Read one import.
+
+        :param import_id: The import.
+        :returns: The import.
+        :raises NotFoundError: If it does not exist.
+        """
+        return self.storage.get_import(import_id)
+
+    def page_imports(self, offset: int = 0, limit: int = 50, underlying: str | None = None) -> Page[DataImport]:
+        """List imports, newest first.
+
+        :param offset: Index of the first import to return.
+        :param limit: Page size.
+        :param underlying: Only imports of this underlying, when given.
+        :returns: A page of imports.
+        """
+        return self.storage.page_imports(offset, limit, underlying)
+
+    def quality_report(self, import_id: str) -> QualityReport | None:
+        """An import's quality report (DATA-21).
+
+        :param import_id: The import.
+        :returns: The report, or ``None`` if validation has not run.
+        :raises NotFoundError: If the import does not exist.
+        """
+        return ingest_module.quality_report(self.storage.get_import(import_id))

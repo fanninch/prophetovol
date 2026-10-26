@@ -10,6 +10,8 @@ Oct 25, 2026 · @Chuck · **Status: Agreed (v7). This document defines what Phas
 - **IV is rescaled** if a data source measures time to expiry differently from CONV-1, preserving total variance (DATA-15).
 - CONV-1, CONV-7, SPEC-27, SPEC-42, SPEC-61, SPEC-63, ENG-24, STR-20 and RES-1 are reworded in internal terms; TEST-5, TEST-6, Appendix A and the glossary follow.
 
+**Editorial updates** (Oct 26, 2026; no requirement changed): CONV-10 states that call delta − put delta = 1 for a call and a put at the same implied vol (not at every strike, since the vendor quotes calls and puts at separate implied vols); TEST-6's wording follows.
+
 **Editorial updates** (Oct 25, 2026; no requirement changed): SPEC-55's heading says *settlement date*, matching its text; open item 6 records that the performance targets are set. Implementation progress per requirement is tracked in *ProphetoVol — Phase 1 Requirement Status*.
 
 **Changes in v6** (agreed Oct 25, 2026), from the real vendor data examined in Phase 0 of the implementation plan (SPX, 2007 to Aug 2024):
@@ -210,7 +212,7 @@ These meanings apply everywhere (specs, results, documentation). They are **Prop
   - prices (bid, ask, marks) in index points per unit of the underlying; dollar amounts are price × quantity × multiplier
   - implied volatility as a decimal (0.18, not 18), consistent with CONV-1's time to expiry
   - the forward as one value per expiration and date (DATA-14)
-  - **delta**: the undiscounted Black-76 forward delta, N(d1) for a call and N(d1) − 1 for a put, so call delta − put delta = 1 at every strike
+  - **delta**: the undiscounted Black-76 forward delta, N(d1) for a call and N(d1) − 1 for a put; for a call and a put at the same strike and implied vol, call delta − put delta = 1 (the vendor quotes calls and puts at separate implied vols, so with real data the difference departs from 1 where those differ, mostly in the wings)
   - **gamma**: the change in delta per one point of the forward
   - **vega**: the change in price per one volatility point (0.01 of IV)
   - **theta**: the change in price per calendar day
@@ -952,7 +954,7 @@ tests/
   - IV of −1 and zero greeks on the settlement date; `mean price` of 0 when the bid is 0; crossed quotes and zero asks; both roots sharing an expiration date; the `*` column; MM/DD/YYYY dates
   - five-character codes, including one code naming two contracts on a date; every historical root mapped to its normalized root and settlement style; `osi_symbol` built for both formats
   - Saturday-dated expirations with their settlement and last trading dates
-  - the single-price period, with parity forwards fitted per expiration (and the fallback when a fit is invalid) and greeks recomputed in the internal conventions (call delta − put delta = 1), the vendor's values kept; and the per-series period, with the vendor's forward and greeks used
+  - the single-price period, with parity forwards fitted per expiration (and the fallback when a fit is invalid) and greeks recomputed in the internal conventions (equal to Black-76 from the stored time to expiry, forward and IV), the vendor's values kept; and the per-series period, with the vendor's forward and greeks used
   - an import of several files
 - **TEST-7** **Adapter contract suite** (DATA-84).
 - **TEST-8** **Validation tests** for every spec rule, including SPEC-52, SPEC-53 and explicit time units, and the YAML round trip (SPEC-81).

@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–5 done (Oct 25, 2026); Phase 6 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–6 done (Oct 25–26, 2026); Phase 7 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -296,7 +296,7 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
   - both symbol formats, the same five-character code for two contracts on a date (counted, not rejected), `osi_symbol` for both, every historical root normalized
   - Saturday-dated expirations with their settlement and last trading dates; time to expiry from SQL equal to `pricing/time.py` for every row
   - parity forwards on a synthetic chain with a known forward and discount factor (exact recovery), an invalid fit falling back with a warning, the vendor's forward used from the cut-over date
-  - internal greeks: before `internal_greeks_from`, recomputed (call delta − put delta = 1 at every strike, equal to Black-76 from the stored time to expiry, forward and IV), with the vendor's discounted values kept in `vendor_*`; from it, copied from the vendor; `greeks_source` set accordingly; nothing in the engine-facing columns comes from a vendor-specific convention
+  - internal greeks: before `internal_greeks_from`, recomputed (equal to Black-76 from the stored time to expiry, forward and IV; call delta − put delta = 1 where call and put share an IV), with the vendor's discounted values kept in `vendor_*`; from it, copied from the vendor; `greeks_source` set accordingly; nothing in the engine-facing columns comes from a vendor-specific convention
   - every check triggered by a crafted file; multi-symbol and unknown-root rejection; an import of several files and of a folder; zip with several CSVs; the size limit; cancellation between partitions leaving nothing staged
 
 ### Phase 7: Overlap, commit, versions, delete, purge, invalidation and coverage
@@ -454,6 +454,13 @@ Added in v3, from Phase 0:
 Added in v4, with requirements v7:
 
 18. **Internal conventions with data-source adapters** (DATA-15). Core code (`pricing`, `engine`, `stress`, the conventions module) states ProphetoVol's own conventions and has no vendor-specific parameters; ingest converts into them, and the generator converts out of them to write vendor files. Greeks recomputed at ingest for the pre-June-2018 period are computed with the same `pricing/black76.py` the stress module uses, so there is one Black-76 in the code base.
+
+Added with Phase 6 (details in §16, Phase 6):
+
+19. **The ingest adapter works in its own DuckDB working database** under `<home>/uploads/<import_id>/`, removed afterwards; storage receives finished partitions (DATA-83).
+20. **Local CSV files are hashed where they are**, not copied into `uploads/`; zip members are extracted, and HTTP uploads land in `uploads/` (DATA-10).
+21. **Validation errors fail the job**; the import is kept as `failed` with its quality report, and nothing is written.
+22. **Internal greeks are null whenever the internal IV is null**, so a vendor's zero greeks are never used as real values.
 
 ## 14. Risks
 
@@ -731,3 +738,39 @@ Not a plan phase: the project's rules, which until now lived in a private memory
 - **`scripts/update_tracker.py`:** applies row changes and additions from a JSON file, recomputes the summary and per-area counts from the rows, fills plan-phase dates and the M1 status, and checks that the tracker has exactly the requirement IDs of the specification (`--check`). It replaces the throwaway script used for the tracker so far.
 - **`.gitignore`:** `.claude/settings.local.json` (personal settings).
 - **Tests:** 185, all passing (unit 163, contract 18, meta 2, packaging 2). New: `tests/unit/test_update_tracker.py`: row changes and recounts, added rows, refused mistakes, the coverage check, the command line, and a check that **the real tracker covers the real specification and its stored counts match its rows**, so a mismatch fails the suite.
+
+**Phase 6 (ingest, normalization, validation and quality reports), Oct 26, 2026**
+
+- **`data/schema.py`:** `MARKET_SCHEMA` (Appendix A's 49 columns, internal and `vendor_*`), `ForwardSource`, `GreeksSource`, `VendorMethodology`.
+- **`data/quality.py`:** `QualityReport`, `QualityCheck`, `DateCount`, `Severity`; `errors`, `warnings`, `flags_by_date()` (the data versions' quality flags).
+- **`data/receive.py`:** `plan_inputs` (files, folders searched recursively, zips; existence, type and size limit checked before anything is read) and `receive` (every file hashed in 8 MB chunks; zip members extracted into the import's working folder as they are hashed).
+- **`data/validation.py`:**
+  - the header check
+  - **structural checks** on parsed rows (errors: unparseable value, several underlyings, unknown underlying, unknown root, not European, duplicate contract; information: repeated vendor symbol, file already imported)
+  - **content checks** on normalized rows (warnings: crossed quote, zero ask, IV −1 before settlement, missing vendor forward, no parity forward, missing trading day, not a trading day, low contract count; information: vendor flag)
+  - each check is counted per date, with up to five examples
+- **`data/derive.py`:** the working database; `load_files` (all CSVs read as text, then parsed); `load_reference` (root table and calendar table); `derive`; `_fit_parity`; `read_partition`; `_recompute_greeks`.
+  - `derive` covers normalized roots and `osi_symbol`; settlement date and last trading day by ASOF joins on the calendar; clock-time time to expiry; trading days; internal IV; the parity fit; the forward choice.
+  - `_recompute_greeks` runs Black-76 from `pricing/black76.py` over Arrow arrays.
+- **`data/ingest.py`:** the job: receive → headers → parse and structural checks → derive and content checks → one partition per month → staged versions. Progress and cancellation at every step; cancellation discards what was written; the working folder is always removed.
+- **Service:** audited `import_files(paths, context, data_source, background)` (inputs checked before any job starts), `job_handlers()` (`ingest`), `get_import`, `page_imports`, `quality_report`.
+- **Storage change:** `update_import` now also updates the import's `underlying`, which ingest learns only after parsing (found by a test); the contract suite covers it.
+- **Decisions made in this phase (also listed in §13):**
+  - 19. **The ingest adapter works in its own DuckDB working database** under `<home>/uploads/<import_id>/` (memory-limited, spilling to disk, removed afterwards). Vendor-specific SQL stays in the adapter; storage receives finished partitions through `write_market_partition` (DATA-83). DATA-81's "reads through Ibis" applies to stored data, not to the transformation of incoming files.
+  - 20. **Local CSV files are hashed where they are, not copied into `uploads/`.** Copying a year (about 650 MB) would double the I/O for no gain; zip members are extracted, and HTTP uploads (Phase 20) land in `uploads/` as DATA-10 says.
+  - 21. **Validation errors fail the job.** The import is kept as `failed`, with its quality report and the error checks named in its error, and nothing is written. The `data.import` attempt records the accepted request; the rejection is on the job and the import.
+  - 22. **Internal greeks are null whenever the internal IV is null** (on the settlement date, or where the vendor's IV is −1 or not positive), so a vendor's zero greeks are never used as real values.
+- **Found while building:**
+  - DuckDB 2.0 renamed `fetch_arrow_table` to `to_arrow_table`, used here through `con.sql(…)`.
+  - **On real 2008 data, call delta − put delta departs from 1** where the vendor quotes the call and the put at different IVs (median 0.99996; up to 0.25 off in the wings). The deltas are right. CONV-10's sentence "= 1 at every strike" was imprecise and is corrected in requirements v7 (editorial: "for a call and a put at the same implied vol").
+- **Real-data sanity check** (scratch only, not a committed test; the optional real-data tests are Phase 8):
+  - **2008:** 321k rows ingested in 4.1 s; all 37 historical roots mapped; parity forwards for 98% of rows, with 104 expirations falling back to the vendor's single price; greeks recomputed.
+  - **2023:** 4.04M rows in 27.5 s; vendor forwards and greeks; parity forwards within a median 0.1 bp of the vendor's.
+  - ⚠ The `PROPHETOVOL_VENDOR_DATA` variable names `D:\prophetovol_vendor_data`, which does not exist (the files are in `D:\propheto_vendor_data`); fix before Phase 8's real-data tests.
+- **Tests:** 211, all passing in about 30 seconds (unit 189, contract 18, meta 2, packaging 2). New, in `tests/unit/test_ingest.py`, 26 tests:
+  - **current conventions:** files, rows, versions, partitions and schema; `osi_symbol`; settlement date, last trading day, expiry, **time to expiry equal to `pricing/time.py` for every row**, trading days; Good Friday; settlement-date nulls; vendor forwards and greeks copied; parity as a check; quality warnings and version flags; `vendor_mid`
+  - **older conventions:** root normalization and repeated codes; Saturday-dated monthlies, including Good Friday 2008; parity forwards recovering the generator's true forward and discount; greeks recomputed exactly as Black-76 from the stored values, with the vendor's discounted deltas kept
+  - **exact parity recovery** on a hand-built chain, to 1e-9, and the fallback to the vendor's single price with its warning
+  - **every error check**, each failing the import with nothing written; the misnamed header with missing and unexpected columns; **the warnings**, with the flagged dates
+  - folders, files and zips giving the same rows; duplicate files reported; refused inputs audited with no import created
+  - cancellation between partitions discarding everything; a background import

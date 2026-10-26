@@ -109,7 +109,9 @@ class StorageAdapter(ABC):
 
     @abstractmethod
     def update_import(self, record: DataImport) -> None:
-        """Replace an import's mutable fields (status, counts, dates, report, commit details, error).
+        """Replace an import's mutable fields (underlying, status, counts, dates, report, commit details, error).
+
+        The underlying is known only once the files are parsed, so ingest sets it after creating the import.
 
         :param record: The import with its new values; identified by ``import_id``.
         :raises NotFoundError: If the import does not exist.

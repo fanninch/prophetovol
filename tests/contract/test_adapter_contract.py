@@ -94,12 +94,13 @@ class TestImports:
         got = adapter.get_import("imp_1")
         assert got.status is ImportStatus.INGESTING and [f.name for f in got.files] == ["a.csv", "b.csv"]
         assert got.created_at == T0
-        got.status, got.rows = ImportStatus.STAGED, 1234
+        got.status, got.rows, got.underlying = ImportStatus.STAGED, 1234, "NDX"
         got.first_as_of_date, got.last_as_of_date = date(2024, 1, 2), date(2024, 3, 28)
         got.quality_report = {"checks": [{"check": "zero_ask", "count": 3}]}
         adapter.update_import(got)
         again = adapter.get_import("imp_1")
         assert (again.status, again.rows, again.last_as_of_date) == (ImportStatus.STAGED, 1234, date(2024, 3, 28))
+        assert again.underlying == "NDX"
         assert again.quality_report["checks"][0]["count"] == 3
 
     def test_paging_newest_first_with_filter(self, adapter):
