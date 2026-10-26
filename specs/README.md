@@ -16,6 +16,8 @@ Each stage is reviewed and agreed before the next one starts.
 4. **Implementation.** Phases are built one at a time, each with its tests, and the project README is updated. Each phase adds implementation notes to the plan (what was built, what changed from the plan, test counts), updates the plan's status line, and updates the **requirement status tracker** next to the plan (*ProphetoVol — <Phase> Requirement Status*): one row per requirement ID with its status (Done, Partial, Not started), the plan phase that did it, what remains, and its tests. The tracker is the place to see whether a requirement is done. Changes are left uncommitted: all git operations (branches, commits, pushes) are done by the project owner after review.
 5. **Complete.** The status here and in the roadmap's phase summary is updated.
 
+For Claude Code, `CLAUDE.md` at the repository root summarizes these rules, and the `phase-wrapup` skill (`.claude/skills/phase-wrapup/`) carries out step 4's documentation updates; `scripts/update_tracker.py` updates the requirement status tracker and checks it against the requirements.
+
 If implementation shows that a requirement is wrong or incomplete, the requirements are revised as a new version and agreed before the code departs from them.
 
 ## Documents

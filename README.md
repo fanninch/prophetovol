@@ -110,7 +110,19 @@ The wheel is pure Python (`py3-none-any`).
 | --- | --- |
 | `src/prophetovol/` | the package: `core`, `registry`, `reference`, `storage`, `data`, `pricing`, `engine`, `stress`, `results`, `runs`, `server`, `cli`, `testdata` |
 | `tests/` | `unit/`, `contract/` (the storage adapter contract suite), `meta/` (documentation rules), `packaging/` (the wheel) |
+| `scripts/` | developer tools: `update_tracker.py` updates and checks the requirement status tracker |
+| `CLAUDE.md`, `.claude/` | guidance and settings for Claude Code (see below) |
 | `specs/` | roadmap, requirements and implementation plans |
 
 Docstrings are reStructuredText with Sphinx field lists (`:param:`, `:returns:`, `:raises:`), so a
 Sphinx site can be built later.
+
+## Working with Claude Code
+
+`CLAUDE.md` gives Claude Code the project's process, architecture rules, code style, commands and
+known pitfalls; it is read automatically at the start of every session. `.claude/settings.json`
+denies history-changing git commands (the project owner does all git operations) and allows the
+routine test and build commands. The `phase-wrapup` skill (`.claude/skills/phase-wrapup/`) is the
+checklist that ends every portion of work: suites green, plan notes, the requirement status tracker,
+status lines, and a commit message. Personal overrides go in `.claude/settings.local.json`, which git
+ignores.
