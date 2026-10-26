@@ -42,6 +42,18 @@ Only one process can open a home directory at a time (for example, the CLI canno
 `prophetovol serve` is running); a second process gets a message saying so. The first open
 publishes the shipped reference data as version 1; later changes to it are never overwritten.
 
+## Jobs and the attempts log
+
+Long operations (imports, commits, purges, runs) run as jobs, recorded in the catalog with their
+progress, so job history survives a restart. The server runs them one at a time in the
+background; the CLI runs them in the foreground and records them the same way. A job left
+unfinished by a process that stopped is marked failed ("interrupted") the next time the home
+directory is opened.
+
+Every requested operation is recorded in the attempts log with who asked, through which client,
+and the outcome: `ok`, `rejected` (with the reasons, for example each validation error and its
+field), or `error`. Attempts are never deleted.
+
 ## Reference data and conventions
 
 The package ships the SPX underlying and the `ivolatility_eod` data source as YAML
