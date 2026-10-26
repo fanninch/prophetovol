@@ -84,7 +84,8 @@ def plan_inputs(paths: list[Path], max_bytes: int = DEFAULT_MAX_IMPORT_BYTES) ->
             total += path.stat().st_size
         elif path.suffix.lower() == ".zip":
             with zipfile.ZipFile(path) as zf:
-                members = sorted(m for m in zf.infolist() if not m.is_dir() and m.filename.lower().endswith(".csv"))
+                members = sorted((m for m in zf.infolist() if not m.is_dir() and m.filename.lower().endswith(".csv")),
+                                 key=lambda m: m.filename)
                 if not members:
                     issues.append(ValidationIssue(where, f"no .csv files in archive {path}"))
                 for m in members:

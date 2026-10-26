@@ -13,21 +13,24 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+import pyarrow as pa
 import pydantic
 
 from prophetovol.core.context import CallContext, Channel
-from prophetovol.core.errors import ConfigurationError, ValidationFailed, ValidationIssue
+from prophetovol.core.errors import ConfigurationError, ImmutableEntityError, ValidationFailed, ValidationIssue
 from prophetovol.core.home import resolve_home
 from prophetovol.core.paging import Page
-from prophetovol.core.records import AttemptRecord, DataImport, DefinitionVersion, JobRecord, JobStatus, VersionState
+from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, JobRecord,
+                                      JobStatus, VersionState)
 from prophetovol.data import ingest as ingest_module
+from prophetovol.data.lifecycle import (ChangePreview, CommitChoice, CoverageDay, CoverageMonth, CoverageReport,
+                                        DataSelection, OverlapItem, RunImpact)
 from prophetovol.data.quality import QualityReport
-from prophetovol.data.lifecycle import (ChangePreview, CommitChoice, DataSelection, OverlapItem, RunImpact,
-                                       CoverageDay, CoverageMonth, CoverageReport)
 from prophetovol.data.receive import DEFAULT_MAX_IMPORT_BYTES, plan_inputs
 from prophetovol.reference.calendar import TradingCalendar, nyse_calendar
 from prophetovol.reference.defaults import default_data_sources, default_underlyings
 from prophetovol.reference.models import DataSource, Underlying
+from prophetovol.registry.mechanism import ImplementationInfo, RegistryInfo
 from prophetovol.runs.audit import audited
 from prophetovol.runs.jobs import JobContext, JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
 from prophetovol.storage.adapter import StorageAdapter
@@ -257,6 +260,11 @@ class BacktestService:
         :raises NotFoundError: If the job does not exist.
         :raises ImmutableEntityError: If it has already finished.
         """
+        if self._runner is None:
+            job = self.storage.get_job(job_id)
+            if job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
+                raise ImmutableEntityError(f"job {job_id} has already finished ({job.status})")
+            raise ConfigurationError("this service has no running job worker; cancel through the owning service")
         return self.jobs.cancel(job_id)
 
     def get_job(self, job_id: str) -> JobRecord:
@@ -513,3 +521,79 @@ class BacktestService:
                 contracts=sum(v.contracts for d in entries for v in d.snapshots),
                 flagged_days=sum(any(v.quality_flags for v in d.snapshots) for d in entries)))
         return CoverageReport(underlying=underlying, days=days, months=months)
+
+    def list_registries(self) -> list[RegistryInfo]:
+        """Describe all registered component types (REG-3).
+
+        :returns: Registry metadata in name order.
+        """
+        from prophetovol.registry.catalog import all_registries
+        return [registry.info() for registry in all_registries()]
+
+    @audited("registry.list")
+    def list_implementations(self, kind: str, context: CallContext) -> list[ImplementationInfo]:
+        """Describe a registry's implementations and parameter schemas.
+
+        :param kind: Registry type, such as settlement_source.
+        :param context: Who requested discovery.
+        :returns: Implementation metadata in name order.
+        """
+        from prophetovol.registry.catalog import get_registry
+        registry = get_registry(kind)
+        return [registry.describe(name) for name in registry.names()]
+
+    @audited("registry.show")
+    def describe_implementation(self, kind: str, name: str, context: CallContext) -> ImplementationInfo:
+        """Describe a named implementation, including its JSON Schema.
+
+        :param kind: Registry type.
+        :param name: Implementation name.
+        :param context: Who requested discovery.
+        :returns: Implementation metadata.
+        """
+        from prophetovol.registry.catalog import get_registry
+        return get_registry(kind).describe(name)
+
+    def data_versions(self, underlying: str, import_id: str | None = None,
+                       states: list[VersionState] | None = None) -> list[DataVersionRecord]:
+        """List data versions for review and coverage bounds.
+
+        :param underlying: Underlying to inspect.
+        :param import_id: Restrict to one import when supplied.
+        :param states: Restrict to these version states when supplied.
+        :returns: Version records in as-of/import order.
+        """
+        return self.storage.list_versions(underlying, import_id, states)
+
+    def import_snapshot(self, import_id: str, day: date, columns: list[str] | None = None) -> pa.Table:
+        """Read an import's normalized snapshot for quality review.
+
+        :param import_id: Import being reviewed.
+        :param day: Snapshot date.
+        :param columns: Columns to return, or all columns.
+        :returns: Arrow table of the snapshot's rows.
+        """
+        return self.storage.read_import_snapshot(import_id, day, columns)
+
+    @audited("docs.generate")
+    def generate_docs(self, output: str | os.PathLike[str], context: CallContext, check: bool = False) -> list[str]:
+        """Generate deterministic reStructuredText reference documentation from live schemas.
+
+        :param output: Directory for generated reference files.
+        :param context: Who requested generation.
+        :param check: Compare existing files without writing; refuse stale or missing files.
+        :returns: Generated or checked file paths.
+        """
+        from prophetovol.documentation import reference_documents
+        documents = reference_documents()
+        folder = Path(output)
+        if check:
+            stale = [name for name, text in documents.items()
+                     if not (folder / name).is_file() or (folder / name).read_text(encoding="utf-8") != text]
+            if stale:
+                raise ValidationFailed([ValidationIssue("docs", "stale or missing: " + ", ".join(stale))])
+        else:
+            folder.mkdir(parents=True, exist_ok=True)
+            for name, text in documents.items():
+                (folder / name).write_text(text, encoding="utf-8", newline="\n")
+        return [str(folder / name) for name in documents]

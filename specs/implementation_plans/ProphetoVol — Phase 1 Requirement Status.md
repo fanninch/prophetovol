@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 25, 2026 · @Chuck · **Up to date through plan Phase 7 (overlap, commit, versions, delete, purge, invalidation and coverage).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
+Oct 26, 2026 · @Chuck · **Up to date through plan Phase 8 (data CLI, documentation and checkpoint 1).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,11 +13,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 39 done, 50 partial, 133 not started.
+**222 requirements:** 41 done, 49 partial, 132 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
-| **M1 Data foundation** | 1–8 | **In progress:** phases 1–7 done; 8 (data CLI, documentation and checkpoint 1) to go |
+| **M1 Data foundation** | 1–8 | **Complete pending the checkpoint 1 demo:** phases 1–8 done |
 | **M2 Engine core** | 9–15 | Not started |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
@@ -32,7 +32,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 5 | Synthetic data generator | Oct 25, 2026 |
 | 6 | Ingest, normalization, validation and quality reports | Oct 26, 2026 |
 | 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | Oct 25, 2026 |
-| 8 | Data CLI, documentation and checkpoint 1 | — |
+| 8 | Data CLI, documentation and checkpoint 1 | Oct 26, 2026 |
 | 9–24 | M2–M4 (see the implementation plan, §7–§9) | — |
 
 | Area | Done | Partial | Not started |
@@ -50,17 +50,17 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Runs (§11) | 0 | 3 | 8 |
 | Results and analytics (§12) | 0 | 0 | 8 |
 | Interfaces (§13) | 4 | 6 | 15 |
-| Schemas and documentation (§14) | 0 | 4 | 0 |
+| Schemas and documentation (§14) | 1 | 3 | 0 |
 | Audit (§15) | 1 | 3 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
-| Testing (§17) | 1 | 2 | 8 |
+| Testing (§17) | 2 | 2 | 7 |
 | Non-functional (§18) | 0 | 3 | 2 |
 
 ## Architecture (§4)
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| ARC-1 | BacktestService is the only component that opens storage; clients are thin | **Partial** | Phase 3 | CLI commands (8), API (19-20) built as thin clients | `unit/test_service.py` |
+| ARC-1 | BacktestService is the only component that opens storage; clients are thin | **Partial** | Phase 3, 8 (CLI commands as thin service clients) | API (19-20) built as a thin client | `unit/test_service.py`, `unit/test_data_cli.py` |
 | ARC-2 | The engine is a pure library with no I/O | Not started |  | Phase 9-13 |  |
 | ARC-3 | Point-in-time access through MarketDataView, enforced in code | Not started |  | Phase 10 |  |
 | ARC-4 | One writer: service owns read-write connections; write jobs one at a time; readers on cursors | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py` (readers), `unit/test_jobs.py` |
@@ -106,7 +106,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source) | selectors, schedules, conditions, actions, hedge, sizing, fills, constructor (9, 11-13); stress types and modes (16-17) | `unit/test_registry.py` |
 | REG-2 | Every implementation declares name, description, documented parameter model, version | **Done** | Phase 2 | enforced at registration for every future implementation | `unit/test_registry.py` |
-| REG-3 | Registries are discoverable with descriptions and JSON Schemas | **Partial** | Phase 2 (service level) | CLI `registry list/show` (8), API (20) | `unit/test_registry.py` |
+| REG-3 | Registries are discoverable with descriptions and JSON Schemas | **Partial** | Phase 2 (service level), 8 (CLI `registry list/show`) | API (20) | `unit/test_registry.py`, `unit/test_data_cli.py` |
 | REG-4 | Condition types are pluggable | Not started |  | Phase 13 |  |
 
 ## Data module (§6)
@@ -124,7 +124,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-14 | The forward: vendor per-series from 2018-06-25, parity fit before | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | **Done** | Phase 6 (the ivolatility adapter) | IV rescaling is not exercised: the only configured time convention equals CONV-1 | `unit/test_ingest.py` |
 | DATA-20 | Validation checks and the quality report | **Done** | Phase 6 |  | `unit/test_ingest.py` |
-| DATA-21 | Quality report viewable in GUI and CLI, kept permanently | **Partial** | Phase 6 (stored permanently; `quality_report` in the service) | CLI (8), GUI (21) | `unit/test_ingest.py` |
+| DATA-21 | Quality report viewable in GUI and CLI, kept permanently | **Partial** | Phase 6 (stored permanently; `quality_report` in the service), 8 (CLI `data quality`) | GUI (21) | `unit/test_ingest.py`, `unit/test_data_cli.py` |
 | DATA-30 | Overlap with active data shown before commit | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-31 | Commit choices: replace, add new dates only, cancel | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-32 | Commit is atomic | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
@@ -137,7 +137,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-53 | Delete and purge recorded in the audit trail | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-60 | Runs that read changed data are flagged data superseded | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-61 | The data-superseded flag is visible on runs and in the API | **Partial** | Phase 7 (persisted flags and service read) | Run lists/pages (14, 23) and API (20) | `unit/test_data_lifecycle.py` |
-| DATA-70 | Coverage view per trading day | **Partial** | Phase 7 (daily coverage and monthly summaries in service) | CLI (8), GUI (21) | `unit/test_data_lifecycle.py` |
+| DATA-70 | Coverage view per trading day | **Partial** | Phase 7 (daily coverage and monthly summaries in service), 8 (CLI `data coverage`) | GUI (21) | `unit/test_data_lifecycle.py`, `unit/test_data_cli.py` |
 | DATA-80 | Parquet layout per underlying/year/month, one file per import; active-version filtering | **Done** | Phase 3, 7 |  | `unit/test_duckdb_storage.py`, `contract/test_lifecycle_contract.py` |
 | DATA-81 | Reads go through Ibis | **Partial** | Phase 3, 7 (catalog and active market reads) | Chunked market provider (10), result reads (14) | `contract/test_lifecycle_contract.py` |
 | DATA-82 | Writes go through the StorageAdapter interface | **Partial** | Phase 3, 7 (commit, delete, purge, active snapshots) | Run result writes (14) | `contract/test_lifecycle_contract.py` |
@@ -312,8 +312,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | INT-35 | GUI: Run page | Not started |  | Phase 23 |  |
 | INT-36 | GUI: Jobs panel | Not started |  | Phase 21 |  |
 | INT-37 | Charts as tables; desktop-first layout; browsers | Not started |  | Phase 21-23 |  |
-| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`) | data and registry (8), spec and run (14), stress (16), demo (24) | `unit/test_cli.py` |
-| INT-41 | CLI and server cannot share a home; both say so with the remedy | **Partial** | Phase 3 (service reports it) | CLI (8) and server (19) messages | `unit/test_service.py` |
+| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`), 8 (`data`, `registry`, `jobs`, `docs`) | spec and run (14), stress (16), demo (24) | `unit/test_cli.py`, `unit/test_data_cli.py` |
+| INT-41 | CLI and server cannot share a home; both say so with the remedy | **Partial** | Phase 3 (service reports it), 8 (CLI message with the remedy) | server message (19) | `unit/test_service.py`, `unit/test_data_cli.py` |
 | INT-50 | Synthetic data generator in the vendor format | **Done** | Phase 5 | also an older-conventions mode (five-character codes, historical roots, Saturday expirations, single price, discounted deltas) | `unit/test_generator.py` |
 | INT-51 | `prophetovol demo` | Not started |  | Phase 24 |  |
 | INT-52 | Vendor data never committed; tests on synthetic data; optional real-data tests | **Partial** | Phase 1 (`.gitignore`; synthetic-only tests) | optional real-data tests (8, 15) |  |
@@ -322,10 +322,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| DOC-1 | One pydantic definition per configurable item, every field described | **Partial** | Phase 1 (meta-test), applied in 2-4 | applies to every later model; generated reference docs (8) | `meta/test_documentation.py` |
+| DOC-1 | One pydantic definition per configurable item, every field described | **Partial** | Phase 1 (meta-test), applied in 2-8; 8 (generated reference docs, checked current by a meta-test) | applies to every later model | `meta/test_documentation.py` |
 | DOC-2 | Descriptions state units, signs, defaults and interactions | **Partial** | Phase 2-4 | applies to every later model |  |
-| DOC-3 | Conventions published as a document generated from the module | **Partial** | Phase 2 (conventions module) | generated document (8) | `unit/test_conventions.py` |
-| DOC-4 | reST docstrings with Sphinx fields; README coverage | **Partial** | Phase 1 (meta-test enforces docstrings and `:param`) | README sections for demo, import, spec, run (8, 14, 24) | `meta/test_documentation.py` |
+| DOC-3 | Conventions published as a document generated from the module | **Done** | Phase 2 (conventions module), 8 (`docs/reference/conventions.rst` generated by `docs generate`) |  | `unit/test_conventions.py`, `meta/test_documentation.py` |
+| DOC-4 | reST docstrings with Sphinx fields; README coverage | **Partial** | Phase 1 (meta-test enforces docstrings and `:param`), 8 (README: install, test data, import, review, coverage, delete, purge) | README sections for spec, run (14) and demo (24) | `meta/test_documentation.py` |
 
 ## Audit (§15)
 
@@ -350,20 +350,20 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | Not started |  | Phase 10 |  |
-| TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row) | vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py` |
+| TEST-5 | Time-convention tests | **Done** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row), 8 (vendor call deltas reproduced on real 2023 data, median error 3e-7) |  | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py`, `realdata/test_vendor_ingest.py` |
 | TEST-6 | Ingest tests reproducing real-data quirks | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | TEST-7 | Adapter contract suite | **Partial** | Phase 3, 7 | Atomic run writes (14) | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |
-| TEST-10 | Optional real-data tests | Not started |  | Phase 8, 15 (findings from Phase 0 recorded in plan §15) |  |
+| TEST-10 | Optional real-data tests | **Partial** | Phase 8 (ingest part: real 2008 and 2023 through the CLI; counts, quality, coverage, derived columns, parity forwards, checkpoint 1 flow) | run part (15); Phase 0 findings recorded in plan §15 | `realdata/test_vendor_ingest.py` |
 | TEST-11 | Appendix B acceptance tests | Not started |  | Phase 15 |  |
 
 ## Non-functional (§18)
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s) | confirmed again in 8 (CLI); whole run in 15 |  |
+| NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s), 8 (2008 and 2023 imported and checked through the CLI in about 60 s together) | whole run (15) |  |
 | NFR-2 | GUI responsiveness | Not started |  | Phase 21-24 |  |
-| NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages) | CLI (8) and API (19) presentation | `unit/test_core.py`, `unit/test_service.py` |
+| NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages), 8 (CLI: short expected errors; unexpected ones logged to `logs/server.log`) | API presentation (19) | `unit/test_core.py`, `unit/test_service.py`, `unit/test_data_cli.py` |
 | NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4, 7 (confirmed scope; recoverable purge/discard) | Immutable run results (14) | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | NFR-5 | Accessibility | Not started |  | Phase 21-24 |  |

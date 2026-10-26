@@ -1,15 +1,20 @@
 """The ``prophetovol`` command line: a thin client of the service (ARC-1, INT-40).
 
-Commands are added by later phases (data, registry, spec, stress, run, serve, demo).
+Data, registry, jobs and documentation commands are available. Spec, stress, run, serve and demo
+commands arrive in later phases.
 """
 
 from __future__ import annotations
 
+import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import click
+from pydantic import ValidationError
 
+from prophetovol.core.errors import ProphetoVolError
 from prophetovol.core.home import HOME_ENV_VAR, resolve_home
 from prophetovol.core.versions import software_versions
 
@@ -38,7 +43,52 @@ def _print_versions(ctx: click.Context, _param: click.Parameter, value: bool) ->
     ctx.exit()
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@contextmanager
+def _logging(home):
+    """Log details to the home's file without exposing tracebacks in terminal messages."""
+    log_file = home / "logs" / "server.log"
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(log_file, encoding="utf-8")
+    except OSError as exc:
+        raise click.ClickException(f"Cannot open the home log {log_file}: {exc.strerror or type(exc).__name__}") from None
+    logger = logging.getLogger("prophetovol")
+    handlers, level, propagate = logger.handlers[:], logger.level, logger.propagate
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logger.handlers, logger.level, logger.propagate = [handler], logging.INFO, False
+    try:
+        yield log_file
+    finally:
+        logger.handlers, logger.level, logger.propagate = handlers, level, propagate
+        handler.close()
+
+
+class _CliGroup(click.Group):
+    """Translate service errors once at the CLI boundary (NFR-3)."""
+
+    def invoke(self, ctx):
+        """Invoke a command with file logging and readable errors.
+
+        :param ctx: Click invocation context.
+        :returns: The command's return value.
+        """
+        home = resolve_home(ctx.params.get("home"))
+        with _logging(home) as log_file:
+            try:
+                return super().invoke(ctx)
+            except (click.ClickException, click.Abort, click.exceptions.Exit):
+                raise
+            except ProphetoVolError as exc:
+                raise click.ClickException(str(exc)) from None
+            except ValidationError as exc:
+                message = "; ".join(".".join(map(str, e["loc"])) + ": " + e["msg"] for e in exc.errors())
+                raise click.ClickException(message) from None
+            except Exception:
+                logging.getLogger("prophetovol.cli").exception("command failed")
+                raise click.ClickException(f"Unexpected error. Details were logged to {log_file}.") from None
+
+
+@click.group(cls=_CliGroup, context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--version", is_flag=True, expose_value=False, is_eager=True, callback=_print_versions,
               help="Show the versions of ProphetoVol and its libraries, then exit.")
 @click.option("--home", type=click.Path(file_okay=False, path_type=Path), default=None,
@@ -87,3 +137,12 @@ def testdata_generate(out_dir: Path, start_date, end_date, seed: int, convention
                f"to {len(summary.files)} file(s) in {out_dir}")
     click.echo(f"quirks: {summary.crossed_quotes} crossed quotes, {summary.zero_asks} zero asks, "
                f"{summary.flagged} flagged rows")
+
+
+# Imported after the root command exists; these commands use only service operations.
+from prophetovol.cli.commands import data, registry, jobs, docs
+
+main.add_command(data)
+main.add_command(registry)
+main.add_command(jobs)
+main.add_command(docs)

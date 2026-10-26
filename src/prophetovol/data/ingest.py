@@ -103,6 +103,7 @@ def ingest(ctx: JobContext, calendar: TradingCalendar, max_bytes: int = DEFAULT_
                             files=[ImportFile(name=f.name, size_bytes=f.size_bytes, sha256=f.sha256) for f in files],
                             actor=ctx.context.actor, channel=ctx.context.channel, created_at=utc_now())
         storage.create_import(record)
+        ctx.record.result = {"import_id": import_id}  # retain the report link even when validation fails
         ctx.check_cancelled()
 
         ctx.progress(1, None, "checking headers")
@@ -151,7 +152,7 @@ def ingest(ctx: JobContext, calendar: TradingCalendar, max_bytes: int = DEFAULT_
         ctx.progress(total, total, "staged")
         return {"import_id": import_id, "status": record.status.value, "rows": rows,
                 "errors": len(report.errors), "warnings": len(report.warnings)}
-    except JobCancelled:
+    except (JobCancelled, KeyboardInterrupt):
         if record is not None:
             storage.discard_import(import_id)
             discarded = storage.get_import(import_id)
