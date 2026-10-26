@@ -65,6 +65,19 @@ CATALOG_MIGRATIONS: tuple[Migration, ...] = (
             outcome VARCHAR NOT NULL, reasons VARCHAR NOT NULL,
             actor VARCHAR NOT NULL, channel VARCHAR NOT NULL, attempted_at TIMESTAMP NOT NULL)""",
     )),
+    Migration(2, "Data lifecycle: run provenance, invalidations and file-operation recovery", (
+        """CREATE TABLE runs (
+            run_id VARCHAR PRIMARY KEY, status VARCHAR NOT NULL,
+            data_superseded BOOLEAN NOT NULL DEFAULT FALSE)""",
+        """CREATE TABLE run_data_versions (
+            run_id VARCHAR NOT NULL, underlying VARCHAR NOT NULL, as_of TIMESTAMP NOT NULL,
+            import_id VARCHAR NOT NULL, PRIMARY KEY (run_id, underlying, as_of, import_id))""",
+        """CREATE TABLE run_invalidations (
+            run_id VARCHAR NOT NULL, underlying VARCHAR NOT NULL, as_of TIMESTAMP NOT NULL,
+            import_id VARCHAR NOT NULL, as_of_date DATE NOT NULL,
+            PRIMARY KEY (run_id, underlying, as_of, import_id))""",
+        "CREATE TABLE file_operations (operation_id VARCHAR PRIMARY KEY)",
+    )),
 )
 """Migrations of ``catalog.duckdb``."""
 
@@ -81,10 +94,10 @@ def schema_version(con: duckdb.DuckDBPyConnection) -> int:
     :returns: The highest applied migration's version.
     """
     exists = con.execute(
-        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'schema_version'").fetchone()[0]
+        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'schema_version'").fetchall()[0][0]
     if not exists:
         return 0
-    return con.execute("SELECT coalesce(max(version), 0) FROM schema_version").fetchone()[0]
+    return con.execute("SELECT coalesce(max(version), 0) FROM schema_version").fetchall()[0][0]
 
 
 def apply_migrations(con: duckdb.DuckDBPyConnection, migrations: tuple[Migration, ...]) -> int:

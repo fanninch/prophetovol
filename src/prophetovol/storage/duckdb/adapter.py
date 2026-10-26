@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ from prophetovol.core.paging import Page, check_page
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, ImportFile,
                                       ImportStatus, JobRecord, JobStatus, VersionState)
 from prophetovol.storage.adapter import StorageAdapter
+from prophetovol.storage.duckdb.lifecycle import _LifecycleStorage, _locked
 from prophetovol.storage.duckdb.schema import CATALOG_MIGRATIONS, RESULTS_MIGRATIONS, apply_migrations, schema_version
 
 CATALOG_FILE = "catalog.duckdb"
@@ -106,7 +108,7 @@ def _connect(path: Path, home: Path) -> duckdb.DuckDBPyConnection:
         raise
 
 
-class DuckDBAdapter(StorageAdapter):
+class DuckDBAdapter(_LifecycleStorage, StorageAdapter):
     """Storage in DuckDB databases and Parquet files under a home directory.
 
     Use :meth:`open` to create the owner; :meth:`reader` gives adapters for other threads.
@@ -125,6 +127,7 @@ class DuckDBAdapter(StorageAdapter):
         self._owner = owner
         self._ibis = ibis.duckdb.from_connection(catalog)
         self._closed = False
+        self._lifecycle_lock = threading.RLock()
 
     @classmethod
     def open(cls, home: Path) -> DuckDBAdapter:
@@ -145,7 +148,13 @@ class DuckDBAdapter(StorageAdapter):
             raise
         apply_migrations(catalog, CATALOG_MIGRATIONS)
         apply_migrations(results, RESULTS_MIGRATIONS)
-        return cls(home, catalog, results, owner=True)
+        adapter = cls(home, catalog, results, owner=True)
+        try:
+            adapter._recover_files()
+        except Exception:
+            adapter.close()
+            raise
+        return adapter
 
     # --- lifecycle -------------------------------------------------------------------------
 
@@ -164,7 +173,9 @@ class DuckDBAdapter(StorageAdapter):
 
         :returns: The reader adapter.
         """
-        return DuckDBAdapter(self._home, self._cat.cursor(), self._res.cursor(), owner=False)
+        reader = DuckDBAdapter(self._home, self._cat.cursor(), self._res.cursor(), owner=False)
+        reader._lifecycle_lock = self._lifecycle_lock
+        return reader
 
     def close(self) -> None:
         """Close this adapter's connections or cursors."""
@@ -404,6 +415,7 @@ class DuckDBAdapter(StorageAdapter):
         """
         return sorted((self._home / MARKET_DIR).glob(f"underlying=*/year=*/month=*/{import_id}.parquet"))
 
+    @_locked
     def write_market_partition(self, import_id: str, underlying: str, year: int, month: int, table: pa.Table) -> None:
         """Write one month of an import's market snapshots to its own Parquet file.
 
@@ -422,6 +434,7 @@ class DuckDBAdapter(StorageAdapter):
         pq.write_table(table, partial, row_group_size=ROW_GROUP_SIZE, compression="zstd")
         os.replace(partial, target)
 
+    @_locked
     def record_staged_versions(self, versions: list[DataVersionRecord]) -> None:
         """Record data versions in state ``staged``, in one transaction.
 
@@ -459,6 +472,7 @@ class DuckDBAdapter(StorageAdapter):
                                   state_changed_at=_utc(r["state_changed_at"]))
                 for r in self._rows(t.order_by(["as_of", "import_id"]))]
 
+    @_locked
     def read_import_snapshot(self, import_id: str, as_of_date: date, columns: list[str] | None = None) -> pa.Table:
         """Read one date's snapshot as an import supplied it, whatever its state.
 
@@ -478,12 +492,15 @@ class DuckDBAdapter(StorageAdapter):
             expr = expr.select(columns)
         return expr.to_pyarrow()
 
+    @_locked
     def discard_import(self, import_id: str) -> None:
         """Delete a staged import's files and mark it and its versions discarded.
 
         :param import_id: The import.
         """
-        self.get_import(import_id)  # raises NotFoundError for an unknown import
+        record = self.get_import(import_id)
+        if record.status == ImportStatus.COMMITTED:
+            raise ImmutableEntityError("only staged imports can be discarded: delete or purge instead")
         v = self._ibis.table("data_versions")
         used = self._rows(v.filter((v.import_id == import_id)
                                    & ~v.state.isin([VersionState.STAGED.value, VersionState.DISCARDED.value]))
@@ -492,18 +509,13 @@ class DuckDBAdapter(StorageAdapter):
             raise ImmutableEntityError(
                 f"import {import_id} has versions in use ({', '.join(sorted(r['state'] for r in used))}); "
                 "only staged imports can be discarded: delete or purge instead")
-        for path in self._import_files(import_id):
-            path.unlink()
         now = _db_ts(utc_now())
-        self._cat.execute("BEGIN TRANSACTION")
-        try:
+        def apply():
             self._write("UPDATE data_versions SET state = ?, state_changed_at = ? WHERE import_id = ?",
                         [VersionState.DISCARDED.value, now, import_id])
-            self._write("UPDATE imports SET status = ? WHERE import_id = ?", [ImportStatus.DISCARDED.value, import_id])
-            self._cat.execute("COMMIT")
-        except Exception:
-            self._cat.execute("ROLLBACK")
-            raise
+            self._write("UPDATE imports SET status = ?, commit_choice = ?, committed_at = ? WHERE import_id = ?",
+                        [ImportStatus.DISCARDED.value, "cancel", now, import_id])
+        self._file_transaction({path: None for path in self._import_files(import_id)}, apply)
 
     # --- jobs --------------------------------------------------------------------------------
 

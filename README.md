@@ -4,8 +4,8 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built: plan phases 0–6 of 24 are done (repository foundation, conventions and calendar,
-storage and catalog, jobs and audit, synthetic data, ingest); milestone M1 (data foundation) is in progress. The requirements, the
+**Status:** Phase 1 is being built: plan phases 0–7 of 24 are done (repository foundation, conventions and calendar,
+storage and catalog, jobs and audit, synthetic data, ingest, data lifecycle); milestone M1 (data foundation) is in progress. The requirements, the
 implementation plan and the [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
 data, publishing a spec and running a backtest are added as those phases are built.
@@ -63,7 +63,7 @@ changes the random path (the same seed always gives the same files).
 Vendor files are imported as one import per call: CSV files, folders of them, or zip archives. Each
 import is validated (with a quality report kept permanently), normalized into ProphetoVol's own
 conventions with the vendor's original values kept alongside, and staged; nothing is used by runs
-until the import is committed (the next phase). Until the `prophetovol data` commands arrive, import
+until the import is committed. Until the `prophetovol data` commands arrive, import
 from Python:
 
 ```python
@@ -76,6 +76,50 @@ with BacktestService.open() as svc:
     report = svc.quality_report(job.result["import_id"])
     print([(check.name, check.severity, check.count) for check in report.checks])
 ```
+
+## Reviewing, committing and managing data
+
+Phase 7 exposes the data lifecycle through `BacktestService`; the data CLI arrives in Phase 8.
+After a successful import, review its quality report and overlap before choosing what becomes active:
+
+```python
+from datetime import date
+from prophetovol.data.lifecycle import CommitChoice, DataSelection
+
+# Inside the service context, after import_files succeeds:
+import_id = job.result["import_id"]
+context = CallContext.for_channel("library")
+print(svc.overlap(import_id, context))
+committed = svc.commit_import(import_id, CommitChoice.ADD_NEW, context)
+print(committed.status, committed.error)
+print(svc.coverage("SPX", date(2024, 1, 1), date(2024, 12, 31), context))
+```
+
+`replace` activates every incoming snapshot and retains replaced versions as superseded.
+`add_new` activates only snapshots without active data; overlapping incoming versions are retained
+as superseded and can be purged. `cancel` discards the staged import. Commit and dependent-run
+invalidation occur in one catalog transaction. Active snapshot reads filter by the version registry.
+
+Delete deactivates current data while keeping the files. Purge removes only superseded or deleted
+versions, rewriting a monthly file when it also contains data that must remain. Both require a
+reviewed preview and explicit confirmation:
+
+```python
+selection = DataSelection(underlying="SPX", start=date(2024, 1, 1), end=date(2024, 1, 31))
+preview = svc.preview_data_change("delete", selection, context)
+print(preview.versions, preview.runs)  # present these for the user's review
+# Only after the user confirms this preview:
+# deleted = svc.delete_data(preview, context, confirmed=True)
+```
+
+For purge, request a `"purge"` preview and call `purge_data`; select either a date range or
+`DataSelection(import_id=import_id)`. A stale preview is refused, including when a queued job
+starts after its scope or affected runs changed. Affected runs keep their results and receive
+persisted data-superseded flags and dates. Interrupted file changes are recovered when the home
+is reopened. Purge needs temporary disk space for backups and replacement files.
+
+Commit, delete and purge return persisted jobs and accept `background=True` when the job runner
+is running. Submissions and execution outcomes are audited separately, linked by the job id.
 
 ## Jobs and the attempts log
 
