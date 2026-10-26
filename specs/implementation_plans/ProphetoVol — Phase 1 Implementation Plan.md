@@ -653,3 +653,26 @@ Recorded per phase: what was built, what changed from the plan, and test counts.
   - migrations: order, idempotence, rollback of a failing migration, refusal of newer databases
   - the file layout, naive-UTC storage, and refusing to discard an activated import
   - the service: seeding with the opener's actor and channel, no reseeding or overwriting on reopen, `PROPHETOVOL_HOME`, readers, and **a real second process holding the home directory**, reported as in use and free again once it closes
+
+**Phase 4 (jobs and audit), Oct 25, 2026**
+
+- **`runs/jobs.py`:**
+  - `JobRunner`: one daemon worker thread takes job ids from a FIFO queue (INT-23). Submission, cancellation and the worker each use their own cursor (`storage.reader()`), since DuckDB connections are not thread-safe. A lock-guarded in-memory state per job settles the race between a cancel and the worker picking up the same job.
+  - `JobContext`, given to handlers: `params`, `context`, `progress()` (written at most every 0.5 s), `check_cancelled()` (raises `JobCancelled` at a safe point), `save()`.
+  - `execute_job`, shared by the runner and the CLI's foreground path: records `running`, then `succeeded` with the handler's result, `cancelled`, or `failed` with the message. A handler's exception is recorded, not propagated; `KeyboardInterrupt` is recorded as "cancelled by the user" and then propagated. The final save always carries the last reported progress (the §15.4 finding).
+  - `recover_interrupted_jobs`: jobs found queued or running are marked failed with `INTERRUPTED_MESSAGE` (RUN-20); runs join this in Phase 14.
+  - `JobRunner.stop()`: lets the running job finish, then marks queued jobs cancelled with `STOPPED_MESSAGE`, so a clean shutdown is not later reported as a crash.
+  - Cancelling a finished job raises `ImmutableEntityError`; an unknown kind is refused at submission.
+- **`runs/audit.py`:** `@audited(operation)` for service methods that take `context`. It appends one attempt per call: `ok`; `rejected` for any `ProphetoVolError` (validation, refusals, not found), with one reason per validation issue including its field path; or `error` for anything else. The exception is re-raised unchanged, and a failure to write the attempt is logged but never hides the operation's own result. `summarize_params` keeps simple values (strings shortened to 200 characters) and records containers by size.
+- **`runs/service.py`:**
+  - recovers interrupted jobs on open (`recovered_jobs`)
+  - `start_jobs(handlers)` (owner only, once), `stop_jobs()` (also called by `close()`), `jobs`, `submit_job`, `run_job` (foreground), audited `cancel_job`, `get_job`, `page_jobs`, `page_attempts`
+  - the first audited write operations: `publish_underlying` and `publish_data_source` (REF-2), which validate, convert pydantic errors to located `ValidationFailed` issues (`ValidationFailed.from_pydantic`), and publish through VER-1's unchanged-content rule
+- **Decision:** `submit_job` and `run_job` are plumbing and are not audited themselves. The domain operations that start jobs (import, commit, purge, run) are audited, so each request appears once in the attempts log.
+- **Tests:** 143, all passing in about 11 seconds (unit 121, contract 18, meta 2, packaging 2); the threaded tests passed eight repeated runs. New:
+  - success with result, progress and times; strict FIFO with no overlap; a failing job followed by one that still runs
+  - cancelling a queued job (immediate, never runs) and a running job (stops at a safe point); refusing to cancel a finished job
+  - stop: running job finishes, queued jobs cancelled
+  - progress throttling with a fake clock, with the final value always written
+  - `KeyboardInterrupt`; recovery of queued and running jobs, directly and on reopening a home directory
+  - attempts for ok, rejected (with field paths), error, and a failing attempt write; the summary rules; the service's job rules

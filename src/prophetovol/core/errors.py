@@ -6,6 +6,7 @@ Clients map these to readable messages (the CLI) or HTTP statuses (the API, NFR-
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 class ProphetoVolError(Exception):
@@ -59,3 +60,12 @@ class ValidationFailed(ProphetoVolError):
         self.issues = list(issues)
         lines = "\n".join(f"  - {issue}" for issue in self.issues)
         super().__init__(f"validation failed with {len(self.issues)} issue(s):\n{lines}")
+
+    @classmethod
+    def from_pydantic(cls, error: Any) -> ValidationFailed:
+        """Convert a pydantic ``ValidationError`` into located issues.
+
+        :param error: The pydantic error.
+        :returns: One issue per pydantic error, with its dotted field path.
+        """
+        return cls([ValidationIssue(".".join(str(part) for part in e["loc"]), e["msg"]) for e in error.errors()])
