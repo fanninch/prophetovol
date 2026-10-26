@@ -23,7 +23,7 @@ def test_conventions_are_not_defined_as_a_vendor_s():
 
 def test_conv_10_states_the_internal_greek_conventions():
     text = CONVENTIONS[9].statement
-    assert "undiscounted Black-76 forward delta" in text and "call delta − put delta = 1" in text
+    assert "undiscounted Black-76 forward delta" in text and "same strike and implied vol, call delta − put delta = 1" in text
     assert "per volatility point" in text and "per calendar day" in text
 
 

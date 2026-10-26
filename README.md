@@ -4,8 +4,8 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built: plan phases 0–5 of 24 are done (repository foundation, conventions and calendar,
-storage and catalog, jobs and audit, synthetic data); milestone M1 (data foundation) is in progress. The requirements, the
+**Status:** Phase 1 is being built: plan phases 0–6 of 24 are done (repository foundation, conventions and calendar,
+storage and catalog, jobs and audit, synthetic data, ingest); milestone M1 (data foundation) is in progress. The requirements, the
 implementation plan and the [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
 data, publishing a spec and running a backtest are added as those phases are built.
@@ -58,6 +58,25 @@ historical roots, Saturday-dated monthlies, one underlying price per date, disco
 `--rows-per-file` splits the output into several files, as the vendor's downloads are; `--seed`
 changes the random path (the same seed always gives the same files).
 
+## Importing data
+
+Vendor files are imported as one import per call: CSV files, folders of them, or zip archives. Each
+import is validated (with a quality report kept permanently), normalized into ProphetoVol's own
+conventions with the vendor's original values kept alongside, and staged; nothing is used by runs
+until the import is committed (the next phase). Until the `prophetovol data` commands arrive, import
+from Python:
+
+```python
+from prophetovol.core.context import CallContext
+from prophetovol.runs.service import BacktestService
+
+with BacktestService.open() as svc:
+    job = svc.import_files(["D:/vendor/spx/spx_2023"], CallContext.for_channel("library"))
+    print(job.status, job.error)
+    report = svc.quality_report(job.result["import_id"])
+    print([(check.name, check.severity, check.count) for check in report.checks])
+```
+
 ## Jobs and the attempts log
 
 Long operations (imports, commits, purges, runs) run as jobs, recorded in the catalog with their
@@ -80,8 +99,9 @@ or `SPXW` (PM-settled). A root that is not listed fails ingest rather than being
 ProphetoVol has its own conventions for time, prices, implied vol and greeks, independent of any
 data vendor; each data source's ingest converts its files into them and keeps the vendor's original
 values alongside. Time to expiry is calendar minutes on the exchange clock (daylight saving ignored)
-over the minutes in 365 days. Delta is the undiscounted Black-76 forward delta (call minus put delta
-is exactly 1), vega is per volatility point and theta per calendar day. An expiration dated on a non-trading day (the
+over the minutes in 365 days. Delta is the undiscounted Black-76 forward delta (at the same strike and
+implied vol, call minus put delta is exactly 1), vega is per volatility point and theta per calendar
+day. An expiration dated on a non-trading day (the
 Saturday-dated monthlies before 2015) settles on the trading day before it; AM-settled contracts
 last trade the trading day before they settle. The full list of conventions is in
 `prophetovol.core.conventions`.

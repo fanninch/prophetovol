@@ -337,9 +337,9 @@ class DuckDBAdapter(StorageAdapter):
         :param record: The import with its new values.
         """
         self.get_import(record.import_id)
-        self._write("""UPDATE imports SET status = ?, rows = ?, first_as_of_date = ?, last_as_of_date = ?,
+        self._write("""UPDATE imports SET underlying = ?, status = ?, rows = ?, first_as_of_date = ?, last_as_of_date = ?,
                        quality_report = ?, commit_choice = ?, error = ?, committed_at = ? WHERE import_id = ?""", [
-            record.status.value, record.rows, record.first_as_of_date, record.last_as_of_date,
+            record.underlying, record.status.value, record.rows, record.first_as_of_date, record.last_as_of_date,
             _json(record.quality_report), record.commit_choice, record.error, _db_ts(record.committed_at),
             record.import_id])
 

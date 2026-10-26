@@ -47,7 +47,7 @@ def test_greeks_match_finite_differences(call):
 
 @pytest.mark.parametrize("k, t", [(4500, 0.05), (5000, 0.25), (5600, 2.0)])
 def test_internal_delta_convention(k, t):
-    # CONV-10: undiscounted forward delta, so call delta - put delta = 1 at every strike and tenor
+    # CONV-10: undiscounted forward delta, so at the same strike and vol, call delta - put delta = 1 at any tenor
     g_call = black76.greeks(5000, k, t, 0.2, True)
     g_put = black76.greeks(5000, k, t, 0.2, False)
     assert g_call.delta - g_put.delta == pytest.approx(1.0, abs=1e-15)
