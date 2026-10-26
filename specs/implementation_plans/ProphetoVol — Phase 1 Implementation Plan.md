@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–7 done; Phase 8 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–8 done (M1 complete pending the checkpoint 1 demo); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -795,3 +795,40 @@ Not a plan phase: the project's rules, which until now lived in a private memory
 - **Test mistakes corrected during development:** the unit and contract files initially shared a basename, which conflicts with this repository's pytest import mode; the contract file is now `test_lifecycle_contract.py`.
 - **Documentation:** README library examples, current phase status and requirement tracker updated. The two previously reviewed ingest edge cases (apostrophes in paths and duplicate basenames) are not changed in this phase; they remain separate between-phase corrections under the repository process.
 - **Next:** Phase 8, data CLI, generated documentation, optional real-data tests and checkpoint 1. M1 remains in progress.
+
+
+**Phase 8 (data CLI, documentation and checkpoint 1), Oct 26, 2026**
+
+- **`cli/commands.py`:** the `data`, `registry`, `jobs` and `docs` command groups, each a thin call to a `BacktestService` operation.
+  - `data import <paths>... [--commit replace|add-new|ask]`: one import of all the files, folders and zips given; it shows the quality report and the overlap, then commits. `ask` prompts with cancel as the default, and end of input or Ctrl+C discards the staged import. A failed validation exits non-zero and names the import, whose report is kept.
+  - `data list`, `data quality <import_id> [--details]`, `data coverage [--underlying --from --to --daily]`.
+  - `data delete --underlying --from --to` and `data purge --import-id | --underlying --from --to`: an exact preview, including affected runs, then a confirmation (`--yes` for scripts).
+  - `registry list [<type>]`, `registry show <type> <name>` (the full parameter schema); `jobs list|show|cancel`; `docs generate [--out] [--check]`.
+- **`cli/__init__.py`:** the CLI logs to `<home>/logs/server.log`. Expected errors (`ProphetoVolError`, pydantic validation errors) become short click messages; unexpected ones are logged with their traceback and the user sees only where the details are (INT-41). An unwritable log is itself a readable error.
+- **`documentation.py`:** `reference_documents()` renders `docs/reference/` (index, conventions, models, registries) as reStructuredText from the pydantic schemas, registries and conventions. The service's audited `generate_docs` writes them, or with `check` reports which files are stale; the meta-test `test_generated_reference_is_current` fails when the committed files differ (DOC-1, DOC-3).
+- **Service:** audited `list_registries`, `list_implementations` (`registry.list`) and `describe_implementation` (`registry.show`); `data_versions` and `import_snapshot` (an import's rows for one date, for review and the real-data tests); `generate_docs`; `cancel_job` refuses clearly when no job runner is running.
+- **Small changes made for the CLI:**
+  - A failed job's result carries `error_kind` (`expected` or `unexpected`), so the CLI can tell a validation failure from a defect without parsing messages.
+  - Ingest records the import id on the job's result before any work, so a failed or cancelled job still links to its import and quality report.
+  - Ingest treats `KeyboardInterrupt` like a cancellation, discarding what it wrote.
+  - Zip members are imported in file-name order, so an archive gives the same import as its extracted folder.
+- **Plan refinements:** no new design decisions and no requirement changes.
+- **README:** CLI-first sections for importing, reviewing, committing, coverage, delete and purge, the registry, jobs and docs commands, the real-data tests, and the current status.
+- **Real-data tests** (`tests/realdata/test_vendor_ingest.py`, marked `realdata`, skipped unless `PROPHETOVOL_VENDOR_DATA` is set; vendor files are read in place and the home is in pytest's temporary area outside the repository):
+  - **2008** (older conventions): 321,408 rows over 253 dates from 1 file, imported through the CLI in one import. Per-date contract counts match the files; coverage and missing trading days agree with the calendar; greeks recomputed and equal to Black-76 from the stored values; five-character vendor symbols, Saturday-dated expirations settling on the Friday, and parity forwards present.
+  - **2023** (current conventions): 4,039,670 rows over 250 dates from 5 files. Vendor greeks kept; the vendor's call deltas reproduced from the stored time to expiry with a median error of 3.0e-7 (TEST-5); parity forwards within a median 0.06 bp of the vendor's.
+  - **Checkpoint 1 flow** for both years: re-importing one file shows a full overlap, `add-new` activates nothing, the superseded versions are purged, then one day is deleted and purged after confirmation.
+  - The `PROPHETOVOL_VENDOR_DATA` problem noted in Phase 6 is fixed; the variable now names the folder that holds the files. All 6 pass in about 60 seconds.
+- **Tests:** 275, of which 269 run by default and pass in about 50 seconds (unit 236, contract 28, meta 3, packaging 2); the 6 real-data tests are skipped without the variable. New in `tests/unit/test_data_cli.py`:
+  - every data command on generated data through click's test runner
+  - the `ask` choices; end of input discarding
+  - multiple files and a zip each being one import
+  - delete declined, then confirmed, then purge; affected runs named in the preview
+  - a failed validation keeping its report link and exiting non-zero
+  - readable expected errors; the locked-home message naming the remedy
+  - registry schemas; docs generation and the stale check
+  - unexpected exceptions and job failures logged but not shown
+  - REST-only fields hidden from help; an unwritable log
+  - Ctrl+C during ingest discarding the partial import
+- **Still open (between-phase corrections, unchanged here):** the two reviewed ingest edge cases from Phase 7. Paths containing an apostrophe are still interpolated into DuckDB SQL in `data/derive.py`. Duplicate base names are now harmless for zip members, which get numbered names, but have not been re-reviewed for folders.
+- **Next:** checkpoint 1 demo with you, which completes M1; then Phase 9 (spec model, validation and publishing), the start of M2.

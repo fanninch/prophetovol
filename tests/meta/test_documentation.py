@@ -100,3 +100,12 @@ def test_public_code_has_rest_docstrings():
                     problems += [f"{where}.{attr}: :param {p}:"
                                  for p in _missing_params(func, mdoc, skip_first=not isinstance(member, staticmethod))]
     assert not problems, "documentation problems:\n" + "\n".join(problems)
+
+
+def test_generated_reference_is_current():
+    from pathlib import Path
+    from prophetovol.documentation import reference_documents
+    folder = Path(__file__).resolve().parents[2] / "docs" / "reference"
+    for name, text in reference_documents().items():
+        assert (folder / name).is_file(), f"generate missing reference: {name}"
+        assert (folder / name).read_text(encoding="utf-8") == text, f"regenerate stale reference: {name}"

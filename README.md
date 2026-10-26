@@ -4,11 +4,12 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built: plan phases 0–7 of 24 are done (repository foundation, conventions and calendar,
-storage and catalog, jobs and audit, synthetic data, ingest, data lifecycle); milestone M1 (data foundation) is in progress. The requirements, the
-implementation plan and the [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
-are in [`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
-data, publishing a spec and running a backtest are added as those phases are built.
+**Status:** Phase 1 is being built. Plan phases 0–8 of 24 are done: milestone M1 (data foundation) is
+complete apart from its checkpoint demo, with data import, review, commit, delete, purge and coverage
+through the `prophetovol` CLI. The requirements, the implementation plan and the
+[requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
+are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
+milestones M2 to M4.
 
 ## Install
 
@@ -60,66 +61,61 @@ changes the random path (the same seed always gives the same files).
 
 ## Importing data
 
-Vendor files are imported as one import per call: CSV files, folders of them, or zip archives. Each
-import is validated (with a quality report kept permanently), normalized into ProphetoVol's own
-conventions with the vendor's original values kept alongside, and staged; nothing is used by runs
-until the import is committed. Until the `prophetovol data` commands arrive, import
-from Python:
+Vendor files are imported as one import per command: CSV files, folders of them, or zip archives
+(a year of SPX normally comes as several files). Each import is validated, with a quality report
+kept permanently, normalized into ProphetoVol's own conventions with the vendor's original values
+kept alongside, and staged. You then review it and choose what becomes active:
 
-```python
-from prophetovol.core.context import CallContext
-from prophetovol.runs.service import BacktestService
-
-with BacktestService.open() as svc:
-    job = svc.import_files(["D:/vendor/spx/spx_2023"], CallContext.for_channel("library"))
-    print(job.status, job.error)
-    report = svc.quality_report(job.result["import_id"])
-    print([(check.name, check.severity, check.count) for check in report.checks])
+```bash
+prophetovol data import D:/vendor/spx/spx_2023
 ```
 
-## Reviewing, committing and managing data
+The command shows the quality report and the overlap with data already active, then asks for a
+commit choice:
 
-Phase 7 exposes the data lifecycle through `BacktestService`; the data CLI arrives in Phase 8.
-After a successful import, review its quality report and overlap before choosing what becomes active:
+- `replace`: every incoming snapshot becomes active; replaced versions are kept as superseded.
+- `add-new`: only dates without active data become active; overlapping incoming versions are
+  kept as superseded, and can be purged.
+- `cancel`: the staged import is discarded (also what happens on Ctrl+C or end of input).
 
-```python
-from datetime import date
-from prophetovol.data.lifecycle import CommitChoice, DataSelection
+`--commit replace` or `--commit add-new` skips the question, for scripts. A failed validation
+exits with an error and keeps the import and its report for review.
 
-# Inside the service context, after import_files succeeds:
-import_id = job.result["import_id"]
-context = CallContext.for_channel("library")
-print(svc.overlap(import_id, context))
-committed = svc.commit_import(import_id, CommitChoice.ADD_NEW, context)
-print(committed.status, committed.error)
-print(svc.coverage("SPX", date(2024, 1, 1), date(2024, 12, 31), context))
+## Reviewing and managing data
+
+```bash
+prophetovol data list                                # imports, newest first, including failed and discarded ones
+prophetovol data quality IMPORT_ID [--details]      # the stored quality report; --details adds dates and examples
+prophetovol data coverage [--underlying SPX] [--from 2024-01-01 --to 2024-12-31] [--daily]
+prophetovol data delete --underlying SPX --from 2024-01-01 --to 2024-01-31
+prophetovol data purge --import-id IMPORT_ID         # or --underlying SPX --from ... --to ...
 ```
 
-`replace` activates every incoming snapshot and retains replaced versions as superseded.
-`add_new` activates only snapshots without active data; overlapping incoming versions are retained
-as superseded and can be purged. `cancel` discards the staged import. Commit and dependent-run
-invalidation occur in one catalog transaction. Active snapshot reads filter by the version registry.
+Coverage summarizes trading days by month (covered, missing, non-trading dates with data,
+contracts and flagged days); `--daily` lists each day with its import and quality flags.
 
-Delete deactivates current data while keeping the files. Purge removes only superseded or deleted
-versions, rewriting a monthly file when it also contains data that must remain. Both require a
-reviewed preview and explicit confirmation:
+**Delete** deactivates active data in a date range but keeps the files. **Purge** removes only
+superseded or deleted versions and reclaims disk space, rewriting a monthly file when it also
+holds data that must remain (it needs temporary disk space for backups). Both show an exact
+preview, including any runs that read the data, and change nothing until you confirm (`--yes`
+confirms for scripts). Affected runs keep their results and are flagged *data superseded*.
+Interrupted file changes are recovered when the home is next opened.
 
-```python
-selection = DataSelection(underlying="SPX", start=date(2024, 1, 1), end=date(2024, 1, 31))
-preview = svc.preview_data_change("delete", selection, context)
-print(preview.versions, preview.runs)  # present these for the user's review
-# Only after the user confirms this preview:
-# deleted = svc.delete_data(preview, context, confirmed=True)
+Other commands:
+
+```bash
+prophetovol registry list [TYPE]          # component types, or the implementations of one type
+prophetovol registry show TYPE NAME       # an implementation with its full parameter schema
+prophetovol jobs list [--status running]  # persisted jobs, newest first
+prophetovol jobs show JOB_ID
+prophetovol docs generate [--check]       # regenerate (or check) docs/reference from the schemas
 ```
 
-For purge, request a `"purge"` preview and call `purge_data`; select either a date range or
-`DataSelection(import_id=import_id)`. A stale preview is refused, including when a queued job
-starts after its scope or affected runs changed. Affected runs keep their results and receive
-persisted data-superseded flags and dates. Interrupted file changes are recovered when the home
-is reopened. Purge needs temporary disk space for backups and replacement files.
-
-Commit, delete and purge return persisted jobs and accept `background=True` when the job runner
-is running. Submissions and execution outcomes are audited separately, linked by the job id.
+Expected errors are shown as short messages; unexpected ones say only that details were written
+to `logs/server.log` in the home directory. Every command is also a `BacktestService` operation
+(`import_files`, `overlap`, `commit_import`, `coverage`, `preview_data_change`, `delete_data`,
+`purge_data`, …) for use from Python; commit, delete and purge return persisted jobs and accept
+`background=True` when the job runner is running.
 
 ## Jobs and the attempts log
 
@@ -156,9 +152,11 @@ last trade the trading day before they settle. The full list of conventions is i
 pytest
 ```
 
-Optional tests against real vendor files run only when `PROPHETOVOL_VENDOR_DATA` names a folder
-with one subfolder per underlying (for example `spx/`). Vendor data is licensed and never goes in
-the repository.
+Optional tests against real vendor files (`tests/realdata/`, marked `realdata`) run only when
+`PROPHETOVOL_VENDOR_DATA` names a folder with one subfolder per underlying, holding `spx/spx_2008`
+and `spx/spx_2023`. They import both years through the CLI and walk through checkpoint 1 (quality,
+overlap, commit, coverage, delete and purge) in a temporary home. Vendor data is licensed and never
+goes in the repository.
 
 ## Building a wheel
 

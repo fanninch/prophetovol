@@ -35,7 +35,7 @@ These held throughout the discussion and should carry into every phase.
 
 | Phase | Theme | Main deliverables | Status |
 | --- | --- | --- | --- |
-| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v7) and implementation plan (v4) agreed; plan phases 0–7 of 24 done (M1 in progress). Progress per requirement: *ProphetoVol — Phase 1 Requirement Status* |
+| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v7) and implementation plan (v4) agreed; plan phases 0–8 of 24 done (M1 complete pending the checkpoint 1 demo). Progress per requirement: *ProphetoVol — Phase 1 Requirement Status* |
 | **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Roadmap — not yet specified |
 | **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Roadmap — not yet specified |
 | **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Roadmap — not yet specified |

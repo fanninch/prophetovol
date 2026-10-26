@@ -21,7 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 from prophetovol.core.context import CallContext
-from prophetovol.core.errors import ImmutableEntityError
+from prophetovol.core.errors import ImmutableEntityError, ProphetoVolError
 from prophetovol.core.ids import new_id, utc_now
 from prophetovol.core.records import JobRecord, JobStatus
 from prophetovol.storage.adapter import StorageAdapter
@@ -130,7 +130,8 @@ def execute_job(record: JobRecord, handler: JobHandler, storage: StorageAdapter,
     The handler's result marks the job ``succeeded``; :class:`JobCancelled` marks it ``cancelled``;
     any other exception marks it ``failed`` with the exception's message (and is not re-raised,
     except ``KeyboardInterrupt``, which marks it cancelled first). The last reported progress is
-    always written with the final status.
+    always written with the final status. Failed jobs retain any artifact links and add an
+    ``error_kind`` (expected or unexpected) so clients can choose a safe error presentation.
 
     :param record: The job, already stored, in status ``queued``.
     :param handler: The job's work.
@@ -154,6 +155,7 @@ def execute_job(record: JobRecord, handler: JobHandler, storage: StorageAdapter,
     except Exception as exc:  # noqa: BLE001 - a job's failure is recorded, not propagated
         log.exception("job %s (%s) failed", record.job_id, record.kind)
         record.status, record.error = JobStatus.FAILED, str(exc) or type(exc).__name__
+        record.result = dict(record.result or {}, error_kind="expected" if isinstance(exc, ProphetoVolError) else "unexpected")
     record.finished_at = utc_now()
     ctx.save()
     return record
@@ -174,6 +176,7 @@ def recover_interrupted_jobs(storage: StorageAdapter) -> list[str]:
             return changed
         for job in page.items:
             job.status, job.error, job.finished_at = JobStatus.FAILED, INTERRUPTED_MESSAGE, utc_now()
+            job.result = dict(job.result or {}, error_kind="expected")
             storage.update_job(job)
             changed.append(job.job_id)
 

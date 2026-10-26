@@ -121,7 +121,8 @@ class JobRecord(BaseModel):
     progress_done: int | None = Field(default=None, description="Units of work done, when known.")
     progress_total: int | None = Field(default=None, description="Units of work in total, when known.")
     progress_label: str = Field(default="", description="What the job is doing now, for people.")
-    result: dict[str, Any] | None = Field(default=None, description="Links to what the job produced, such as an import or run id.")
+    result: dict[str, Any] | None = Field(default=None, description="Links to what the job produced, such as an import or run id; failed jobs also carry "
+                                                                     "error_kind (expected or unexpected) for client presentation.")
     error: str | None = Field(default=None, description="Why the job failed, if it did.")
     cancel_requested: bool = Field(default=False, description="Whether cancellation was asked for (INT-24).")
     actor: str = Field(description="Who started the job (AUD-1).")
