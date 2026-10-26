@@ -6,13 +6,25 @@ from prophetovol.core.conventions import (CONVENTIONS, MINUTES_PER_YEAR, dollar_
                                           dollar_theta, dollar_vega)
 
 
-def test_all_nine_conventions_in_order_with_text():
-    assert [c.id for c in CONVENTIONS] == [f"CONV-{i}" for i in range(1, 10)]
+def test_all_ten_conventions_in_order_with_text():
+    assert [c.id for c in CONVENTIONS] == [f"CONV-{i}" for i in range(1, 11)]
     assert all(c.title and len(c.statement) > 40 for c in CONVENTIONS)
 
 
 def test_conv_1_states_the_exchange_clock():
     assert "exchange" in CONVENTIONS[0].statement and "daylight-saving" in CONVENTIONS[0].statement
+
+
+def test_conventions_are_not_defined_as_a_vendor_s():
+    # Internal conventions stand on their own; a vendor may be mentioned only as agreeing with them.
+    for c in CONVENTIONS:
+        assert "vendor's convention" not in c.statement and "vendor vega" not in c.statement
+
+
+def test_conv_10_states_the_internal_greek_conventions():
+    text = CONVENTIONS[9].statement
+    assert "undiscounted Black-76 forward delta" in text and "call delta − put delta = 1" in text
+    assert "per volatility point" in text and "per calendar day" in text
 
 
 def test_minutes_per_year():

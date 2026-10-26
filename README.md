@@ -77,8 +77,11 @@ The package ships the SPX underlying and the `ivolatility_eod` data source as YA
 since 2007, each mapped to its settlement style and to one of today's two roots: `SPX` (AM-settled)
 or `SPXW` (PM-settled). A root that is not listed fails ingest rather than being guessed.
 
-Time to expiry follows the vendor's convention: calendar minutes on the exchange clock (daylight
-saving ignored) over the minutes in 365 days. An expiration dated on a non-trading day (the
+ProphetoVol has its own conventions for time, prices, implied vol and greeks, independent of any
+data vendor; each data source's ingest converts its files into them and keeps the vendor's original
+values alongside. Time to expiry is calendar minutes on the exchange clock (daylight saving ignored)
+over the minutes in 365 days. Delta is the undiscounted Black-76 forward delta (call minus put delta
+is exactly 1), vega is per volatility point and theta per calendar day. An expiration dated on a non-trading day (the
 Saturday-dated monthlies before 2015) settles on the trading day before it; AM-settled contracts
 last trade the trading day before they settle. The full list of conventions is in
 `prophetovol.core.conventions`.

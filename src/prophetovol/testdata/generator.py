@@ -20,8 +20,12 @@ Two conventions are available (requirements v6, DATA-2, DATA-14):
   root, so one code names two contracts on a date, as in the real files), one underlying price per
   date in ``stock price for iv``, and discounted deltas.
 
-Greeks are computed from the rounded values written to the file (IV to 6 decimals, forward to 3,
-index level to 2), so recomputing them from the file reproduces them to the file's rounding (TEST-5).
+The generator writes vendor files, so it converts from the internal conventions to the vendor's
+(the reverse of an ingest adapter, DATA-15): greeks are computed with Black-76 in the internal
+conventions (CONV-10), and in the older conventions the delta is then discounted as the vendor's
+were before Jun 25, 2018. Greeks are computed from the rounded values written to the file (IV to
+6 decimals, forward to 3, index level to 2), so recomputing them from the file reproduces them to
+the file's rounding (TEST-5).
 The output for a given configuration is identical on every run (same seed, same bytes).
 """
 
@@ -355,7 +359,9 @@ class _Generator:
                 iv = np.repeat(self.implied_vol(forward, strikes, t), 2)
                 disc = math.exp(-self.c.rate * t)
                 mid = black76.price(forward, k, t, iv, calls, discount=disc)
-                g = black76.greeks(forward, k, t, iv, calls, delta_discount=disc if self.older else 1.0)
+                g = black76.greeks(forward, k, t, iv, calls)
+                if self.older:  # the vendor's deltas before Jun 25, 2018 were discounted
+                    g = g._replace(delta=g.delta * disc)
                 rho = -t * mid * 0.01
             bid, ask = self.quotes(mid)
             u = self.rng.random((4, 2 * n))

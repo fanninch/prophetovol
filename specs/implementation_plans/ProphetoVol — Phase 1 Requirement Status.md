@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 25, 2026 · @Chuck · **Up to date through plan Phase 5 (synthetic data generator).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v3, agreed).
+Oct 25, 2026 · @Chuck · **Up to date through plan Phase 5 and the internal conventions change (requirements v7).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,7 +13,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**220 requirements:** 15 done, 49 partial, 156 not started.
+**222 requirements:** 15 done, 50 partial, 157 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
@@ -40,9 +40,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Architecture (§4) | 2 | 2 | 3 |
 | Time, steps and snapshots (§5.1) | 0 | 1 | 2 |
 | Versioning (§5.3) | 0 | 3 | 1 |
-| Conventions (§5.4) | 0 | 9 | 0 |
+| Conventions (§5.4) | 0 | 10 | 0 |
 | Registries (§5.5) | 1 | 2 | 1 |
-| Data module (§6) | 1 | 8 | 20 |
+| Data module (§6) | 1 | 8 | 21 |
 | Reference data (§7) | 7 | 1 | 0 |
 | Strategy specification (§8) | 0 | 0 | 50 |
 | Engine (§9) | 0 | 0 | 19 |
@@ -89,15 +89,16 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| CONV-1 | Time to expiry: calendar minutes on the exchange clock over 365 days | **Partial** | Phase 2 | stored per row at ingest (6); used by engine and stress (12-17) | `unit/test_time.py` |
+| CONV-1 | Time to expiry: calendar minutes on the exchange clock over 365 days | **Partial** | Phase 2, internal conventions change (stated as ProphetoVol's own; IV rescaling rule in DATA-15) | stored per row at ingest (6); used by engine and stress (12-17) | `unit/test_time.py` |
 | CONV-2 | Trading days to expiry: after the as-of date through the settlement date | **Partial** | Phase 2 | stored at ingest (6); used by selectors and triggers (11, 13) | `unit/test_time.py` |
 | CONV-3 | Settlement date, expiry and last trading day (incl. Saturday-dated) | **Partial** | Phase 2 | stored at ingest (6); forced closes (13) | `unit/test_time.py` |
 | CONV-4 | Delta targets are absolute values | **Partial** | Phase 2 (published text) | delta selectors (11) | `unit/test_conventions.py` |
 | CONV-5 | At the money means 50 delta of the leg's own type | **Partial** | Phase 2 (published text) | `atm` selector (11) | `unit/test_conventions.py` |
 | CONV-6 | Trades execute at the step where the trigger is observed | **Partial** | Phase 2 (published text) | engine (12-13) | `unit/test_conventions.py` |
-| CONV-7 | Dollar greek formulas | **Partial** | Phase 2 (formulas) | position snapshots (12) | `unit/test_conventions.py` |
+| CONV-7 | Dollar greek formulas | **Partial** | Phase 2 (formulas), internal conventions change (units from CONV-10) | position snapshots (12) | `unit/test_conventions.py` |
 | CONV-8 | Signs: positive quantity is long; positive cash flow is received | **Partial** | Phase 2 (published text) | accounting (12) | `unit/test_conventions.py` |
 | CONV-9 | A roll re-establishes the structure by default | **Partial** | Phase 2 (published text) | rolls (13) | `unit/test_conventions.py` |
+| CONV-10 | Internal price, IV and greek conventions (undiscounted forward delta, vega per point, theta per day) | **Partial** | Phase 5 (Black-76 in these conventions), internal conventions change (stated; vendor parameter removed) | snapshots produced in them by ingest (6) | `unit/test_black76.py`, `unit/test_conventions.py` |
 
 ## Registries (§5.5)
 
@@ -119,8 +120,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-10 | Uploads are streamed; ingest runs as a job with progress | Not started |  | Phase 6 (job infrastructure ready from 4) |  |
 | DATA-11 | Ingest validates and normalizes into staged Parquet under a new import id | **Partial** | Phase 3 (staged storage) | ingest pipeline (6) | `contract/test_adapter_contract.py` |
 | DATA-12 | Each file's SHA-256 is recorded; duplicate files are reported | **Partial** | Phase 3 (storage and lookup) | hashing on upload and reporting (6) | `contract/test_adapter_contract.py` |
-| DATA-13 | Normalization rules and derived columns computed at ingest | Not started |  | Phase 6 |  |
+| DATA-13 | Normalization rules and derived columns computed at ingest | Not started |  | Phase 6 (including internal greeks recomputed before `internal_greeks_from`) |  |
 | DATA-14 | The forward: vendor per-series from 2018-06-25, parity fit before | Not started |  | Phase 6 |  |
+| DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | Not started |  | Phase 6 (the ivolatility adapter; `internal_greeks_from` configured from the internal conventions change) |  |
 | DATA-20 | Validation checks and the quality report | Not started |  | Phase 6 |  |
 | DATA-21 | Quality report viewable in GUI and CLI, kept permanently | Not started |  | Phase 6, 8 (CLI), 21 (GUI) |  |
 | DATA-30 | Overlap with active data shown before commit | Not started |  | Phase 7 |  |
@@ -148,7 +150,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | REF-1 | Underlying configuration with expiry times and all vendor roots | **Done** | Phase 2, 3 (seeded) |  | `unit/test_reference.py`, `unit/test_service.py` |
 | REF-2 | Underlying configurations are editable as versioned definitions | **Done** | Phase 3, 4 |  | `unit/test_service.py`, `unit/test_audit.py` |
-| REF-5 | Data source configuration and timing | **Done** | Phase 2, 3 (seeded) |  | `unit/test_reference.py` |
+| REF-5 | Data source configuration and timing | **Done** | Phase 2, 3 (seeded), internal conventions change (`internal_greeks_from`) |  | `unit/test_reference.py` |
 | REF-6 | Timing confirmed on real data; held in configuration | **Done** | Phase 0 (confirmed), 2 (configuration) |  | `unit/test_reference.py` |
 | REF-10 | NYSE trading calendar from exchange_calendars | **Done** | Phase 2 |  | `unit/test_calendar.py` |
 | REF-11 | The calendar version is recorded on runs | **Partial** | Phase 2 (version available) | recorded on runs (14) | `unit/test_calendar.py` |
@@ -176,7 +178,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-24 | `strike_offset` strike selector | Not started |  | Phase 11 |  |
 | SPEC-25 | No-match handling | Not started |  | Phase 11 |  |
 | SPEC-26 | Selection uses only eligible contracts | Not started |  | Phase 11 |  |
-| SPEC-27 | Delta selection uses vendor delta; null delta not eligible | Not started |  | Phase 11 |  |
+| SPEC-27 | Delta selection uses vendor delta; null delta not eligible | Not started |  | Phase 11 (uses the snapshot's internal delta, CONV-10) |  |
 | SPEC-28 | Quote filters | Not started |  | Phase 11 |  |
 | SPEC-30 | `once` entry schedule | Not started |  | Phase 11 |  |
 | SPEC-31 | `when_flat` entry schedule with cooldown | Not started |  | Phase 11 |  |
@@ -223,7 +225,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ENG-21 | Marking, stale marks and warnings | Not started |  | Phase 12 |  |
 | ENG-22 | Final marks of settled and force-closed legs | Not started |  | Phase 12 |  |
 | ENG-23 | The series forward used for the forward selector and stress | Not started |  | Phase 11, 16 (column from 6) |  |
-| ENG-24 | Greeks are the vendor's | Not started |  | Phase 12 |  |
+| ENG-24 | Greeks are the vendor's | Not started |  | Phase 12 (the snapshot's internal greeks, DATA-15) |  |
 | ENG-25 | Two times in one snapshot (16:15 options, 16:00 index) | Not started |  | Phase 12 |  |
 | ENG-30 | Accounting: market value, cash flows, period P&L | Not started |  | Phase 12 |  |
 | ENG-31 | Fees reported separately | Not started |  | Phase 12 |  |
@@ -242,7 +244,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | STR-2 | Runs attach zero or more stress definitions | Not started |  | Phase 16 |  |
 | STR-10 | `underlying_slide` scenario type and `default_slide` | Not started |  | Phase 16 |  |
 | STR-11 | Scenario-type registry as the extension point | Not started |  | Phase 16 |  |
-| STR-20 | Black-76 revaluation on the series forward | **Partial** | Phase 5 (Black-76 prices and greeks) | stress revaluation on the series forward (16) | `unit/test_black76.py` |
+| STR-20 | Black-76 revaluation on the series forward | **Partial** | Phase 5 (Black-76 prices and greeks in the internal conventions) | stress revaluation on the series forward (16) | `unit/test_black76.py` |
 | STR-21 | Shocked forward, unchanged vol (sticky strike) | Not started |  | Phase 16 |  |
 | STR-22 | Stress P&L from model values only | Not started |  | Phase 16 |  |
 | STR-23 | Null IV revalued at intrinsic and flagged | Not started |  | Phase 16 |  |
@@ -349,7 +351,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | Not started |  | Phase 10 |  |
 | TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly) | SQL vs Python per row (6), vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py` |
-| TEST-6 | Ingest tests reproducing real-data quirks | Not started |  | Phase 6 |  |
+| TEST-6 | Ingest tests reproducing real-data quirks | Not started |  | Phase 6 (including recomputed greeks before `internal_greeks_from`) |  |
 | TEST-7 | Adapter contract suite | **Partial** | Phase 3 (Phase 3 cases) | 7, 14 | `contract/test_adapter_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |

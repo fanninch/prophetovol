@@ -1,6 +1,4 @@
-"""Black-76 prices and greeks (STR-20) in the vendor's conventions."""
-
-import math
+"""Black-76 prices and greeks (STR-20) in the internal conventions (CONV-10)."""
 
 import numpy as np
 import pytest
@@ -47,12 +45,15 @@ def test_greeks_match_finite_differences(call):
     assert g.theta == pytest.approx(theta_fd, rel=1e-5)
 
 
-def test_delta_conventions():
-    g_call = black76.greeks(5000, 5000, 0.25, 0.2, True)
-    g_put = black76.greeks(5000, 5000, 0.25, 0.2, False)
-    assert g_call.delta - g_put.delta == pytest.approx(1.0)  # undiscounted, as the vendor from Jun 2018
-    d = math.exp(-0.04 * 0.25)
-    old_call = black76.greeks(5000, 5000, 0.25, 0.2, True, delta_discount=d)
-    old_put = black76.greeks(5000, 5000, 0.25, 0.2, False, delta_discount=d)
-    assert old_call.delta - old_put.delta == pytest.approx(d)  # discounted, as before Jun 2018
-    assert g_call.gamma == g_put.gamma and g_call.vega == g_put.vega and g_call.theta < 0
+@pytest.mark.parametrize("k, t", [(4500, 0.05), (5000, 0.25), (5600, 2.0)])
+def test_internal_delta_convention(k, t):
+    # CONV-10: undiscounted forward delta, so call delta - put delta = 1 at every strike and tenor
+    g_call = black76.greeks(5000, k, t, 0.2, True)
+    g_put = black76.greeks(5000, k, t, 0.2, False)
+    assert g_call.delta - g_put.delta == pytest.approx(1.0, abs=1e-15)
+    assert g_call.gamma == g_put.gamma and g_call.vega == g_put.vega and g_call.theta == g_put.theta < 0
+
+
+def test_no_vendor_specific_parameters():
+    import inspect
+    assert list(inspect.signature(black76.greeks).parameters) == ["forward", "strike", "time", "vol", "is_call"]

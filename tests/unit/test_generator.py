@@ -140,12 +140,13 @@ class TestGreeksReproduce:
 
     @staticmethod
     def check(rows, forward_of, delta_discount_of):
+        """Recompute in the internal conventions, then apply the vendor's delta discount (the generator's job)."""
         live = [r for r in rows if r["iv"] != "-1"]
         assert live
         for r in live:
             t, _ = time_to_expiry(r)
-            g = black76.greeks(forward_of(r, t), float(r["strike"]), t, float(r["iv"]), r["call/put"] == "C",
-                               delta_discount=delta_discount_of(t))
+            g = black76.greeks(forward_of(r, t), float(r["strike"]), t, float(r["iv"]), r["call/put"] == "C")
+            g = g._replace(delta=g.delta * delta_discount_of(t))
             for name in ("delta", "gamma", "vega", "theta"):
                 assert abs(round(float(getattr(g, name)), 6) - float(r[name])) <= 1e-9, (name, r)
 
