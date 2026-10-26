@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–6 done (Oct 25–26, 2026); Phase 7 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–7 done; Phase 8 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -462,6 +462,13 @@ Added with Phase 6 (details in §16, Phase 6):
 21. **Validation errors fail the job**; the import is kept as `failed` with its quality report, and nothing is written.
 22. **Internal greeks are null whenever the internal IV is null**, so a vendor's zero greeks are never used as real values.
 
+Added with Phase 7 (details in §16, Phase 7):
+
+23. **Unused overlaps from add-new-only are superseded**, retained for review and eligible for purge. They never become active implicitly.
+24. **Delete/purge confirmation binds to a hashed preview** of the operation, selection, eligible version identities/states and dependent runs. The worker recomputes it before execution; a changed scope requires a new review.
+25. **Purge and discard use a recoverable file journal.** Backups and prepared replacements precede an atomically published manifest. The catalog transaction records the operation id; reopening restores uncommitted originals or cleans committed backups. Reader cursors share a lock for lifecycle writes and file reads.
+26. **Invalidation executes inside the lifecycle job's catalog transaction**, as §4.2 specifies, rather than as a separately scheduled job that could leave flags temporarily stale. Phase 7 creates the minimal `runs`, `run_data_versions` and `run_invalidations` tables; Phase 14 extends them through subsequent migrations.
+
 ## 14. Risks
 
 | Risk | Mitigation |
@@ -774,3 +781,17 @@ Not a plan phase: the project's rules, which until now lived in a private memory
   - **every error check**, each failing the import with nothing written; the misnamed header with missing and unexpected columns; **the warnings**, with the flagged dates
   - folders, files and zips giving the same rows; duplicate files reported; refused inputs audited with no import created
   - cancellation between partitions discarding everything; a background import
+
+
+**Phase 7 (overlap, commit, versions, delete, purge, invalidation and coverage), Oct 25, 2026**
+
+- **`data/lifecycle.py`:** documented models for commit choices, import/range selections, overlap pairs, affected runs, confirmation previews and daily/monthly coverage.
+- **`storage/adapter.py`, `storage/duckdb/lifecycle.py`, `storage/duckdb/adapter.py`:** overlap; atomic replace/add-new/cancel; version transitions; exact active-snapshot reads through Ibis with an optional as-of cutoff; confirmed delete and purge; partial-file rewrites; persisted invalidation dates. Lifecycle writes and file reads share a lock across cursors, preserving one active version under concurrent requests.
+- **Recoverable purge/discard:** prepare backups/replacements and publish a manifest before file mutations. Commit an operation marker with catalog state changes. On failure/cancellation restore the originals; after interruption, recover on home open according to the catalog marker. Preparation and replacement boundaries check cancellation. Progress writes stay outside the replacement transaction so cancellation can update the job row without a write conflict.
+- **`storage/duckdb/schema.py`:** migration 2 adds minimal run/provenance/invalidations tables and committed file-operation markers. Existing migration 1 is unchanged; real run creation and result tables remain Phase 14. Fixed schema-version reads to fully consume their results before Ibis reuses the connection, exposed by the migration-preservation test.
+- **`runs/service.py`:** audited overlap/preview/coverage operations and commit/delete/purge jobs, in foreground or background. Explicit confirmation is required even with no affected runs, and the preview is rechecked when a queued job executes. Execution is audited separately with its job id, so later failures are not hidden by successful submission. Coverage includes missing trading days, non-trading dates with data, imports, counts and quality flags.
+- **Plan refinements:** decisions 23–26 above; no requirement changes. Invalidation is atomic with the change inside the submitted lifecycle job. Add-new-only overlaps use the existing superseded state. File journaling strengthens the planned purge against interruption. Phase 10 still supplies the engine-facing `MarketDataView`; Phase 7's cutoff check is at the storage boundary only.
+- **Tests:** 241 total (unit 209, contract 28, meta 2, packaging 2). The 30 new cases cover overlap, replace, add-new-only, discard, delete, partial/full purge, active/point-in-time reads, confirmation and stale scopes (including queued execution), exact run invalidation, migration preservation, coverage, concurrent commits, injected rollback failures, cancellation after file replacement, and recovery before/after commit and during preparation.
+- **Test mistakes corrected during development:** the unit and contract files initially shared a basename, which conflicts with this repository's pytest import mode; the contract file is now `test_lifecycle_contract.py`.
+- **Documentation:** README library examples, current phase status and requirement tracker updated. The two previously reviewed ingest edge cases (apostrophes in paths and duplicate basenames) are not changed in this phase; they remain separate between-phase corrections under the repository process.
+- **Next:** Phase 8, data CLI, generated documentation, optional real-data tests and checkpoint 1. M1 remains in progress.

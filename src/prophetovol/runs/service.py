@@ -8,6 +8,7 @@ at a time (INT-41); inside it, one owning service holds the databases and reques
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -15,12 +16,14 @@ from typing import Any
 import pydantic
 
 from prophetovol.core.context import CallContext, Channel
-from prophetovol.core.errors import ConfigurationError, ValidationFailed
+from prophetovol.core.errors import ConfigurationError, ValidationFailed, ValidationIssue
 from prophetovol.core.home import resolve_home
 from prophetovol.core.paging import Page
-from prophetovol.core.records import AttemptRecord, DataImport, DefinitionVersion, JobRecord, JobStatus
+from prophetovol.core.records import AttemptRecord, DataImport, DefinitionVersion, JobRecord, JobStatus, VersionState
 from prophetovol.data import ingest as ingest_module
 from prophetovol.data.quality import QualityReport
+from prophetovol.data.lifecycle import (ChangePreview, CommitChoice, DataSelection, OverlapItem, RunImpact,
+                                       CoverageDay, CoverageMonth, CoverageReport)
 from prophetovol.data.receive import DEFAULT_MAX_IMPORT_BYTES, plan_inputs
 from prophetovol.reference.calendar import TradingCalendar, nyse_calendar
 from prophetovol.reference.defaults import default_data_sources, default_underlyings
@@ -293,7 +296,7 @@ class BacktestService:
 
         :returns: Handlers by job kind.
         """
-        return {"ingest": self._ingest_job}
+        return {"ingest": self._ingest_job, "commit": self._data_job, "delete": self._data_job, "purge": self._data_job}
 
     def _ingest_job(self, ctx: JobContext) -> dict[str, Any]:
         """Run an import job (the ``ingest`` job kind).
@@ -356,3 +359,157 @@ class BacktestService:
         :raises NotFoundError: If the import does not exist.
         """
         return ingest_module.quality_report(self.storage.get_import(import_id))
+
+    def _data_job(self, ctx: JobContext) -> dict[str, Any]:
+        """Execute lifecycle work with the worker's cursor and an execution audit record."""
+        service = BacktestService(ctx.storage, self.calendar, owner=False)
+        ctx.check_cancelled()
+        ctx.progress(0, 1, ctx.record.kind)
+        result = service._execute_data(ctx.record.kind, ctx.params, ctx.record.job_id, ctx.context, ctx)
+        ctx.progress(1, 1, "complete")
+        return result
+
+    @audited("data.execute")
+    def _execute_data(self, operation: str, params: dict[str, Any], job_id: str,
+                      context: CallContext, ctx: JobContext) -> dict[str, Any]:
+        """Audit execution separately from submission, including failures and stale confirmations."""
+        if operation == "commit":
+            count = self.storage.commit_import(params["import_id"], CommitChoice(params["choice"]))
+            return {"import_id": params["import_id"], "activated": count}
+        preview = ChangePreview.model_validate(params["preview"])
+        count = self.storage.apply_change(preview, progress=lambda done, total: self._file_progress(ctx, done, total))
+        return {"operation": operation, "versions": count, "confirmation": preview.token}
+
+    def _file_progress(self, ctx: JobContext, done: int, total: int) -> None:
+        """Check cancellation between purge files and persist progress."""
+        ctx.check_cancelled()
+        if done < total / 2:
+            ctx.progress(done, total, "preparing purge")
+        else:
+            # The replacement phase holds a catalog transaction. Do not write the job row here:
+            # a concurrent cancel request must be able to update it without a write conflict.
+            ctx.record.progress_done = done
+            ctx.record.progress_total = total
+            ctx.record.progress_label = "purging files"
+
+    def _start_data_job(self, kind, params, context, background):
+        """Dispatch lifecycle operations through the existing job machinery."""
+        if background:
+            return self.submit_job(kind, params, context)
+        return self.run_job(kind, params, self._data_job, context)
+
+    @audited("data.overlap")
+    def overlap(self, import_id: str, context: CallContext) -> list[OverlapItem]:
+        """Show staged snapshots and their active overlaps before commit.
+
+        :param import_id: Staged import to review.
+        :param context: Who is reviewing the import.
+        :returns: Incoming and existing snapshots, with imports and counts.
+        """
+        return self.storage.overlap(import_id)
+
+    @audited("data.commit")
+    def commit_import(self, import_id: str, choice: CommitChoice, context: CallContext,
+                      background: bool = False) -> JobRecord:
+        """Commit or discard reviewed staged data as a persisted job.
+
+        :param import_id: Staged import.
+        :param choice: ``replace``, ``add_new`` or ``cancel``.
+        :param context: Who chose the operation.
+        :param background: Queue on the running worker instead of executing immediately.
+        :returns: Job with the activation count or error.
+        """
+        try:
+            choice = CommitChoice(choice)
+        except ValueError:
+            raise ValidationFailed([ValidationIssue("choice", "choose replace, add_new or cancel")]) from None
+        self.storage.overlap(import_id)
+        return self._start_data_job("commit", {"import_id": import_id, "choice": choice.value}, context, background)
+
+    @audited("data.preview")
+    def preview_data_change(self, operation: str, selection: DataSelection,
+                            context: CallContext) -> ChangePreview:
+        """Preview eligible data and affected runs before a delete or purge.
+
+        :param operation: ``delete`` or ``purge``.
+        :param selection: An import to purge, or an inclusive underlying/date range.
+        :param context: Who requested the preview.
+        :returns: Report to present for confirmation; reuse it when submitting the operation.
+        """
+        return self.storage.preview_change(operation, selection)
+
+    def _confirmed_change(self, operation, preview, confirmed, context, background):
+        """Validate an explicit confirmation and submit the exact reviewed scope."""
+        if not confirmed or preview.operation != operation:
+            raise ValidationFailed([ValidationIssue("confirmation", "review the affected runs and confirm this operation")])
+        current = self.storage.preview_change(operation, preview.selection)
+        if current.token != preview.token:
+            raise ValidationFailed([ValidationIssue("confirmation", "data or affected runs changed; review and confirm again")])
+        return self._start_data_job(operation, {"preview": preview.model_dump(mode="json")}, context, background)
+
+    @audited("data.delete")
+    def delete_data(self, preview: ChangePreview, context: CallContext, confirmed: bool = False,
+                    background: bool = False) -> JobRecord:
+        """Deactivate active versions after confirmation, keeping their files and run results.
+
+        :param preview: Previously reviewed delete report.
+        :param context: Who confirmed the deletion.
+        :param confirmed: Explicit confirmation; defaults to refusal.
+        :param background: Queue the job instead of executing immediately.
+        :returns: Job with the count of deactivated versions.
+        """
+        return self._confirmed_change("delete", preview, confirmed, context, background)
+
+    @audited("data.purge")
+    def purge_data(self, preview: ChangePreview, context: CallContext, confirmed: bool = False,
+                   background: bool = False) -> JobRecord:
+        """Physically remove reviewed superseded/deleted data, retaining audit and results.
+
+        :param preview: Previously reviewed purge report.
+        :param context: Who confirmed the purge.
+        :param confirmed: Explicit confirmation; defaults to refusal.
+        :param background: Queue the job instead of executing immediately.
+        :returns: Job with the count of purged versions.
+        """
+        return self._confirmed_change("purge", preview, confirmed, context, background)
+
+    def run_data_impacts(self, run_id: str) -> list[RunImpact]:
+        """Read a run's persisted data-superseded dates.
+
+        :param run_id: The run id.
+        :returns: Affected dates grouped by underlying.
+        """
+        return self.storage.run_data_impacts(run_id)
+
+    @audited("data.coverage")
+    def coverage(self, underlying: str, start: date, end: date, context: CallContext) -> CoverageReport:
+        """Report trading-day coverage and monthly counts over an inclusive date range.
+
+        :param underlying: Configured underlying.
+        :param start: First date, inclusive.
+        :param end: Last date, inclusive.
+        :param context: Who requested the report.
+        :returns: Every trading day plus non-trading dates with data, and monthly summaries.
+        """
+        self.underlying(underlying)
+        if start > end:
+            raise ValidationFailed([ValidationIssue("end", "end must be on or after start")])
+        sessions = set(self.calendar.sessions_in_range(start, end))
+        by_day = {}
+        for v in self.storage.list_versions(underlying, states=[VersionState.ACTIVE]):
+            if start <= v.as_of_date <= end:
+                by_day.setdefault(v.as_of_date, []).append(v)
+        days = [CoverageDay(day=d, trading_day=d in sessions, snapshots=by_day.get(d, []))
+                for d in sorted(sessions | set(by_day))]
+        groups = {}
+        for d in days:
+            groups.setdefault(d.day.strftime("%Y-%m"), []).append(d)
+        months = []
+        for month, entries in sorted(groups.items()):
+            trading = sum(d.trading_day for d in entries)
+            covered = sum(d.trading_day and bool(d.snapshots) for d in entries)
+            months.append(CoverageMonth(month=month, trading_days=trading, covered_days=covered,
+                missing_days=trading-covered, non_trading_days=sum(not d.trading_day for d in entries),
+                contracts=sum(v.contracts for d in entries for v in d.snapshots),
+                flagged_days=sum(any(v.quality_flags for v in d.snapshots) for d in entries)))
+        return CoverageReport(underlying=underlying, days=days, months=months)

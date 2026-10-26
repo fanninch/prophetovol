@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 25, 2026 · @Chuck · **Up to date through plan Phase 6 (ingest, normalization, validation and quality reports).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
+Oct 25, 2026 · @Chuck · **Up to date through plan Phase 7 (overlap, commit, versions, delete, purge, invalidation and coverage).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,11 +13,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 27 done, 50 partial, 145 not started.
+**222 requirements:** 39 done, 50 partial, 133 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
-| **M1 Data foundation** | 1–8 | **In progress:** phases 1–6 done (Oct 25–26, 2026); 7 (versions, delete, purge, coverage), 8 (data CLI, checkpoint 1) to go |
+| **M1 Data foundation** | 1–8 | **In progress:** phases 1–7 done; 8 (data CLI, documentation and checkpoint 1) to go |
 | **M2 Engine core** | 9–15 | Not started |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
@@ -31,7 +31,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 4 | Jobs and audit | Oct 25, 2026 |
 | 5 | Synthetic data generator | Oct 25, 2026 |
 | 6 | Ingest, normalization, validation and quality reports | Oct 26, 2026 |
-| 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | — |
+| 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | Oct 25, 2026 |
 | 8 | Data CLI, documentation and checkpoint 1 | — |
 | 9–24 | M2–M4 (see the implementation plan, §7–§9) | — |
 
@@ -39,15 +39,15 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- |
 | Architecture (§4) | 2 | 2 | 3 |
 | Time, steps and snapshots (§5.1) | 0 | 2 | 1 |
-| Versioning (§5.3) | 0 | 3 | 1 |
+| Versioning (§5.3) | 1 | 2 | 1 |
 | Conventions (§5.4) | 0 | 10 | 0 |
 | Registries (§5.5) | 1 | 2 | 1 |
-| Data module (§6) | 11 | 8 | 11 |
+| Data module (§6) | 22 | 8 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
 | Strategy specification (§8) | 0 | 0 | 50 |
 | Engine (§9) | 0 | 0 | 19 |
 | Stress module (§10) | 0 | 1 | 17 |
-| Runs (§11) | 0 | 2 | 9 |
+| Runs (§11) | 0 | 3 | 8 |
 | Results and analytics (§12) | 0 | 0 | 8 |
 | Interfaces (§13) | 4 | 6 | 15 |
 | Schemas and documentation (§14) | 0 | 4 | 0 |
@@ -83,7 +83,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | VER-1 | Published definitions are immutable; every change is a new integer version | **Partial** | Phase 3, 4 | strategy specs (9), stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
 | VER-2 | Each published version stores a content hash of its canonical JSON | **Partial** | Phase 3 | specs (9), stress definitions (16) | `contract/test_adapter_contract.py` |
 | VER-3 | A run records by reference everything it used | Not started |  | Phase 14 |  |
-| VER-4 | Market snapshots are versioned per (underlying, as_of) | **Partial** | Phase 3 | activation and replacement (7) | `contract/test_adapter_contract.py` |
+| VER-4 | Market snapshots are versioned per (underlying, as_of) | **Done** | Phase 3, 7 |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 
 ## Conventions (§5.4)
 
@@ -125,24 +125,24 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | **Done** | Phase 6 (the ivolatility adapter) | IV rescaling is not exercised: the only configured time convention equals CONV-1 | `unit/test_ingest.py` |
 | DATA-20 | Validation checks and the quality report | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | DATA-21 | Quality report viewable in GUI and CLI, kept permanently | **Partial** | Phase 6 (stored permanently; `quality_report` in the service) | CLI (8), GUI (21) | `unit/test_ingest.py` |
-| DATA-30 | Overlap with active data shown before commit | Not started |  | Phase 7 |  |
-| DATA-31 | Commit choices: replace, add new dates only, cancel | Not started |  | Phase 7 (cancel = discard, storage ready from 3) |  |
-| DATA-32 | Commit is atomic | Not started |  | Phase 7 |  |
-| DATA-33 | Committing or replacing data queues invalidation | Not started |  | Phase 7 |  |
-| DATA-40 | At most one active version per (underlying, as_of); superseded kept until purge | **Partial** | Phase 3 (version records and states) | activation and supersession (7) | `contract/test_adapter_contract.py` |
+| DATA-30 | Overlap with active data shown before commit | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-31 | Commit choices: replace, add new dates only, cancel | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-32 | Commit is atomic | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-33 | Committing or replacing data queues invalidation | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-40 | At most one active version per (underlying, as_of); superseded kept until purge | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-41 | Version registry in the catalog, contents in Parquet; identity (underlying, as_of, import_id) | **Done** | Phase 3 |  | `contract/test_adapter_contract.py` |
-| DATA-50 | Delete by underlying and range deactivates versions | Not started |  | Phase 7 |  |
-| DATA-51 | Purge removes superseded or deleted data and reclaims space | Not started |  | Phase 7 |  |
-| DATA-52 | Affected runs listed and confirmed before delete or purge | Not started |  | Phase 7 |  |
-| DATA-53 | Delete and purge recorded in the audit trail | Not started |  | Phase 7 (audit mechanism ready from 4) |  |
-| DATA-60 | Runs that read changed data are flagged data superseded | Not started |  | Phase 7 |  |
-| DATA-61 | The data-superseded flag is visible on runs and in the API | Not started |  | Phase 7, 14, 20, 23 |  |
-| DATA-70 | Coverage view per trading day | Not started |  | Phase 7; 8 (CLI), 21 (GUI) |  |
-| DATA-80 | Parquet layout per underlying/year/month, one file per import; active-version filtering | **Partial** | Phase 3 (layout) | active-version filtering on reads (7, 10) | `contract/test_adapter_contract.py`, `unit/test_duckdb_storage.py` |
-| DATA-81 | Reads go through Ibis | **Partial** | Phase 3 (all catalog reads) | market reads (7, 10), results reads (14) | `contract/test_adapter_contract.py` |
-| DATA-82 | Writes go through the StorageAdapter interface | **Partial** | Phase 3 | commit, deactivate, purge (7), market view (10), run results (14) | `contract/test_adapter_contract.py` |
-| DATA-83 | Physical layout is known only to the adapter | **Partial** | Phase 3 | holds for each operation added in 7, 10, 14 | `contract/test_adapter_contract.py` |
-| DATA-84 | Adapter contract test suite | **Partial** | Phase 3 (Phase 3 cases) | overlap, replace, add-new-only, delete, purge, point-in-time (7); run writes (14) | `contract/test_adapter_contract.py` |
+| DATA-50 | Delete by underlying and range deactivates versions | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-51 | Purge removes superseded or deleted data and reclaims space | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-52 | Affected runs listed and confirmed before delete or purge | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-53 | Delete and purge recorded in the audit trail | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-60 | Runs that read changed data are flagged data superseded | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
+| DATA-61 | The data-superseded flag is visible on runs and in the API | **Partial** | Phase 7 (persisted flags and service read) | Run lists/pages (14, 23) and API (20) | `unit/test_data_lifecycle.py` |
+| DATA-70 | Coverage view per trading day | **Partial** | Phase 7 (daily coverage and monthly summaries in service) | CLI (8), GUI (21) | `unit/test_data_lifecycle.py` |
+| DATA-80 | Parquet layout per underlying/year/month, one file per import; active-version filtering | **Done** | Phase 3, 7 |  | `unit/test_duckdb_storage.py`, `contract/test_lifecycle_contract.py` |
+| DATA-81 | Reads go through Ibis | **Partial** | Phase 3, 7 (catalog and active market reads) | Chunked market provider (10), result reads (14) | `contract/test_lifecycle_contract.py` |
+| DATA-82 | Writes go through the StorageAdapter interface | **Partial** | Phase 3, 7 (commit, delete, purge, active snapshots) | Run result writes (14) | `contract/test_lifecycle_contract.py` |
+| DATA-83 | Physical layout is known only to the adapter | **Partial** | Phase 3, 7 (all lifecycle file operations inside adapter) | Applies to provider (10) and results (14) | `contract/test_lifecycle_contract.py` |
+| DATA-84 | Adapter contract test suite | **Partial** | Phase 3, 7 | Atomic run writes (14) | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 
 ## Reference data (§7)
 
@@ -273,7 +273,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | RUN-22 | Cancellation at the next step boundary keeps results | Not started |  | Phase 14 (cooperative cancellation ready from 4) |  |
 | RUN-23 | Results written in one transaction when the run ends | Not started |  | Phase 14 |  |
 | RUN-30 | Recorded provenance of a run | **Partial** | Phase 1 (software versions collector) | provenance recorded on runs (14) | `unit/test_core.py` |
-| RUN-40 | Runs flagged data superseded | Not started |  | Phase 7, 14 |  |
+| RUN-40 | Runs flagged data superseded | **Partial** | Phase 7 (invalidation against seeded run provenance) | Record each real run's read versions (14) | `unit/test_data_lifecycle.py` |
 
 ## Results and analytics (§12)
 
@@ -331,8 +331,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4 (definitions, imports, jobs, attempts), 6 (imports from ingest) | commits, deletes, purges (7), runs (14) | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
-| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4 (mechanism; publishing, job cancel), 6 (`data.import`) | each new operation is audited as it is added | `unit/test_audit.py` |
+| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4, 6, 7 (lifecycle jobs and attempts) | Runs (14) | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
+| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4, 6, 7 (preview, commit, delete, purge and execution) | Each new operation is audited as it is added | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
 | AUD-3 | Software versions recorded on every run | **Partial** | Phase 1 (collector) | recorded on runs (14) | `unit/test_core.py` |
 | AUD-4 | Content hashes for definitions and import files | **Done** | Phase 3 (stored), 6 (file hashing at ingest) | specs (9) get hashes through the same `save_definition` | `contract/test_adapter_contract.py`, `unit/test_ingest.py` |
 
@@ -352,7 +352,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | TEST-4 | Point-in-time test | Not started |  | Phase 10 |  |
 | TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row) | vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py` |
 | TEST-6 | Ingest tests reproducing real-data quirks | **Done** | Phase 6 |  | `unit/test_ingest.py` |
-| TEST-7 | Adapter contract suite | **Partial** | Phase 3 (Phase 3 cases) | 7, 14 | `contract/test_adapter_contract.py` |
+| TEST-7 | Adapter contract suite | **Partial** | Phase 3, 7 | Atomic run writes (14) | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |
 | TEST-10 | Optional real-data tests | Not started |  | Phase 8, 15 (findings from Phase 0 recorded in plan §15) |  |
@@ -365,5 +365,5 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s) | confirmed again in 8 (CLI); whole run in 15 |  |
 | NFR-2 | GUI responsiveness | Not started |  | Phase 21-24 |  |
 | NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages) | CLI (8) and API (19) presentation | `unit/test_core.py`, `unit/test_service.py` |
-| NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4 (immutable definitions, append-only attempts, discard only staged) | delete and purge with confirmation (7), runs (14) | `contract/test_adapter_contract.py`, `unit/test_duckdb_storage.py` |
+| NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4, 7 (confirmed scope; recoverable purge/discard) | Immutable run results (14) | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | NFR-5 | Accessibility | Not started |  | Phase 21-24 |  |

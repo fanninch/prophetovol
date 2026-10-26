@@ -6,8 +6,7 @@ implementation, DuckDB plus Parquet (``storage.duckdb``), and every implementati
 contract suite in ``tests/contract`` (DATA-84).
 
 The interface grows with the plan's phases: this version has the catalog, staged market data,
-jobs and attempts. Commit, overlap, delete, purge and point-in-time reads arrive with Phase 7,
-run results with Phase 14.
+jobs, attempts and the Phase 7 data lifecycle. Run results arrive with Phase 14.
 
 An adapter object is used from one thread at a time. Request threads use :meth:`reader`, which
 returns an adapter on independent cursors of the same databases (ARC-4).
@@ -15,13 +14,16 @@ returns an adapter on independent cursors of the same databases (ARC-4).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
 
+from prophetovol.data.lifecycle import ChangePreview, CommitChoice, DataSelection, OverlapItem, RunImpact
 from prophetovol.core.context import CallContext
 from prophetovol.core.paging import Page
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, JobRecord,
@@ -250,4 +252,62 @@ class StorageAdapter(ABC):
         :param limit: Page size.
         :param operation: Only attempts at this operation, when given.
         :returns: A page of attempts.
+        """
+
+    # --- data lifecycle (DATA-30 to DATA-70) -------------------------------------------------
+
+    @abstractmethod
+    def overlap(self, import_id: str) -> list[OverlapItem]:
+        """Compare every staged snapshot with currently active data (DATA-30).
+
+        :param import_id: A staged import.
+        :returns: Incoming versions paired with their active overlaps, ordered by as-of.
+        """
+
+    @abstractmethod
+    def run_data_impacts(self, run_id: str) -> list[RunImpact]:
+        """Read the persisted superseded-data dates of a run (RUN-40).
+
+        :param run_id: Run whose flags are requested.
+        :returns: Affected dates grouped by underlying; empty if no invalidations exist.
+        """
+
+    @abstractmethod
+    def commit_import(self, import_id: str, choice: CommitChoice) -> int:
+        """Activate an import atomically, preserving old versions and invalidating dependent runs.
+
+        :param import_id: Staged import to commit.
+        :param choice: Replace overlaps, add new dates only, or cancel/discard.
+        :returns: Number of snapshots activated.
+        """
+
+    @abstractmethod
+    def preview_change(self, operation: str, selection: DataSelection) -> ChangePreview:
+        """List eligible versions and dependent runs before delete or purge (DATA-52).
+
+        :param operation: ``delete`` or ``purge``.
+        :param selection: Import for purge, or inclusive underlying/date range.
+        :returns: Review report with a token that detects intervening changes.
+        """
+
+    @abstractmethod
+    def apply_change(self, preview: ChangePreview, progress: Callable[[int, int], None] | None = None) -> int:
+        """Execute a confirmed preview, rejecting a changed scope before touching data.
+
+        :param preview: The report the caller confirmed, including its original token.
+        :param progress: Optional progress/cancellation callback between purge files; receives done and total.
+        :returns: Number of versions deleted or purged.
+        :raises ValidationFailed: If versions or dependent runs changed after review.
+        """
+
+    @abstractmethod
+    def read_active_snapshot(self, underlying: str, as_of: datetime, columns: list[str] | None = None,
+                             cutoff: datetime | None = None) -> pa.Table:
+        """Read only the active version at the exact as-of instant, with an optional point-in-time guard.
+
+        :param underlying: Underlying to read.
+        :param as_of: Requested aware snapshot instant; no implicit carry-forward.
+        :param columns: Columns to return; all when omitted.
+        :param cutoff: Latest allowed aware instant; asking for later data raises PointInTimeError.
+        :returns: Active rows or an empty table when no snapshot is active.
         """
