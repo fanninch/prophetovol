@@ -1967,6 +1967,14 @@ prophetovol.reference.models.DataSource
          "description": "First date from which the source's greeks follow the internal conventions (CONV-10) and are used as they are. Before it, ingest recomputes them with Black-76 (DATA-13, DATA-15). Null if the source's greeks always follow them.",
          "title": "Internal Greeks From"
        },
+       "low_contract_ratio": {
+         "default": 0.5,
+         "description": "A date is flagged with the low_contract_count warning when its contract count is below this share of the median of the 5 surrounding dates (DATA-20). 0.5 by default; a higher ratio catches smaller drops but also flags normal dips, such as the day after a monthly expiration.",
+         "exclusiveMinimum": 0,
+         "maximum": 1,
+         "title": "Low Contract Ratio",
+         "type": "number"
+       },
        "option_snapshot_time": {
          "description": "Exchange-local time of the option quotes, IV, greeks and forward (16:15 for ivolatility_eod).",
          "format": "time",

@@ -22,9 +22,6 @@ from prophetovol.data.quality import DateCount, QualityCheck, Severity
 EXAMPLES = 5
 """Example rows kept per check."""
 
-LOW_CONTRACT_RATIO = 0.5
-"""A date is flagged when its contracts fall below this share of the median of the 5 surrounding dates."""
-
 _P_EXAMPLE = ("file", "date_raw AS date", "vendor_symbol AS option_symbol", "ex_raw AS expiration",
               "strike_raw AS strike", "cp AS call_put", "style", "bid_raw AS bid", "ask_raw AS ask")
 _N_EXAMPLE = ("file", "as_of_date", "vendor_symbol AS option_symbol", "expiration", "strike", "option_type",
@@ -146,11 +143,14 @@ def structural_checks(con: duckdb.DuckDBPyConnection, known_underlyings: set[str
     return [c for c in checks if c.count]
 
 
-def content_checks(con: duckdb.DuckDBPyConnection, sessions: set[date]) -> list[QualityCheck]:
+def content_checks(con: duckdb.DuckDBPyConnection, sessions: set[date],
+                   low_contract_ratio: float) -> list[QualityCheck]:
     """The checks on normalized rows (table ``n``, with forwards decided in column ``forward_source``).
 
     :param con: The working database.
     :param sessions: The trading days from the calendar, covering the import's date range.
+    :param low_contract_ratio: A date is flagged when its contracts fall below this share of the median of
+        the 5 surrounding dates (the data source's ``low_contract_ratio``).
     :returns: The findings, in check order.
     """
     checks = [
@@ -190,11 +190,11 @@ def content_checks(con: duckdb.DuckDBPyConnection, sessions: set[date]) -> list[
         low = []
         for i, (d, n) in enumerate(counts):
             window = [m for _, m in counts[max(0, i - 2): i + 3]]
-            if len(window) >= 3 and n < LOW_CONTRACT_RATIO * statistics.median(window):
+            if len(window) >= 3 and n < low_contract_ratio * statistics.median(window):
                 low.append((d, n, statistics.median(window)))
         checks.append(QualityCheck(
             name="low_contract_count", severity=Severity.WARNING,
-            description=f"Contracts on a date below {LOW_CONTRACT_RATIO:.0%} of the median of the 5 surrounding dates.",
+            description=f"Contracts on a date below {low_contract_ratio:.0%} of the median of the 5 surrounding dates.",
             count=len(low), by_date=[DateCount(as_of_date=d, count=1) for d, _, _ in low],
             examples=[{"as_of_date": d.isoformat(), "contracts": n, "median_nearby": m} for d, n, m in low[:EXAMPLES]]))
     checks.append(_check(con, "vendor_flagged", Severity.INFO, "Rows with the vendor's * flag (meaning unconfirmed).",

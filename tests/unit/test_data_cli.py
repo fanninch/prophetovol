@@ -40,16 +40,19 @@ def import_data(home, files, choice="replace", input=None):
 def test_import_list_quality_coverage_and_jobs(tmp_path, files):
     home = tmp_path / "home"
     import_id, result = import_data(home, files)
-    assert "Quality:" in result.output and "Overlap: 0 of 3" in result.output
-    assert "Activated 3 snapshots" in result.output
+    assert "Quality:" in result.output and "Overlap: none; all 3 incoming snapshots are new dates" in result.output
+    assert "Date  " not in result.output  # no overlap table when nothing overlaps
+    assert "Activated 3 snapshots." in result.output
     listing = invoke(home, "data", "list", "--underlying", "SPX", "--limit", 1)
     assert listing.exit_code == 0 and import_id in listing.output and "committed" in listing.output
-    quality = invoke(home, "data", "quality", import_id, "--details")
-    assert quality.exit_code == 0 and '"checks"' in quality.output and '"by_date"' in quality.output
+    assert "3 of 3" in listing.output and "\t" not in listing.output
+    quality = invoke(home, "data", "quality", import_id, "--json")
+    assert quality.exit_code == 0 and json.loads(quality.output)["checks"]
     coverage = invoke(home, "data", "coverage", "--daily")
     assert coverage.exit_code == 0 and "2024-03" in coverage.output and import_id in coverage.output
     jobs = invoke(home, "jobs", "list", "--status", "succeeded")
     assert jobs.exit_code == 0 and "commit" in jobs.output and "ingest" in jobs.output
+    assert f"{import_id} (replace)" in jobs.output and "Started" in jobs.output
     job_id = re.search(r"Job: (job_\w+)", result.output).group(1)
     shown = invoke(home, "jobs", "show", job_id)
     body = json.loads(shown.output)
@@ -63,7 +66,8 @@ def test_ask_commit_choices(tmp_path, files, answer, status):
     home = tmp_path / "home"
     first, _ = import_data(home, files)
     second, result = import_data(home, files, "ask", input=answer+"\n")
-    assert "Overlap: 3 of 3" in result.output and first in result.output
+    assert "Overlap: 3 of 3 incoming snapshots already active" in result.output and first in result.output
+    assert "2024-03-18" in result.output and "T20:15" not in result.output  # dates, not UTC instants
     assert result.output.index("Quality:") < result.output.index("Commit choice")
     with BacktestService.open(home) as svc:
         assert svc.get_import(second).status == status
@@ -106,7 +110,11 @@ def test_delete_decline_then_confirm_and_purge(tmp_path, files):
     with BacktestService.open(home) as svc:
         assert len(svc.data_versions("SPX", states=[VersionState.ACTIVE])) == 3
     deleted = invoke(home, "data", "delete", *args, input="y\n")
-    assert deleted.exit_code == 0 and "Delete completed: 1" in deleted.output
+    assert deleted.exit_code == 0 and "Delete completed: 1 version." in deleted.output
+    assert "No runs affected." in deleted.output and "Affected runs" not in deleted.output
+    assert "2 of 3" in invoke(home, "data", "list").output  # active days after the delete
+    jobs = invoke(home, "jobs", "list").output
+    assert "SPX 2024-03-18 to 2024-03-18" in jobs
     declined = invoke(home, "data", "purge", "--import-id", import_id, input="n\n")
     assert declined.exit_code == 0 and "no data changed" in declined.output
     purged = invoke(home, "data", "purge", *args, "--yes")
@@ -115,6 +123,39 @@ def test_delete_decline_then_confirm_and_purge(tmp_path, files):
         assert svc.import_snapshot(import_id, date(2024, 3, 18)).num_rows == 0
         assert svc.import_snapshot(import_id, date(2024, 3, 19)).num_rows > 0
         assert svc.page_attempts(operation="data.delete").items[0].channel == "cli"
+
+
+def test_quality_details_are_readable(tmp_path, files):
+    home = tmp_path / "home"
+    import_id, _ = import_data(home, files)
+    with BacktestService.open(home) as svc:
+        report = svc.quality_report(import_id)
+    detailed = invoke(home, "data", "quality", import_id, "--details")
+    assert detailed.exit_code == 0 and "{" not in detailed.output
+    for check in report.checks:
+        assert f"{check.name} ({check.severity}, {check.count:,}):" in detailed.output
+    if any(c.examples for c in report.checks):
+        assert "example: " in detailed.output
+    if any(c.by_date for c in report.checks):
+        assert "2024-03-1" in detailed.output
+
+
+def test_coverage_collapses_months_without_data(tmp_path, files):
+    home = tmp_path / "home"
+    import_data(home, files)
+    result = invoke(home, "data", "coverage", "--underlying", "SPX", "--from", "2023-11-01", "--to", "2024-03-31")
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert any(line.startswith("2023-11 to 2024-02 ") for line in lines)
+    assert not any(line.startswith(("2023-12 ", "2024-01 ")) for line in lines)
+    assert "3 of " in lines[0] and "trading days covered" in lines[0]
+
+
+def test_table_columns_are_aligned(capsys):
+    from prophetovol.cli.commands import _n, _table
+    _table(["A", "Longer"], [("value", None), ("x", 12)])
+    assert capsys.readouterr().out.splitlines() == ["A      Longer", "value  -", "x      12"]
+    assert (_n(1, "date"), _n(2, "date"), _n(1_000, "version")) == ("1 date", "2 dates", "1,000 versions")
 
 
 def test_delete_preview_names_affected_runs_before_confirmation(tmp_path, files):
@@ -203,6 +244,27 @@ def test_unexpected_job_failure_is_logged_not_exposed(tmp_path, files, monkeypat
     assert shown.exit_code == 0 and "private job detail" not in shown.output
     assert "Unexpected failure" in shown.output
     assert "private job detail" in (tmp_path / "home" / "logs" / "server.log").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("error", [BrokenPipeError(32, "Broken pipe"), OSError(22, "Invalid argument")])
+def test_closed_output_pipe_exits_quietly(tmp_path, monkeypatch, error):
+    import prophetovol.cli as cli
+    def fail(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(BacktestService, "page_imports", fail)
+    monkeypatch.setattr(cli, "_stdout_closed", lambda exc: exc is error)
+    result = invoke(tmp_path / "home", "data", "list")
+    assert result.exit_code == 1 and "Unexpected error" not in result.output
+    assert "Traceback" not in (tmp_path / "home" / "logs" / "server.log").read_text(encoding="utf-8")
+
+
+def test_other_os_errors_stay_unexpected(tmp_path, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError(22, "private os detail")
+    monkeypatch.setattr(BacktestService, "page_imports", fail)
+    result = invoke(tmp_path / "home", "data", "list")
+    assert result.exit_code != 0 and "Unexpected error" in result.output
+    assert "private os detail" in (tmp_path / "home" / "logs" / "server.log").read_text(encoding="utf-8")
 
 
 def test_cli_locked_home_names_remedy(tmp_path):

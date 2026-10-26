@@ -4,9 +4,9 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–8 of 24 are done: milestone M1 (data foundation) is
-complete apart from its checkpoint demo, with data import, review, commit, delete, purge and coverage
-through the `prophetovol` CLI. The requirements, the implementation plan and the
+**Status:** Phase 1 is being built. Plan phases 0–8 of 24 are done and milestone M1 (data foundation)
+is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
+and coverage through the `prophetovol` CLI. The requirements, the implementation plan and the
 [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
 milestones M2 to M4.
@@ -85,14 +85,17 @@ exits with an error and keeps the import and its report for review.
 
 ```bash
 prophetovol data list                                # imports, newest first, including failed and discarded ones
-prophetovol data quality IMPORT_ID [--details]      # the stored quality report; --details adds dates and examples
+prophetovol data quality IMPORT_ID [--details|--json] # the stored quality report; --details adds dates and examples
 prophetovol data coverage [--underlying SPX] [--from 2024-01-01 --to 2024-12-31] [--daily]
 prophetovol data delete --underlying SPX --from 2024-01-01 --to 2024-01-31
 prophetovol data purge --import-id IMPORT_ID         # or --underlying SPX --from ... --to ...
 ```
 
-Coverage summarizes trading days by month (covered, missing, non-trading dates with data,
-contracts and flagged days); `--daily` lists each day with its import and quality flags.
+`data list` shows each import's rows and dates as imported, and in *Active days* how many of its
+snapshots are active now, after later replacements, deletes and purges. Coverage summarizes trading
+days by month (covered, missing, non-trading dates with data, contracts and flagged days), with
+each run of months without data on one line; `--daily` lists each day with its import and quality
+flags. `--json` prints the complete quality report for scripts.
 
 **Delete** deactivates active data in a date range but keeps the files. **Purge** removes only
 superseded or deleted versions and reclaims disk space, rewriting a monthly file when it also

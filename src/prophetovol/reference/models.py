@@ -161,6 +161,12 @@ class DataSource(BaseModel):
         default=6, ge=2,
         description="Number of strikes nearest the money used to fit a parity forward per expiration (DATA-14).",
     )
+    low_contract_ratio: float = Field(
+        default=0.5, gt=0, le=1,
+        description="A date is flagged with the low_contract_count warning when its contract count is below this "
+                    "share of the median of the 5 surrounding dates (DATA-20). 0.5 by default; a higher ratio "
+                    "catches smaller drops but also flags normal dips, such as the day after a monthly expiration.",
+    )
 
     @field_validator("timezone")
     @classmethod

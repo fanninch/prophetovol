@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 26, 2026 · @Chuck · **Up to date through plan Phase 8 (data CLI, documentation and checkpoint 1).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
+Oct 26, 2026 · @Chuck · **Up to date through plan Phase 8 and checkpoint 1.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v4, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -17,7 +17,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
-| **M1 Data foundation** | 1–8 | **Complete pending the checkpoint 1 demo:** phases 1–8 done |
+| **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
 | **M2 Engine core** | 9–15 | Not started |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
@@ -123,7 +123,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-13 | Normalization rules and derived columns computed at ingest | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | DATA-14 | The forward: vendor per-series from 2018-06-25, parity fit before | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | DATA-15 | Data-source adapters convert into internal conventions; originals kept in `vendor_*` | **Done** | Phase 6 (the ivolatility adapter) | IV rescaling is not exercised: the only configured time convention equals CONV-1 | `unit/test_ingest.py` |
-| DATA-20 | Validation checks and the quality report | **Done** | Phase 6 |  | `unit/test_ingest.py` |
+| DATA-20 | Validation checks and the quality report | **Done** | Phase 6, checkpoint 1 corrections (low-count ratio configurable on the data source) |  | `unit/test_ingest.py` |
 | DATA-21 | Quality report viewable in GUI and CLI, kept permanently | **Partial** | Phase 6 (stored permanently; `quality_report` in the service), 8 (CLI `data quality`) | GUI (21) | `unit/test_ingest.py`, `unit/test_data_cli.py` |
 | DATA-30 | Overlap with active data shown before commit | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | DATA-31 | Commit choices: replace, add new dates only, cancel | **Done** | Phase 7 |  | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
@@ -150,7 +150,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | REF-1 | Underlying configuration with expiry times and all vendor roots | **Done** | Phase 2, 3 (seeded) |  | `unit/test_reference.py`, `unit/test_service.py` |
 | REF-2 | Underlying configurations are editable as versioned definitions | **Done** | Phase 3, 4 |  | `unit/test_service.py`, `unit/test_audit.py` |
-| REF-5 | Data source configuration and timing | **Done** | Phase 2, 3 (seeded), internal conventions change (`internal_greeks_from`) |  | `unit/test_reference.py` |
+| REF-5 | Data source configuration and timing | **Done** | Phase 2, 3 (seeded), internal conventions change (`internal_greeks_from`), checkpoint 1 corrections (`low_contract_ratio`) |  | `unit/test_reference.py` |
 | REF-6 | Timing confirmed on real data; held in configuration | **Done** | Phase 0 (confirmed), 2 (configuration) |  | `unit/test_reference.py` |
 | REF-10 | NYSE trading calendar from exchange_calendars | **Done** | Phase 2 |  | `unit/test_calendar.py` |
 | REF-11 | The calendar version is recorded on runs | **Partial** | Phase 2 (version available) | recorded on runs (14) | `unit/test_calendar.py` |

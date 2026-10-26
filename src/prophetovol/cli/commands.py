@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import textwrap
 from contextlib import contextmanager
+from datetime import timezone
 from pathlib import Path
 
 import click
 
 from prophetovol.core.context import CallContext
 from prophetovol.core.records import JobStatus, VersionState
-from prophetovol.data.lifecycle import DataSelection
+from prophetovol.data.lifecycle import CoverageMonth, DataSelection
 from prophetovol.runs.service import BacktestService
 
 
@@ -30,10 +32,43 @@ def _json(value):
 
 
 def _table(headers, rows):
-    """A compact tab-separated table suitable for terminals and redirected output."""
-    click.echo("\t".join(headers))
-    for row in rows:
-        click.echo("\t".join("-" if value is None else str(value) for value in row))
+    """A table with columns aligned by padding; empty values show as ``-``."""
+    cells = [list(headers)] + [["-" if value is None else str(value) for value in row] for row in rows]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(headers))]
+    for row in cells:
+        click.echo("  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip())
+
+
+def _n(count, word, plural=None):
+    """A count with its noun in the right number: ``1 date``, ``3 dates``."""
+    return f"{count:,} {word if count == 1 else plural or word + 's'}"
+
+
+def _local_time(instant):
+    """A stored UTC instant as local wall-clock time, to the minute."""
+    if instant is None:
+        return None
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    return instant.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+def _wrapped(text, indent):
+    """Echo text wrapped to 100 columns under the given indent."""
+    click.echo(textwrap.fill(text, width=100, initial_indent=indent, subsequent_indent=indent))
+
+
+def _wrapped_items(lead, items, indent):
+    """Echo comma-separated items wrapped to 100 columns, never splitting an item across lines."""
+    line = indent + lead
+    for i, item in enumerate(items):
+        piece = item + ("," if i < len(items) - 1 else "")
+        if len(line) + 1 + len(piece) > 100 and line.strip():
+            click.echo(line)
+            line = indent + piece
+        else:
+            line += ("" if line.endswith(" ") else " ") + piece
+    click.echo(line)
 
 
 def _job(job):
@@ -47,16 +82,24 @@ def _job(job):
 
 
 def _quality(report, details=False):
-    """Show every check with its severity and count, optionally including dates and examples."""
+    """Show every check with its severity and count, optionally with its dates and examples."""
     if report is None:
         click.echo("No quality report is available yet.")
         return
-    click.echo(f"Quality: {report.rows:,} rows, {report.dates} dates, {len(report.errors)} error checks, "
-               f"{len(report.warnings)} warning checks")
+    click.echo(f"Quality: {_n(report.rows, 'row')}, {_n(report.dates, 'date')}, "
+               f"{_n(len(report.errors), 'error check')}, {_n(len(report.warnings), 'warning check')}")
     _table(["Check", "Severity", "Count", "Description"],
-           [(c.name, c.severity, c.count, c.description) for c in report.checks])
-    if details:
-        _json(report)
+           [(c.name, c.severity, f"{c.count:,}", c.description) for c in report.checks])
+    if not details:
+        return
+    for check in report.checks:
+        click.echo("")
+        click.echo(f"{check.name} ({check.severity}, {check.count:,}): {check.description}")
+        if check.by_date:
+            _wrapped_items(f"{_n(len(check.by_date), 'date')}:",
+                           [f"{d.as_of_date or 'unparsed'} ({d.count:,})" for d in check.by_date], "  ")
+        for example in check.examples:
+            _wrapped("example: " + ", ".join(f"{k}={v}" for k, v in example.items()), "  ")
 
 
 @click.group()
@@ -87,10 +130,14 @@ def data_import(state, paths, choice, data_source):
             _quality(svc.quality_report(import_id))
         _job(job)
         pairs = svc.overlap(import_id, context)
-        click.echo(f"Overlap: {sum(p.active is not None for p in pairs)} of {len(pairs)} snapshots already active")
-        _table(["As of", "Incoming contracts", "Active import", "Active contracts"],
-               [(p.incoming.as_of.isoformat(), p.incoming.contracts, p.active.import_id if p.active else None,
-                 p.active.contracts if p.active else None) for p in pairs])
+        clashes = [p for p in pairs if p.active is not None]
+        if clashes:
+            click.echo(f"Overlap: {len(clashes):,} of {_n(len(pairs), 'incoming snapshot')} already active")
+            _table(["Date", "Incoming contracts", "Active import", "Active contracts"],
+                   [(p.incoming.as_of_date, p.incoming.contracts, p.active.import_id, p.active.contracts)
+                    for p in clashes])
+        else:
+            click.echo(f"Overlap: none; all {_n(len(pairs), 'incoming snapshot')} are new dates")
         if choice == "ask":
             try:
                 choice = click.prompt("Commit choice", type=click.Choice(["replace", "add-new", "cancel"]), default="cancel")
@@ -100,7 +147,8 @@ def data_import(state, paths, choice, data_source):
                 raise
         committed = svc.commit_import(import_id, choice.replace("-", "_"), context)
         _job(committed)
-        click.echo("Staged import discarded." if choice == "cancel" else f"Activated {committed.result['activated']} snapshots.")
+        click.echo("Staged import discarded." if choice == "cancel"
+                   else f"Activated {_n(committed.result['activated'], 'snapshot')}.")
 
 
 @data.command("list")
@@ -110,6 +158,9 @@ def data_import(state, paths, choice, data_source):
 @click.pass_obj
 def data_list(state, underlying, offset, limit):
     """List imports, newest first, including failed and discarded imports.
+
+    Rows and dates are as imported; Active days shows how many of the import's snapshots are active
+    now, after later replacements, deletes and purges.
     \f
     :param state: Shared CLI options.
     :param underlying: Optional underlying filter.
@@ -118,24 +169,35 @@ def data_list(state, underlying, offset, limit):
     """
     with _service(state) as (svc, _):
         page = svc.page_imports(offset, limit, underlying)
-        _table(["Import", "Underlying", "Status", "Rows", "From", "To"],
-               [(i.import_id, i.underlying, i.status, i.rows, i.first_as_of_date, i.last_as_of_date) for i in page.items])
-        click.echo(f"Showing {len(page.items)} of {page.total} imports (offset {page.offset}).")
+        rows = []
+        for i in page.items:
+            versions = svc.data_versions(i.underlying, i.import_id) if i.underlying else []
+            active = sum(v.state == VersionState.ACTIVE for v in versions)
+            rows.append((i.import_id, i.underlying, i.status, f"{i.rows:,}", i.first_as_of_date, i.last_as_of_date,
+                         f"{active:,} of {len(versions):,}" if versions else None))
+        _table(["Import", "Underlying", "Status", "Rows", "From", "To", "Active days"], rows)
+        click.echo(f"Showing {len(page.items)} of {_n(page.total, 'import')} (offset {page.offset}).")
 
 
 @data.command("quality")
 @click.argument("import_id")
-@click.option("--details", is_flag=True, help="Include every per-date count and example as JSON.")
+@click.option("--details", is_flag=True, help="Also list each check's dates and examples.")
+@click.option("--json", "as_json", is_flag=True, help="Print the complete report as JSON instead.")
 @click.pass_obj
-def data_quality(state, import_id, details):
+def data_quality(state, import_id, details, as_json):
     """Show the permanently stored quality report of an import.
     \f
     :param state: Shared CLI options.
     :param import_id: Import to inspect.
-    :param details: Include the complete report.
+    :param details: Include each check's dates and examples.
+    :param as_json: Print the complete report as JSON, for scripts.
     """
     with _service(state) as (svc, _):
-        _quality(svc.quality_report(import_id), details)
+        report = svc.quality_report(import_id)
+        if as_json:
+            _json(report)
+        else:
+            _quality(report, details)
 
 
 @data.command("coverage")
@@ -163,15 +225,57 @@ def data_coverage(state, underlying, start, end, daily):
             lo = start.date() if start else min(v.as_of_date for v in versions)
             hi = end.date() if end else max(v.as_of_date for v in versions)
             report = svc.coverage(symbol, lo, hi, context)
-            click.echo(f"{symbol}: {lo} through {hi}")
+            covered = sum(m.covered_days for m in report.months)
+            trading = sum(m.trading_days for m in report.months)
+            click.echo(f"{symbol}: {lo} through {hi}; {covered:,} of {_n(trading, 'trading day')} covered")
             _table(["Month", "Trading days", "Covered", "Missing", "Non-trading", "Contracts", "Flagged days"],
-                   [(m.month, m.trading_days, m.covered_days, m.missing_days, m.non_trading_days,
-                     m.contracts, m.flagged_days) for m in report.months])
+                   [(label, f"{m.trading_days:,}", f"{m.covered_days:,}", f"{m.missing_days:,}", m.non_trading_days,
+                     f"{m.contracts:,}", m.flagged_days) for label, m in _collapse_empty_months(report.months)])
             if daily:
                 _table(["Date", "Trading day", "Import", "Contracts", "Quality flags"],
                     [(d.day, d.trading_day, v.import_id if v else None, v.contracts if v else 0,
                       ", ".join(v.quality_flags) if v else "missing")
                      for d in report.days for v in (d.snapshots or [None])])
+
+
+def _collapse_empty_months(months):
+    """Merge each run of consecutive months without any data into one ``YYYY-MM to YYYY-MM`` row.
+
+    :param months: Monthly coverage summaries in month order.
+    :returns: ``(label, summary)`` pairs; a merged row's summary holds the run's totals.
+    """
+    rows, run = [], []
+
+    def flush():
+        if len(run) == 1:
+            rows.append((run[0].month, run[0]))
+        elif run:
+            rows.append((f"{run[0].month} to {run[-1].month}", CoverageMonth(
+                month=run[0].month, trading_days=sum(m.trading_days for m in run), covered_days=0,
+                missing_days=sum(m.missing_days for m in run), non_trading_days=0, contracts=0, flagged_days=0)))
+        run.clear()
+
+    for month in months:
+        if month.covered_days == 0 and month.non_trading_days == 0:
+            run.append(month)
+        else:
+            flush()
+            rows.append((month.month, month))
+    flush()
+    return rows
+
+
+def _job_target(job):
+    """What a job acted on, in a few words: an import, or an underlying and date range."""
+    params, result = job.params or {}, job.result or {}
+    if "import_id" in params:
+        return params["import_id"] + (f" ({params['choice'].replace('_', '-')})" if "choice" in params else "")
+    selection = (params.get("preview") or {}).get("selection")
+    if selection:
+        if selection.get("import_id"):
+            return selection["import_id"]
+        return f"{selection.get('underlying')} {selection.get('start')} to {selection.get('end')}"
+    return result.get("import_id")
 
 
 def _change(state, operation, import_id, underlying, start, end, yes):
@@ -180,21 +284,25 @@ def _change(state, operation, import_id, underlying, start, end, yes):
                               start=start.date() if start else None, end=end.date() if end else None)
     with _service(state) as (svc, context):
         preview = svc.preview_data_change(operation, selection, context)
-        click.echo(f"{operation.title()} preview: {len(preview.versions)} eligible versions; {len(preview.runs)} affected run/underlying pairs")
-        _table(["Underlying", "As of", "Import", "State", "Contracts"],
-               [(v.underlying, v.as_of.isoformat(), v.import_id, v.state, v.contracts) for v in preview.versions])
-        _table(["Affected run", "Underlying", "Dates"],
-               [(r.run_id, r.underlying, ", ".join(d.isoformat() for d in r.dates)) for r in preview.runs])
+        click.echo(f"{operation.title()} preview: {_n(len(preview.versions), 'eligible version')}")
         if not preview.versions:
             click.echo("Nothing to change.")
             return
+        _table(["Underlying", "Date", "Import", "State", "Contracts"],
+               [(v.underlying, v.as_of_date, v.import_id, v.state, v.contracts) for v in preview.versions])
+        if preview.runs:
+            click.echo(f"Affected runs (results are kept and flagged data superseded): {len(preview.runs):,}")
+            _table(["Run", "Underlying", "Dates"],
+                   [(r.run_id, r.underlying, ", ".join(d.isoformat() for d in r.dates)) for r in preview.runs])
+        else:
+            click.echo("No runs affected.")
         if not yes and not click.confirm(f"Confirm {operation}?", default=False):
             click.echo("Cancelled; no data changed.")
             return
         method = svc.delete_data if operation == "delete" else svc.purge_data
         job = method(preview, context, confirmed=True)
         _job(job)
-        click.echo(f"{operation.title()} completed: {job.result['versions']} versions.")
+        click.echo(f"{operation.title()} completed: {_n(job.result['versions'], 'version')}.")
 
 
 @data.command("delete")
@@ -293,9 +401,12 @@ def jobs_list(state, status, offset, limit):
     """
     with _service(state) as (svc, _):
         page = svc.page_jobs(offset, limit, [JobStatus(s) for s in status] if status else None)
-        _table(["Job", "Kind", "Status", "Done", "Total", "Progress"],
-               [(j.job_id, j.kind, j.status, j.progress_done, j.progress_total, j.progress_label) for j in page.items])
-        click.echo(f"Showing {len(page.items)} of {page.total} jobs (offset {page.offset}).")
+        _table(["Job", "Kind", "Status", "Started", "Target", "Progress"],
+               [(j.job_id, j.kind, j.status, _local_time(j.started_at or j.created_at), _job_target(j),
+                 " ".join(filter(None, [f"{j.progress_done}/{j.progress_total}" if j.progress_total else None,
+                                        j.progress_label])) or None)
+                for j in page.items])
+        click.echo(f"Showing {len(page.items)} of {_n(page.total, 'job')} (offset {page.offset}).")
 
 
 @jobs.command("show")

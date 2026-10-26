@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–8 done (M1 complete pending the checkpoint 1 demo); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–8 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -832,3 +832,43 @@ Not a plan phase: the project's rules, which until now lived in a private memory
   - Ctrl+C during ingest discarding the partial import
 - **Still open (between-phase corrections, unchanged here):** the two reviewed ingest edge cases from Phase 7. Paths containing an apostrophe are still interpolated into DuckDB SQL in `data/derive.py`. Duplicate base names are now harmless for zip members, which get numbered names, but have not been re-reviewed for folders.
 - **Next:** checkpoint 1 demo with you, which completes M1; then Phase 9 (spec model, validation and publishing), the start of M2.
+
+
+**Checkpoint 1 and CLI corrections (between Phases 8 and 9, branch `checkpoint1`), Oct 26, 2026**
+
+Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to the CLI's output from what it showed.
+
+- **Checkpoint 1, held with the owner on real data** in a separate home outside the repository, through the CLI in a terminal:
+  - **Imported 2008** (older conventions, 321,408 rows, 253 dates, one file) and **2023** (current conventions, 4,039,670 rows, 250 dates, five files as one import). Read both quality reports: no errors. Warnings in 2008: zero asks, IV −1 before settlement, and 104 expirations without a parity forward. Warnings in 2023: crossed quotes and zero asks. Both committed with `replace`.
+  - **Resolved an overlap:** re-importing the one-day file of 2023 was reported as an already-imported file and a full overlap. It was committed with `replace`, and the superseded copy was purged.
+  - **Viewed coverage**, monthly and daily (October 2008: `no_parity_forward` on most days of the crash).
+  - **Deleted and purged** Dec 22–31, 2008 (7 days) after each preview. All 9 jobs succeeded.
+- **Findings from the demo and what changed** (`cli/commands.py`, `cli/__init__.py`):
+  1. The overlap table listed every incoming date even with no overlap. It is now one line when nothing overlaps, and otherwise a table of only the clashing dates.
+  2. Snapshots were shown as UTC instants (`2008-01-02T21:15:00+00:00`). Overlap and previews now show the trading date.
+  3. Tables were tab-separated and drifted. Columns are now aligned; empty cells show `-`.
+  5. `data quality --details` printed the report as raw JSON (2,699 lines for 2023). It now lists each check's dates and counts and its examples, wrapped without splitting an entry; `--json` prints the complete report for scripts.
+  6. Counts now take the right number of their noun ("1 date", "1 version", "Activated 1 snapshot"), with thousands separators.
+  7. Previews printed an empty affected-runs table. They now say "No runs affected", or list the runs with a note that their results are kept and flagged.
+  8. Coverage listed every empty month (168 rows from 2009 to 2022). Each run of months without data is now one row (`2009-01 to 2022-12`), and the heading gives covered and total trading days.
+  10. `data list` gave only each import's rows and dates as imported. A new *Active days* column shows how many of its snapshots are active now (for example `246 of 253` after the delete).
+  11. `jobs list` had no times or targets. It now shows when each job started (local time) and what it acted on: the import and commit choice, or the underlying and date range.
+  - **Found while checking the fixes:** piping output into a command that stops reading (`… | head`) was reported as an unexpected error with a logged traceback. On Windows a closed pipe raises `OSError` `EINVAL` rather than `BrokenPipeError`. The CLI now confirms that standard output is closed and exits with status 1 quietly; other `OSError`s are still unexpected errors.
+- **Finding 4, a gap in DATA-20, closed:** on 2008-09-19 the contract count drops about 15% below its neighbours, and nothing flagged it. DATA-20 makes the low-count ratio *configurable* (default 50% of the median of the 5 surrounding dates), but `data/validation.py` had it as a constant.
+  - It is now `DataSource.low_contract_ratio` (default 0.5, between 0 exclusive and 1), changed by publishing a new data source version (`publish_data_source`).
+  - Ingest passes it to `content_checks`, and the stored check description names the ratio used, so each import's report records its threshold.
+  - Homes whose stored data source definition predates the field load it with the default.
+  - The default is unchanged. A higher ratio (for example 0.9) would flag 2008-09-19, but also normal dips such as the day after a monthly expiration.
+- **Open, for the owner's decision:**
+  - **9.** *Flagged days* in the monthly coverage counts days with any quality flag, so in 2023 almost every day is flagged, because some contract has a zero ask most days. DATA-70 leaves the summary's form open; options are a count per check, or counting only the checks the owner considers significant.
+- **Tests:** 282, all passing: 276 run by default (unit 243, contract 28, meta 3, packaging 2), plus the 6 real-data tests, which pass with `PROPHETOVOL_VENDOR_DATA` set (about 100 seconds together). Changed and new in `tests/unit/test_data_cli.py`:
+  - the overlap wording, and dates instead of UTC instants
+  - aligned columns and plurals
+  - readable `--details` and parseable `--json`
+  - coverage collapsing empty months
+  - "No runs affected"
+  - *Active days* after a delete
+  - job targets
+  - a closed output pipe exiting quietly, while other `OSError`s stay unexpected
+  - in `tests/unit/test_ingest.py`: the low-count ratio, where an 80% day passes at the default, is flagged at 0.9 with the ratio in the description, and 1.5 is refused
+- **M1 is complete.** Next: Phase 9 (spec model, validation and publishing), the start of M2.
