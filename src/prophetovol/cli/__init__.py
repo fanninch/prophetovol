@@ -51,3 +51,39 @@ def main(ctx: click.Context, home: Path | None) -> None:
     :param home: The ``--home`` option, if given.
     """
     ctx.obj = CliState(home=resolve_home(home))
+
+
+@main.group("testdata")
+def testdata() -> None:
+    """Synthetic vendor-format data for tests, the demo and trying things out."""
+
+
+@testdata.command("generate")
+@click.option("--out", "out_dir", type=click.Path(file_okay=False, path_type=Path), required=True,
+              help="Folder to write data_download*.csv files into (existing ones there are replaced).")
+@click.option("--start", "start_date", type=click.DateTime(["%Y-%m-%d"]), required=True, help="First date, YYYY-MM-DD.")
+@click.option("--end", "end_date", type=click.DateTime(["%Y-%m-%d"]), required=True, help="Last date, YYYY-MM-DD.")
+@click.option("--seed", type=int, default=7, show_default=True, help="Random seed.")
+@click.option("--conventions", type=click.Choice(["current", "older"]), default="current", show_default=True,
+              help="current: the vendor from Jun 2018; older: five-character codes, historical roots, "
+                   "Saturday expirations, one price per date, discounted deltas.")
+@click.option("--rows-per-file", type=int, default=None, help="Split into several files, as the vendor does.")
+def testdata_generate(out_dir: Path, start_date, end_date, seed: int, conventions: str,
+                      rows_per_file: int | None) -> None:
+    """Write synthetic option files in the exact ivolatility format.
+    \f
+    :param out_dir: The output folder.
+    :param start_date: First date.
+    :param end_date: Last date.
+    :param seed: Random seed.
+    :param conventions: ``current`` or ``older``.
+    :param rows_per_file: Rows per file before starting a new one, if any.
+    """
+    from prophetovol.testdata.generator import GeneratorConfig, generate
+
+    summary = generate(GeneratorConfig(start_date=start_date.date(), end_date=end_date.date(), seed=seed,
+                                       conventions=conventions, rows_per_file=rows_per_file), out_dir)
+    click.echo(f"wrote {summary.rows:,} rows for {summary.dates} dates and {summary.expirations} expirations "
+               f"to {len(summary.files)} file(s) in {out_dir}")
+    click.echo(f"quirks: {summary.crossed_quotes} crossed quotes, {summary.zero_asks} zero asks, "
+               f"{summary.flagged} flagged rows")

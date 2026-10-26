@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 25, 2026 · @Chuck · **Up to date through plan Phase 4 (jobs and audit).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v3, agreed).
+Oct 25, 2026 · @Chuck · **Up to date through plan Phase 5 (synthetic data generator).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v3, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,11 +13,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**220 requirements:** 14 done, 48 partial, 158 not started.
+**220 requirements:** 15 done, 49 partial, 156 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
-| **M1 Data foundation** | 1–8 | **In progress:** phases 1–4 done (Oct 25, 2026); 5 (synthetic data), 6 (ingest), 7 (versions, delete, purge, coverage), 8 (data CLI, checkpoint 1) to go |
+| **M1 Data foundation** | 1–8 | **In progress:** phases 1–5 done (Oct 25, 2026); 6 (ingest), 7 (versions, delete, purge, coverage), 8 (data CLI, checkpoint 1) to go |
 | **M2 Engine core** | 9–15 | Not started |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
@@ -29,7 +29,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 2 | Conventions, time, calendar and registries | Oct 25, 2026 |
 | 3 | Storage adapter and catalog | Oct 25, 2026 |
 | 4 | Jobs and audit | Oct 25, 2026 |
-| 5 | Synthetic data generator | — |
+| 5 | Synthetic data generator | Oct 25, 2026 |
 | 6 | Ingest, normalization, validation and quality reports | — |
 | 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | — |
 | 8 | Data CLI, documentation and checkpoint 1 | — |
@@ -46,10 +46,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Reference data (§7) | 7 | 1 | 0 |
 | Strategy specification (§8) | 0 | 0 | 50 |
 | Engine (§9) | 0 | 0 | 19 |
-| Stress module (§10) | 0 | 0 | 18 |
+| Stress module (§10) | 0 | 1 | 17 |
 | Runs (§11) | 0 | 2 | 9 |
 | Results and analytics (§12) | 0 | 0 | 8 |
-| Interfaces (§13) | 3 | 6 | 16 |
+| Interfaces (§13) | 4 | 6 | 15 |
 | Schemas and documentation (§14) | 0 | 4 | 0 |
 | Audit (§15) | 0 | 4 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
@@ -112,8 +112,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| DATA-1 | Input is the 22-column ivolatility CSV | Not started |  | Phase 6 |  |
-| DATA-2 | Date format, `*` flag, and both option symbol formats | Not started |  | Phase 6 |  |
+| DATA-1 | Input is the 22-column ivolatility CSV | Not started |  | Phase 6 (column list in `data/ivolatility.py` from 5) |  |
+| DATA-2 | Date format, `*` flag, and both option symbol formats | Not started |  | Phase 6 (OSI symbol and root helpers in `data/ivolatility.py` from 5) |  |
 | DATA-3 | One underlying per import, from one or more files | Not started |  | Phase 6 |  |
 | DATA-4 | Imports accept several CSVs, folders or zips; size limit | Not started |  | Phase 6 |  |
 | DATA-10 | Uploads are streamed; ingest runs as a job with progress | Not started |  | Phase 6 (job infrastructure ready from 4) |  |
@@ -242,7 +242,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | STR-2 | Runs attach zero or more stress definitions | Not started |  | Phase 16 |  |
 | STR-10 | `underlying_slide` scenario type and `default_slide` | Not started |  | Phase 16 |  |
 | STR-11 | Scenario-type registry as the extension point | Not started |  | Phase 16 |  |
-| STR-20 | Black-76 revaluation on the series forward | Not started |  | Phase 16 |  |
+| STR-20 | Black-76 revaluation on the series forward | **Partial** | Phase 5 (Black-76 prices and greeks) | stress revaluation on the series forward (16) | `unit/test_black76.py` |
 | STR-21 | Shocked forward, unchanged vol (sticky strike) | Not started |  | Phase 16 |  |
 | STR-22 | Stress P&L from model values only | Not started |  | Phase 16 |  |
 | STR-23 | Null IV revalued at intrinsic and flagged | Not started |  | Phase 16 |  |
@@ -310,9 +310,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | INT-35 | GUI: Run page | Not started |  | Phase 23 |  |
 | INT-36 | GUI: Jobs panel | Not started |  | Phase 21 |  |
 | INT-37 | Charts as tables; desktop-first layout; browsers | Not started |  | Phase 21-23 |  |
-| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`) | data and registry (8), spec and run (14), stress (16), demo (24) | `unit/test_cli.py` |
+| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`) | data and registry (8), spec and run (14), stress (16), demo (24) | `unit/test_cli.py` |
 | INT-41 | CLI and server cannot share a home; both say so with the remedy | **Partial** | Phase 3 (service reports it) | CLI (8) and server (19) messages | `unit/test_service.py` |
-| INT-50 | Synthetic data generator in the vendor format | Not started |  | Phase 5 |  |
+| INT-50 | Synthetic data generator in the vendor format | **Done** | Phase 5 | also an older-conventions mode (five-character codes, historical roots, Saturday expirations, single price, discounted deltas) | `unit/test_generator.py` |
 | INT-51 | `prophetovol demo` | Not started |  | Phase 24 |  |
 | INT-52 | Vendor data never committed; tests on synthetic data; optional real-data tests | **Partial** | Phase 1 (`.gitignore`; synthetic-only tests) | optional real-data tests (8, 15) |  |
 
@@ -344,11 +344,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| TEST-1 | Golden engine tests | Not started |  | Phase 11-13, 17 (chains from 5) |  |
+| TEST-1 | Golden engine tests | Not started |  | Phase 11-13, 17 (golden chain helpers built in 5) |  |
 | TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | Not started |  | Phase 10 |  |
-| TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries) | generator greeks (5), SQL vs Python per row (6), vendor deltas on real data (8) | `unit/test_time.py` |
+| TEST-5 | Time-convention tests | **Partial** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly) | SQL vs Python per row (6), vendor deltas on real data (8) | `unit/test_time.py`, `unit/test_generator.py` |
 | TEST-6 | Ingest tests reproducing real-data quirks | Not started |  | Phase 6 |  |
 | TEST-7 | Adapter contract suite | **Partial** | Phase 3 (Phase 3 cases) | 7, 14 | `contract/test_adapter_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |

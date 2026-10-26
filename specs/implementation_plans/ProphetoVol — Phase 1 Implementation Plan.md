@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Plan phases 0–4 done (Oct 25, 2026); Phase 5 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Plan phases 0–5 done (Oct 25, 2026); Phase 6 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -678,3 +678,26 @@ Recorded per phase: what was built, what changed from the plan, and test counts.
   - progress throttling with a fake clock, with the final value always written
   - `KeyboardInterrupt`; recovery of queued and running jobs, directly and on reopening a home directory
   - attempts for ok, rejected (with field paths), error, and a failing attempt write; the summary rules; the service's job rules
+
+**Phase 5 (synthetic data generator), Oct 25, 2026**
+
+- **`pricing/black76.py`:** vectorized `d1_d2`, `price` (with a discount factor) and `greeks` in the vendor's conventions, confirmed in Phase 0: undiscounted forward delta, optionally scaled by a discount factor (the vendor's pre-Jun-2018 deltas); gamma on the forward; vega per point; theta per calendar day. Stress revaluation in Phase 16 reuses `price`.
+- **`data/ivolatility.py`:** the 22 `COLUMNS`, `DATE_FORMAT`, `format_date`, `osi_symbol` and `vendor_root` (both symbol formats). Ingest (Phase 6) reads the format with these; the generator writes it.
+- **`testdata/generator.py`:** `GeneratorConfig` (pydantic, every field described), `generate()` and `GenerationSummary`.
+  - A seeded GBM index path (rounded to 2 decimals).
+  - **Current conventions:** `SPX` AM monthlies on third Fridays (holiday-adjusted), `SPXW` PM weeklies on Fridays and dailies Monday to Thursday.
+  - **Older conventions:** Saturday-dated monthlies split across roots by strike range (`SPT`, `SPX`, `SXZ`); `JXA`/`JXB`/`JXD`/`JXE` weeklies; quarterlies under `SZQ` and two Decembers under `SKQ`. The strike code wraps every 26 strikes, so one five-character code names two contracts on a date, as in the real files. One underlying price per date, discounted deltas, integer strikes.
+  - **Strike grids are fixed per expiration** when it is first listed, so held contracts appear every day.
+  - Skew-and-term vols; Black-76 prices; spreads on 0.05 and 0.10 ticks.
+  - On and after the settlement date: IV −1, zero greeks, intrinsic prices; `mean price` 0 whenever the bid is 0.
+  - Configurable crossed-quote, zero-ask and flag shares; files split at date boundaries (`data_download.csv`, `data_download2.csv`, …), newest date first.
+  - **Greeks are computed from the values as written** (IV 6 decimals, forward 3, index 2), so they reproduce exactly from the file (TEST-5). The same configuration gives byte-identical files.
+- **`testdata/golden.py`:** `VendorRow` (every value explicit), `write_rows`, `GoldenChain`, and one example, `pm_call_to_expiry` (three days, strikes 4950/5000/5050, settling at an index of 5050). Phases 11–13 add chains alongside their golden tests.
+- **CLI:** `prophetovol testdata generate --out --start --end [--seed] [--conventions current|older] [--rows-per-file]` (decision 8).
+- **Found and fixed while building:** on a Good Friday week, the Friday weekly shifts to Thursday and collided with that Thursday's daily under the same root, which would have produced duplicate contracts. Listings are now unique per (expiration, root), and a test checks that contracts are unique per date.
+- **Not modeled:** the vendor's 09:30 expiry assumption in its greeks for `JX*` and `SPXPM` (requirements v6, REF-1). The generator uses the true PM expiry, so its greeks follow CONV-3 throughout.
+- **Tests:** 172, all passing in about 18 seconds (unit 150, contract 18, meta 2, packaging 2). New:
+  - Black-76: closed form, put-call parity, greeks against finite differences, both delta conventions
+  - generator: sessions newest first, format and parsing, roots and listing calendars (including Good Friday 2024), unique contracts, fixed strike grids, settlement-date conventions, mean price 0, quirk rates against their configured shares, **greeks reproduced from the file for every live row in both conventions**
+  - older conventions: codes, roots, a repeated code with unique contracts, Saturday-dated monthlies settling on the Friday (or the Thursday on Good Friday 2008) with rows ending there, call minus put delta equal to e^(−rT), integer strikes
+  - byte-identical output per seed, file splitting at date boundaries, the CLI, and the golden chain's round trip

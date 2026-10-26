@@ -4,8 +4,8 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built: plan phases 0–4 of 24 are done (repository foundation, conventions and calendar,
-storage and catalog, jobs and audit); milestone M1 (data foundation) is in progress. The requirements, the
+**Status:** Phase 1 is being built: plan phases 0–5 of 24 are done (repository foundation, conventions and calendar,
+storage and catalog, jobs and audit, synthetic data); milestone M1 (data foundation) is in progress. The requirements, the
 implementation plan and the [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
 data, publishing a spec and running a backtest are added as those phases are built.
@@ -43,6 +43,20 @@ created on first use:
 Only one process can open a home directory at a time (for example, the CLI cannot use it while
 `prophetovol serve` is running); a second process gets a message saying so. The first open
 publishes the shipped reference data as version 1; later changes to it are never overwritten.
+
+## Synthetic test data
+
+`prophetovol testdata generate` writes option files in the vendor's exact 22-column format for a
+synthetic SPX-like index, so everything can be tried and tested without licensed vendor data:
+
+```bash
+prophetovol testdata generate --out sample_data --start 2024-03-01 --end 2024-03-28
+```
+
+`--conventions older` reproduces the vendor's older files instead (five-character option codes,
+historical roots, Saturday-dated monthlies, one underlying price per date, discounted deltas);
+`--rows-per-file` splits the output into several files, as the vendor's downloads are; `--seed`
+changes the random path (the same seed always gives the same files).
 
 ## Jobs and the attempts log
 
