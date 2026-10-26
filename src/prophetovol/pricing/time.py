@@ -68,7 +68,7 @@ def minutes_to_expiry(as_of_local: datetime, expiry_local: datetime) -> int:
     """Whole minutes from the as-of time to the expiry on the exchange clock (CONV-1).
 
     Both arguments are exchange-local and naive, so a daylight-saving change between them is
-    ignored, as in the vendor's convention. Seconds, if any, are dropped (the difference is
+    ignored (CONV-1). Seconds, if any, are dropped (the difference is
     floored to whole minutes).
 
     :param as_of_local: The snapshot's as-of time, exchange-local, without time zone.

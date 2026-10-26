@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Plan phases 0–5 done (Oct 25, 2026); Phase 6 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–5 done (Oct 25, 2026); Phase 6 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -129,6 +129,8 @@ logs/               server log
 
 ### 4.3 Ingest pipeline (DATA-10 to DATA-21)
 
+Ingest is the **`ivolatility_eod` data-source adapter** (DATA-15): it converts the vendor's files into normalized snapshots in ProphetoVol's internal conventions (§5.4 of the requirements), keeping every original value in a `vendor_*` column. Vendor-specific code lives only here (and in the synthetic generator, which writes the vendor format); the engine, selection, hedging and stress read only internal columns. A second vendor would get its own adapter behind the same normalized schema.
+
 1. **Receive.** One import takes one or more CSV files, folders of them, or zip archives (DATA-3, DATA-4). Each file is streamed into `uploads/` in chunks, never held in memory, while its SHA-256 is computed (DATA-10, DATA-12). The uncompressed size limit (default 2 GB per import) is checked as data arrives.
 2. **Parse.** DuckDB reads all the import's CSVs together with every column as text and an explicit header check (DATA-1), so an unparseable value becomes a counted error with examples rather than a failed read. (Phase 0: 4M rows read in about 6 seconds.)
 3. **Validate.** Each check in DATA-20 is one SQL aggregate per check per date, with up to five example rows. Duplicates are checked on the contract key, not the vendor symbol. The results form a `QualityReport` (pydantic) stored on the import. Any error stops the import before anything is written.
@@ -137,7 +139,7 @@ logs/               server log
    - **Symbols:** `vendor_root` is parsed from either symbol format (first three characters of a five-character code; the characters before the date in OSI, trimmed); `root`, `settlement_style` come from the root table; `osi_symbol` is built from `root`, expiration, type and strike.
    - **Expiry** (CONV-3): `settlement_date` = the last trading day on or before the expiration date (calendar table); `expiry_timestamp` and `expiry_local` = the settlement date at 09:30 (AM) or 16:00 (PM); `last_trading_date` = the previous trading day for AM, the settlement date for PM.
    - **Time to expiry:** `time_to_expiry_years` = whole minutes between `as_of_local` and `expiry_local`, over 525,600 (exchange clock, CONV-1); `days_to_expiry`; `trading_days_to_expiry` from the calendar table.
-   - **Nulls:** `iv = -1` becomes null; on a contract's settlement date `iv` and the greeks become null.
+   - **IV and greeks** (DATA-13, DATA-15): the vendor's `iv`, `delta`, `gamma`, `vega`, `theta` and `rho` are kept as `vendor_*` (with `-1` stored as null). The internal `iv` equals `vendor_iv` (`ivolatility_eod` measures time as CONV-1 does, so no rescaling). From the data source's `internal_greeks_from` date the internal greeks are copied from the vendor's (`greeks_source = vendor`); before it they are **recomputed with Black-76** (`pricing/black76.py`) from `time_to_expiry_years`, `forward` and `iv` (`greeks_source = recomputed`). The recomputation runs per month partition in Python over Arrow arrays (vectorized NumPy), after the SQL derivation. On a contract's settlement date the internal `iv` and greeks are null.
    - **Forwards** (DATA-14): `vendor_forward` as given; `vendor_methodology` from the data source's `per_series_forward_from`; the **parity fit** per `(as_of, root, expiration)` (pairs with valid quotes and both bids above zero, the six strikes with the smallest `|C − P|` by window ranking, `regr_slope`/`regr_intercept` for `D` and `F`, the validity checks), giving `parity_forward`, `parity_discount`, `parity_strikes`; then `forward` and `forward_source` (vendor from the cut-over date; parity before it; the vendor's single price when the fit is invalid, counted as a quality warning). `forward` is null on the settlement date.
 5. **Write** Parquet **one month partition at a time** under the new `import_id`, with versions in state `staged`. Phase 0 showed that a single sorted write of a year runs out of memory at a 1 GB limit while per-partition writes do not. Progress is reported per partition (rows and dates done), and cancellation is checked between partitions (INT-24).
 6. **Stop for review.** The import waits for the user's commit choice (DATA-30, DATA-31): the quality report and the overlap are shown first.
@@ -287,13 +289,14 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
 ### Phase 6: Ingest, normalization, validation and quality reports
 
 - `data/ingest.py`: the pipeline of §4.3 (DATA-1 to DATA-4, DATA-10 to DATA-13), imports of several files, folders or zips, with progress and cancellation; duplicate-hash detection per file (DATA-12).
-- `data/derive.py`: the derived columns (DATA-13) and the parity forwards (DATA-14) as SQL over the root and calendar tables.
+- `data/derive.py`: the derived columns (DATA-13) and the parity forwards (DATA-14) as SQL over the root and calendar tables, and the internal IV and greeks (DATA-15), recomputed with Black-76 before the data source's `internal_greeks_from` date.
 - `data/validation.py`: every DATA-20 check with its severity, counts per date and examples; the `QualityReport` model, stored permanently (DATA-21).
 - **Tests** (TEST-6):
   - every normalization rule and derived column; IV −1 and zero greeks on the settlement date stored as null; `mean price` 0 kept as `vendor_mid` only; crossed quotes and zero asks warned; both roots sharing an expiration date; the `*` column; MM/DD/YYYY
   - both symbol formats, the same five-character code for two contracts on a date (counted, not rejected), `osi_symbol` for both, every historical root normalized
   - Saturday-dated expirations with their settlement and last trading dates; time to expiry from SQL equal to `pricing/time.py` for every row
   - parity forwards on a synthetic chain with a known forward and discount factor (exact recovery), an invalid fit falling back with a warning, the vendor's forward used from the cut-over date
+  - internal greeks: before `internal_greeks_from`, recomputed (call delta − put delta = 1 at every strike, equal to Black-76 from the stored time to expiry, forward and IV), with the vendor's discounted values kept in `vendor_*`; from it, copied from the vendor; `greeks_source` set accordingly; nothing in the engine-facing columns comes from a vendor-specific convention
   - every check triggered by a crafted file; multi-symbol and unknown-root rejection; an import of several files and of a folder; zip with several CSVs; the size limit; cancellation between partitions leaving nothing staged
 
 ### Phase 7: Overlap, commit, versions, delete, purge, invalidation and coverage
@@ -447,6 +450,10 @@ Added in v3, from Phase 0:
 15. **Market data is read in three-month chunks from the chunk's own partition files**, with zero-copy per-step slices (§4.6, §15.3).
 16. **Derived columns and parity forwards are computed in SQL at ingest**, over a root table and a calendar table built in Python (§4.3). A test checks that the SQL time-to-expiry arithmetic equals `pricing/time.py` row by row.
 17. **Partitions are written one at a time** at ingest (§4.3, §15.2).
+
+Added in v4, with requirements v7:
+
+18. **Internal conventions with data-source adapters** (DATA-15). Core code (`pricing`, `engine`, `stress`, the conventions module) states ProphetoVol's own conventions and has no vendor-specific parameters; ingest converts into them, and the generator converts out of them to write vendor files. Greeks recomputed at ingest for the pre-June-2018 period are computed with the same `pricing/black76.py` the stress module uses, so there is one Black-76 in the code base.
 
 ## 14. Risks
 
@@ -701,3 +708,15 @@ Recorded per phase: what was built, what changed from the plan, and test counts.
   - generator: sessions newest first, format and parsing, roots and listing calendars (including Good Friday 2024), unique contracts, fixed strike grids, settlement-date conventions, mean price 0, quirk rates against their configured shares, **greeks reproduced from the file for every live row in both conventions**
   - older conventions: codes, roots, a repeated code with unique contracts, Saturday-dated monthlies settling on the Friday (or the Thursday on Good Friday 2008) with rows ending there, call minus put delta equal to e^(−rT), integer strikes
   - byte-identical output per seed, file splitting at date boundaries, the CLI, and the golden chain's round trip
+
+**Internal conventions change (between Phases 5 and 6, branch `internal_conventions`), Oct 25, 2026**
+
+Not a plan phase: a correction prompted by review, so that ProphetoVol's conventions are its own and vendors are handled by adapters (requirements v7, plan v4).
+
+- **Requirements v7:** §5.4 states that the conventions are ProphetoVol's own; new CONV-10 (prices, IV, greeks: undiscounted forward delta, gamma per forward point, vega per vol point, theta per calendar day); new DATA-15 (data-source adapters: format, timestamps, quirks, forwards, IV rescaling when a source's clock differs, greek recomputation where a source's greeks do not follow CONV-10, original values in `vendor_*`); DATA-13 recomputes greeks before `internal_greeks_from` (replacing v6's "deltas used as given"); REF-5 adds `internal_greeks_from`; CONV-1, CONV-7, SPEC-27, SPEC-42, SPEC-61, SPEC-63, ENG-24, STR-20, RES-1, TEST-5, TEST-6, Appendix A and the glossary reworded.
+- **Code:**
+  - `pricing/black76.py` documents the internal conventions and **no longer takes `delta_discount`** (a parameter that existed only to imitate the vendor's pre-2018 deltas)
+  - `testdata/generator.py` applies the vendor's discount to deltas itself in the older conventions, as the reverse of an adapter
+  - `core/conventions.py` gains CONV-10 and rewords CONV-1 and CONV-7; `pricing/time.py`'s docstring cites CONV-1
+  - `DataSource` gains `internal_greeks_from` (2018-06-25 for `ivolatility_eod`)
+- **Tests:** 177, all passing (unit 155, contract 18, meta 2, packaging 2). New or changed: call delta − put delta = 1 at several strikes and tenors; `greeks` has no vendor-specific parameter; ten conventions, none defined as a vendor's, CONV-10's content; `internal_greeks_from` in the shipped data source; the generator tests apply the vendor's discount outside Black-76.

@@ -1,8 +1,8 @@
 # ProphetoVol — Project Roadmap
 
-Oct 25, 2026 · @Chuck · v6 (Phase 1 requirements v6 after Phase 0)
+Oct 25, 2026 · @Chuck · v7 (Phase 1 requirements v7: internal conventions and data-source adapters)
 
-> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
+> **What is being built: Phase 1 only, as defined by *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) and its implementation plan.** Where this roadmap and the Phase 1 specification differ, the specification governs.
 >
 > **Everything about Phases 2 and later is roadmap, not yet specified.** It records the design discussion so far, so later phases start with the reasoning that shaped them. Nothing in those sections is being implemented. Phases may be reordered, merged or dropped, and each gets its own agreed requirements specification and implementation plan before it is built.
 
@@ -35,7 +35,7 @@ These held throughout the discussion and should carry into every phase.
 
 | Phase | Theme | Main deliverables | Status |
 | --- | --- | --- | --- |
-| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v6) and implementation plan (v3) agreed; plan phases 0–5 of 24 done (M1 in progress). Progress per requirement: *ProphetoVol — Phase 1 Requirement Status* |
+| **1** | Deterministic backtester | Data module, strategy specs, daily engine, underlying-slide stress, results and statistics, CLI, API, GUI | **Being built.** Requirements (v7) and implementation plan (v4) agreed; plan phases 0–5 of 24 done (M1 in progress). Progress per requirement: *ProphetoVol — Phase 1 Requirement Status* |
 | **2** | AI test assistant | Strategy-building chat; AI that decides what to test from a request; batch runs and comparisons | Roadmap — not yet specified |
 | **3** | Market context, richer rules and risk | Market-context snapshots, conditions on context, P&L attribution, more stress scenario types, more risk limits, AM settlement table | Roadmap — not yet specified |
 | **4** | Forecasting | Forecast object and record, static forecasters, forecast scoring | Roadmap — not yet specified |
@@ -46,7 +46,7 @@ These held throughout the discussion and should carry into every phase.
 
 ## 4. Phase 1 — Deterministic Backtester (being built)
 
-Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
+Fully specified in *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), which is authoritative. In brief (the package and CLI are `prophetovol`):
 
 - **Data:** upload of ivolatility files; validation and quality reports; overlap handling (replace, add new dates only, cancel); data versions; delete and purge; coverage; trading calendar; settlement-source plug-in point.
 - **Strategies:** legs with expiration and strike selectors (delta, at the money as 50 delta, forward, references to other legs); entry schedules; triggers (condition, scope, action) for rolls and closes; expiration handling; delta-hedge bands; sizing by contracts or notional.
@@ -322,6 +322,7 @@ Decisions made in discussion, by topic. Where a decision belongs to Phase 1, the
 - **Profit and loss triggers are in dollars per structure unit,** not percentages: no denominator (entry premium, notional, stress loss) is well defined for every structure, notably ratios and near-zero-premium spreads (Phase 1 v3).
 - **No guessed values at expiry:** an AM-settled leg with no valid quote on its last trading day closes at its last valid mark; a PM-settled leg whose expiration day is missing from the data closes at the step before. Closing early is preferred to inventing profit or loss (Phase 1 v3).
 - The delta hedge is fractional (Phase 1 v3).
+- **ProphetoVol has its own conventions** for time, prices, IV and greeks, independent of any vendor. Each data source has an adapter (its ingest) that converts into them and keeps the vendor's originals; the engine never depends on a vendor's conventions, so a new vendor means a new adapter, not engine changes. Greeks of the ivolatility single-price period (before Jun 25, 2018) are recomputed at ingest (Phase 1 v7).
 
 **Stress**
 - A stress module that builds stress grids and attaches them to runs; Phase 1 implements only the underlying slide; vol shocks and surface changes come later.

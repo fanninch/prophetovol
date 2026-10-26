@@ -1,4 +1,7 @@
-"""The conventions that apply everywhere: specs, results and documentation (requirements §5.4).
+"""ProphetoVol's internal conventions, which apply everywhere: specs, results and documentation (§5.4).
+
+They are defined independently of any data vendor; each data source's adapter converts into them
+(DATA-15).
 
 The published conventions document is generated from :data:`CONVENTIONS` (DOC-3), so the text
 here is the single statement of each convention. The numeric constants and the dollar-greek
@@ -36,7 +39,9 @@ CONVENTIONS: tuple[Convention, ...] = (
         "Time to expiry is a year fraction in calendar time, measured on the exchange's clock: "
         "(expiry − as-of) in whole minutes, divided by the minutes in 365 days, where both are "
         "exchange-local date-times without time zone, so a daylight-saving change between them is "
-        "ignored. This is the vendor's convention. It is also shown as fractional calendar days to "
+        "ignored. It agrees with the first data source (ivolatility), whose implied vols therefore need no "
+        "conversion; a source measuring time differently has its implied vols rescaled by its adapter. It is "
+        "also shown as fractional calendar days to "
         "expiry (time to expiry × 365): a one-day PM-settled weekly at the 16:15 snapshot shows 0.99 days.",
     ),
     Convention(
@@ -70,8 +75,8 @@ CONVENTIONS: tuple[Convention, ...] = (
         "CONV-7", "Dollar greeks",
         "With q the signed quantity in contracts, m the multiplier and S the index level: dollar "
         "delta = Δ·q·m·S (equivalent index exposure); dollar gamma = Γ·q·m·S²·0.01 (change in dollar "
-        "delta for a 1% index move); dollar vega = vega·q·m (per volatility point; vendor vega is per "
-        "point); dollar theta = θ·q·m (per calendar day; vendor theta is per calendar day).",
+        "delta for a 1% index move); dollar vega = vega·q·m (per volatility point, CONV-10); dollar theta = "
+        "θ·q·m (per calendar day, CONV-10).",
     ),
     Convention(
         "CONV-8", "Signs",
@@ -81,6 +86,14 @@ CONVENTIONS: tuple[Convention, ...] = (
         "CONV-9", "A roll re-establishes the structure",
         "Unless the spec says otherwise, a roll closes the structure and re-establishes it using the "
         "original selection rules.",
+    ),
+    Convention(
+        "CONV-10", "Prices, implied vol and greeks",
+        "Per contract: prices in index points per unit of the underlying (dollars are price × quantity × "
+        "multiplier); implied volatility as a decimal, consistent with CONV-1's time to expiry; one forward per "
+        "expiration and date; delta is the undiscounted Black-76 forward delta, N(d1) for a call and N(d1) − 1 "
+        "for a put, so call delta − put delta = 1; gamma is per point of the forward; vega is per volatility point; "
+        "theta is per calendar day.",
     ),
 )
 """Every convention, in requirement order."""
@@ -111,7 +124,7 @@ def dollar_gamma_1pct(gamma: float, quantity: float, multiplier: float, index_le
 
 
 def dollar_vega(vega: float, quantity: float, multiplier: float) -> float:
-    """Dollar vega per volatility point (CONV-7; vendor vega is per point).
+    """Dollar vega per volatility point (CONV-7, CONV-10).
 
     :param vega: Per-contract vega, per volatility point.
     :param quantity: Signed quantity in contracts.
@@ -122,7 +135,7 @@ def dollar_vega(vega: float, quantity: float, multiplier: float) -> float:
 
 
 def dollar_theta(theta: float, quantity: float, multiplier: float) -> float:
-    """Dollar theta per calendar day (CONV-7; vendor theta is per calendar day).
+    """Dollar theta per calendar day (CONV-7, CONV-10).
 
     :param theta: Per-contract theta, per calendar day.
     :param quantity: Signed quantity in contracts.

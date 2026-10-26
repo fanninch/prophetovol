@@ -142,14 +142,20 @@ class DataSource(BaseModel):
         description="Exchange-local time of the index level, the adjusted close (16:00 for ivolatility_eod).",
     )
     time_to_expiry_convention: Literal["act_365_exchange_clock_to_minute"] = Field(
-        description="How the vendor measures time to expiry: calendar minutes on the exchange clock over "
-                    "the minutes in 365 days (CONV-1).",
+        description="How the source measures time to expiry. act_365_exchange_clock_to_minute equals CONV-1, "
+                    "so the source's implied vols are used without rescaling (DATA-15).",
     )
     per_series_forward_from: date | None = Field(
         default=None,
         description="First date on which the vendor's forward column is a per-series forward. Before it, "
                     "the column is one underlying price per date and the forward is derived from put-call "
                     "parity (DATA-14). Null if the vendor always supplies per-series forwards.",
+    )
+    internal_greeks_from: date | None = Field(
+        default=None,
+        description="First date from which the source's greeks follow the internal conventions (CONV-10) and are "
+                    "used as they are. Before it, ingest recomputes them with Black-76 (DATA-13, DATA-15). Null if the "
+                    "source's greeks always follow them.",
     )
     parity_strikes: int = Field(
         default=6, ge=2,

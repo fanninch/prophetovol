@@ -50,6 +50,7 @@ def test_ivolatility_data_source():
     assert (src.option_snapshot_time, src.index_snapshot_time) == (time(16, 15), time(16, 0))
     assert src.time_to_expiry_convention == "act_365_exchange_clock_to_minute"
     assert src.per_series_forward_from == date(2018, 6, 25) and src.parity_strikes == 6
+    assert src.internal_greeks_from == date(2018, 6, 25)
 
 
 def _config(**changes):

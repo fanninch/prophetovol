@@ -1,6 +1,14 @@
 # ProphetoVol — Phase 1 Requirements Specification
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v6). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v7). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
+
+**Changes in v7** (agreed Oct 25, 2026): **internal conventions and data-source adapters.**
+
+- **ProphetoVol defines its own conventions** (§5.4, new CONV-10 for prices, IV and greeks), independently of any vendor. That the ivolatility files match them is a property of that vendor, not their definition.
+- **Each data source has an adapter**, its ingest, which converts the source's files into normalized market snapshots in the internal conventions (new DATA-15). The source's original values are kept in `vendor_*` columns; the engine, selection, hedging and stress read only internal columns. A new data source needs a new adapter and configuration, not engine changes.
+- **Greeks before Jun 25, 2018 are recomputed at ingest** with Black-76 in the internal conventions, because the vendor's greeks of that period are spot-based with discounted deltas (DATA-13, DATA-15, REF-5). From Jun 25, 2018 the vendor's greeks already follow the internal conventions and are used as they are. This replaces v6's decision to use the vendor's deltas as given in both periods.
+- **IV is rescaled** if a data source measures time to expiry differently from CONV-1, preserving total variance (DATA-15).
+- CONV-1, CONV-7, SPEC-27, SPEC-42, SPEC-61, SPEC-63, ENG-24, STR-20 and RES-1 are reworded in internal terms; TEST-5, TEST-6, Appendix A and the glossary follow.
 
 **Editorial updates** (Oct 25, 2026; no requirement changed): SPEC-55's heading says *settlement date*, matching its text; open item 6 records that the performance targets are set. Implementation progress per requirement is tracked in *ProphetoVol — Phase 1 Requirement Status*.
 
@@ -176,13 +184,13 @@ BacktestService (single owner of all storage access)
 
 ### 5.4 Conventions
 
-These meanings apply everywhere (specs, results, documentation). They are kept in one conventions module and are documented alongside the schemas (§14).
+These meanings apply everywhere (specs, results, documentation). They are **ProphetoVol's own conventions**, defined independently of any data vendor: every data source's adapter converts its data into them (DATA-15), so the engine, selection, hedging and stress never depend on a vendor's conventions. They are kept in one conventions module and are documented alongside the schemas (§14).
 
 - **CONV-1** **Time to expiry** is the model input: a year fraction in calendar time, measured on the **exchange's clock**:
 
   `time_to_expiry_years = (expiry_local − as_of_local) / 365 days`
 
-  where `as_of_local` and `expiry_local` are exchange-local date-times (America/New_York for SPX) without time zone, and the difference is taken to the minute. A daylight-saving change between them is therefore ignored. This is the vendor's convention, confirmed on real data: from Jun 25, 2018 it reproduces the vendor's greeks to the minute, including across DST changes (§7.2). For people, it is also shown as fractional **calendar days to expiry** (`days_to_expiry = time_to_expiry_years × 365`), so a one-day PM-settled weekly at the 16:15 snapshot shows 0.99 days, not 1. Both are stored per row at ingest (DATA-13).
+  where `as_of_local` and `expiry_local` are exchange-local date-times (America/New_York for SPX) without time zone, and the difference is taken to the minute. A daylight-saving change between them is therefore ignored. The convention was chosen to agree with the first data source, so its implied vols need no conversion: from Jun 25, 2018 it reproduces the ivolatility greeks to the minute, including across DST changes (REF-6). A source measuring time differently has its implied vols rescaled by its adapter (DATA-15). For people, it is also shown as fractional **calendar days to expiry** (`days_to_expiry = time_to_expiry_years × 365`), so a one-day PM-settled weekly at the 16:15 snapshot shows 0.99 days, not 1. Both are stored per row at ingest (DATA-13).
 - **CONV-2** **Trading days to expiry** is the number of trading days after the as-of date, up to and including the settlement date (CONV-3). It is used where a rule is stated in trading days.
 - **CONV-3** **Settlement date, expiry and last trading day** come from the expiration date, the root's settlement style (§7.1) and the trading calendar (§7.3):
   - **Settlement date:** the last trading day on or before the expiration date. It is the expiration date itself except for dates that are not trading days, such as the Saturday-dated SPX monthlies before 2015, which settled on the Friday before.
@@ -194,10 +202,18 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **CONV-7** **Dollar greeks**, with `q` the signed quantity in contracts, `m` the multiplier and `S` the index level:
   - dollar delta = Δ · q · m · S (equivalent index exposure)
   - dollar gamma = Γ · q · m · S² · 0.01 (change in dollar delta for a 1% index move)
-  - dollar vega = vega · q · m (per one volatility point; vendor vega is per point)
-  - dollar theta = θ · q · m (per calendar day; vendor theta is per calendar day)
+  - dollar vega = vega · q · m (per one volatility point, CONV-10)
+  - dollar theta = θ · q · m (per calendar day, CONV-10)
 - **CONV-8** **Signs:** positive quantity is long; positive cash flow is cash received.
 - **CONV-9** **A roll**, unless the spec says otherwise, closes the structure and re-establishes it using the original selection rules.
+- **CONV-10** **Prices, implied vol and greeks** in market snapshots and results, per contract:
+  - prices (bid, ask, marks) in index points per unit of the underlying; dollar amounts are price × quantity × multiplier
+  - implied volatility as a decimal (0.18, not 18), consistent with CONV-1's time to expiry
+  - the forward as one value per expiration and date (DATA-14)
+  - **delta**: the undiscounted Black-76 forward delta, N(d1) for a call and N(d1) − 1 for a put, so call delta − put delta = 1 at every strike
+  - **gamma**: the change in delta per one point of the forward
+  - **vega**: the change in price per one volatility point (0.01 of IV)
+  - **theta**: the change in price per calendar day
 
 ### 5.5 Registries (plug-in points)
 
@@ -245,7 +261,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - **Expiry.** `settlement_date`, `expiry_timestamp`, `expiry_local` and `last_trading_date` follow CONV-3.
   - **Time to expiry.** `time_to_expiry_years`, `days_to_expiry` (CONV-1) and `trading_days_to_expiry` (CONV-2).
   - `iv` of `-1` is stored as null.
-  - Greeks are stored as given, except that on a contract's settlement date all greeks and `iv` are stored as null. The vendor reports them as 0 and −1 on that day, and they must not be used. Deltas are used as given in both vendor periods, although before Jun 25, 2018 they are discounted (call delta − put delta ≈ 0.994 at two to four months, against 1.000 later); the difference is documented, not corrected.
+  - **Greeks and IV.** The vendor's values are kept as given in `vendor_iv`, `vendor_delta`, `vendor_gamma`, `vendor_vega`, `vendor_theta` and `vendor_rho`. The internal `iv`, `delta`, `gamma`, `vega` and `theta` (CONV-10) are produced by the adapter (DATA-15): from the data source's `internal_greeks_from` date (Jun 25, 2018 for `ivolatility_eod`) the vendor's greeks already follow CONV-10 and are copied; before it they are spot-based with discounted deltas (call delta − put delta ≈ 0.994 at two to four months), so they are recomputed with Black-76 from `time_to_expiry_years`, `forward` and `iv`. `greeks_source` records which (`vendor` or `recomputed`). On a contract's settlement date all internal greeks and `iv` are null; the vendor reports 0 and −1 on that day, and they must not be used.
   - `vendor_mid` keeps the vendor's `mean price` as given. The engine computes its own mid from bid and ask (§9.3) and never uses `vendor_mid` for pricing, because the vendor shows 0 when the bid is 0.
   - `vendor_forward` keeps `stock price for iv` as given; `forward` and its companions are derived by DATA-14.
   - `vendor_methodology` records which vendor period a row belongs to: `single_price` before the data source's `per_series_forward_from` date (§7.2), `per_series_forward` from it.
@@ -260,6 +276,17 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - *Evidence (Phase 0):* against the vendor's per-series forwards from Jun 2018, this method's median difference is 0.2–1 basis point for expirations up to a year, and valid fits exist for over 99.9% of pre-June-2018 expirations.
 
 ### 6.3 Validation & quality report
+
+- **DATA-15** **Data-source adapters.** Each data source (§7.2) has an adapter, its ingest, that converts the source's files into normalized market snapshots in the internal conventions (§5.4). The adapter, configured by the data source's definition, is responsible for:
+  - parsing the source's format, symbols and roots (DATA-1, DATA-2, REF-1)
+  - timestamps: the source's snapshot times and time zone (REF-5)
+  - the source's null markers and quirks (for ivolatility: IV −1, zero greeks and `mean price` 0)
+  - the forward per expiration (DATA-14)
+  - **implied vol**: if the source measures time to expiry differently from CONV-1, its IV is rescaled to preserve total variance, `iv = vendor_iv · √(T_source / T)`, so prices are unchanged
+  - **greeks**: where the source's greeks do not follow CONV-10, they are recomputed with Black-76 from the internal time to expiry, forward and IV
+  - keeping every original value in a `vendor_*` column (Appendix A), so a snapshot can always be traced to the file
+
+  The engine, selection, hedging and stress read only internal columns. Supporting another vendor means a new adapter and data-source configuration; the engine is unchanged.
 
 - **DATA-20** Validation produces a **quality report** stored with the import: counts and examples per check, per date. Errors block the import; warnings do not.
 
@@ -362,8 +389,9 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   timezone: America/New_York
   option_snapshot_time: "16:15"   # quotes, IV, greeks, forward
   index_snapshot_time:  "16:00"   # adjusted close
-  time_to_expiry_convention: act_365_exchange_clock_to_minute
+  time_to_expiry_convention: act_365_exchange_clock_to_minute   # equals CONV-1: no IV rescaling
   per_series_forward_from: 2018-06-25   # before this date, `stock price for iv` is one price per date (DATA-14)
+  internal_greeks_from: 2018-06-25      # before this date, greeks are recomputed (DATA-13, DATA-15)
   parity_strikes: 6                     # strikes nearest the money used for parity forwards (DATA-14)
   ```
 
@@ -437,7 +465,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **SPEC-24** `strike_offset`: the referenced leg's strike plus an offset, choosing the nearest listed strike. Parameters: `leg`; `points` or `percent` (one of them, signed); `tolerance_points` (default: the series' strike spacing).
 - **SPEC-25** **No match.** When a selector finds no eligible contract within tolerance, the outcome follows `on_no_match`: `skip_entry` (default) or `nearest_any` (the nearest eligible contract regardless of tolerance, with a warning event).
 - **SPEC-26** Selection uses only contracts eligible under §8.2 and under the quote filters (SPEC-28).
-- **SPEC-27** Delta-based selection uses the vendor's delta at that step. Contracts with a null delta are not eligible for delta-based selectors.
+- **SPEC-27** Delta-based selection uses the snapshot's delta at that step (CONV-10). Contracts with a null delta are not eligible for delta-based selectors.
 - **SPEC-28** **Quote filters** (spec-level `selection` block, applying to all legs):
   - `require_valid_quote` (default `true`; §9.3)
   - `min_bid` (default 0.05)
@@ -473,7 +501,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 | `structure_pnl_per_unit_at_or_below` | `amount` (dollars, negative) | structure P&L per unit ≤ amount (a stop) |
 | `trading_days_held_at_least` | `days` | trading days since the structure was opened ≥ days |
 
-- **SPEC-42** Conditions are evaluated at each step on that step's marks and vendor greeks. A condition that needs a null greek evaluates to false and records a warning event.
+- **SPEC-42** Conditions are evaluated at each step on that step's marks and the snapshot's greeks (CONV-10). A condition that needs a null greek evaluates to false and records a warning event.
 - **SPEC-43** **Actions:**
   - `close` with leg scope closes that leg; the structure stays open with its remaining legs. `close` with structure scope closes every leg and the structure's hedge.
   - `roll` with leg scope closes the leg and re-selects it with its original selectors; references to other legs use those legs' current contracts. The leg's quantity is unchanged.
@@ -499,7 +527,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **SPEC-60** `none`: no hedging.
 - **SPEC-61** `band`: keep the structure's net delta per unit within a band.
   - Parameters: `lower`, `upper`, `target` (with `lower ≤ target ≤ upper`); `scope`: `structure` (Phase 1 only).
-  - **Measure.** With `N` structure units, leg quantities `q_i` (signed contracts), vendor deltas `δ_i`, hedge holding `h` in index units and multiplier `m`:
+  - **Measure.** With `N` structure units, leg quantities `q_i` (signed contracts), the snapshot's deltas `δ_i` (CONV-10), hedge holding `h` in index units and multiplier `m`:
 
     net delta per unit = ( Σ q_i · δ_i + h / m ) / N
 
@@ -507,7 +535,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - If the measure is outside `[lower, upper]` after the step's option trades, the hedge is traded so the measure equals `target`.
   - Hedging to flat at every step is `lower = upper = target = 0`.
 - **SPEC-62** **The hedge instrument** in Phase 1 is a synthetic position in the index itself, traded at the index level in the snapshot, with a configurable cost in basis points of traded notional (§11.1). The hedge holding `h` is fractional (in index units) under either rounding setting; it is never rounded. Financing, dividends and margin on the hedge are not modeled (§18). Futures and ETF hedges are later work.
-- **SPEC-63** Hedging is evaluated at every step after option trades (§9.1, step 8), using that step's vendor deltas. Legs with a null delta (at expiry) count as zero delta after settlement.
+- **SPEC-63** Hedging is evaluated at every step after option trades (§9.1, step 8), using that step's deltas from the snapshot (CONV-10). Legs with a null delta (at expiry) count as zero delta after settlement.
 - **SPEC-64** When a structure closes, its hedge is closed at the same step.
 
 ### 8.8 Sizing
@@ -553,7 +581,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 - **ENG-21** **Marking.** A position is marked at the mid of its valid quote. If the quote is invalid or the contract is absent from the market snapshot, the last valid mark is carried forward, the position snapshot is flagged `stale_mark`, and a data-issue event is recorded. After a configurable number of consecutive stale steps (`stale_mark_warning_steps`, default 5), a warning event is recorded at each further stale step.
 - **ENG-22** **Settled and force-closed legs** take their settlement value or fill price as the final mark.
 - **ENG-23** **The series forward** (`forward`, DATA-14) is used for the `forward` selector and for stress pricing (§10.3). It is ignored on a series' settlement date.
-- **ENG-24** **Greeks** are the vendor's values at the step. The engine computes greeks itself only for stress pricing (§10.3).
+- **ENG-24** **Greeks** are the snapshot's internal values at the step (CONV-10, DATA-15). The engine computes greeks itself only for stress pricing (§10.3).
 - **ENG-25** **Two times in one snapshot.** For `ivolatility_eod`, option marks are as of 16:15 ET and the index level as of 16:00 ET. In Phase 1 the hedge trades at the 16:00 index level while options trade at 16:15 quotes. This is a documented simplification (§18), not modeled.
 
 ### 9.4 Accounting
@@ -604,7 +632,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
 
   `V = D · [F·N(d1) − K·N(d2)]` for calls and `V = D · [K·N(−d2) − F·N(−d1)]` for puts,
 
-  where `d1 = (ln(F/K) + σ²T/2) / (σ√T)`, `d2 = d1 − σ√T`, `σ` is the contract's vendor implied vol, `T` is `time_to_expiry_years` (CONV-1), and `D = exp(−rT)` with `r` from the run configuration (default 0).
+  where `d1 = (ln(F/K) + σ²T/2) / (σ√T)`, `d2 = d1 − σ√T`, `σ` is the contract's implied vol from the snapshot (CONV-10), `T` is `time_to_expiry_years` (CONV-1), and `D = exp(−rT)` with `r` from the run configuration (default 0).
 - **STR-21** Under a move of `s`, the forward becomes `F · (1 + s)` and `σ` is unchanged.
 - **STR-22** **Stress P&L** for a position is `q · m · (V_shocked − V_base)`, with both values from the same model, so the model's level never mixes with market marks. The hedge's stress P&L is `h · S · s`.
 - **STR-23** A contract with a null implied vol is revalued at intrinsic value in both base and shocked states, and flagged.
@@ -709,7 +737,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - position: signed `quantity`; time to expiry as `time_to_expiry_years`, `days_to_expiry` (fractional calendar days) and `trading_days_to_expiry`
   - prices: `mark`, `mark_source` (`mid`, `stale`, `fill`, `settlement`), `bid`, `ask`, `iv`, `index_level`, `forward`, `forward_source`
   - values: `market_value`, `cash_flow`, `fees`, `period_pnl`, `cumulative_pnl`
-  - per-contract vendor greeks: `delta`, `gamma`, `vega`, `theta`
+  - per-contract greeks from the snapshot (CONV-10): `delta`, `gamma`, `vega`, `theta`
   - dollar greeks (CONV-7): `dollar_delta`, `dollar_gamma_1pct`, `dollar_vega`, `dollar_theta`
   - `flags` (for example `stale_mark`, `forced_close_stale`, `vendor_flagged`, `missing_day_before`)
 - **RES-2** The hedge's position snapshot has `dollar_delta = h · S` and zero for the other greeks.
@@ -919,12 +947,12 @@ tests/
 - **TEST-2** **Invariant tests** (ENG-33) on many seeded synthetic runs.
 - **TEST-3** **Determinism test:** two runs of the same inputs produce identical stored results.
 - **TEST-4** **Point-in-time test:** any engine access past the step's as-of time raises an error (ARC-3).
-- **TEST-5** **Time-convention tests:** time to expiry is computed to the minute on the exchange clock (CONV-1), including AM-settled expiries at 09:30, PM-settled expiries at 16:00, as-of and expiry on opposite sides of a daylight-saving change, and Saturday-dated expirations settling on the Friday (CONV-3). Black-76 at the computed time reproduces the synthetic generator's greeks exactly. In the optional real-data tests (TEST-10), from Jun 25, 2018, it reproduces the vendor's call deltas with a median absolute error below 0.00001.
+- **TEST-5** **Time-convention tests:** time to expiry is computed to the minute on the exchange clock (CONV-1), including AM-settled expiries at 09:30, PM-settled expiries at 16:00, as-of and expiry on opposite sides of a daylight-saving change, and Saturday-dated expirations settling on the Friday (CONV-3). Black-76 at the computed time reproduces the synthetic generator's greeks exactly. In the optional real-data tests (TEST-10), from Jun 25, 2018, it reproduces the vendor's call deltas with a median absolute error below 0.00001, which is why the vendor's greeks of that period are used as they are (DATA-13).
 - **TEST-6** **Ingest tests** reproducing the quirks found in the real data:
   - IV of −1 and zero greeks on the settlement date; `mean price` of 0 when the bid is 0; crossed quotes and zero asks; both roots sharing an expiration date; the `*` column; MM/DD/YYYY dates
   - five-character codes, including one code naming two contracts on a date; every historical root mapped to its normalized root and settlement style; `osi_symbol` built for both formats
   - Saturday-dated expirations with their settlement and last trading dates
-  - the single-price period, with parity forwards fitted per expiration (and the fallback when a fit is invalid), and the per-series period, with the vendor's forward used
+  - the single-price period, with parity forwards fitted per expiration (and the fallback when a fit is invalid) and greeks recomputed in the internal conventions (call delta − put delta = 1), the vendor's values kept; and the per-series period, with the vendor's forward and greeks used
   - an import of several files
 - **TEST-7** **Adapter contract suite** (DATA-84).
 - **TEST-8** **Validation tests** for every spec rule, including SPEC-52, SPEC-53 and explicit time units, and the YAML round trip (SPEC-81).
@@ -1014,16 +1042,16 @@ Each milestone ends usable on its own, with a demo.
 | `ask` | `ask` | float | |
 | `bid` | `bid` | float | |
 | `mean price` | `vendor_mid` | float | Stored, not used for pricing |
-| `iv` | `iv` | float, nullable | −1 stored as null |
+| `iv` | `vendor_iv` | float, nullable | As given, −1 stored as null; the internal `iv` is derived (DATA-15) |
 | `volume` | `volume` | integer | |
 | `open interest` | `open_interest` | integer | |
 | `stock price for iv` | `vendor_forward` | float, nullable | As given: one price per date before Jun 25, 2018; the per-series forward from then |
 | `*` | `vendor_flag` | boolean | Meaning unconfirmed |
-| `delta` | `delta` | float, nullable | Null on the settlement date; discounted before Jun 25, 2018 (DATA-13) |
-| `vega` | `vega` | float, nullable | Per one vol point; null on the settlement date |
-| `gamma` | `gamma` | float, nullable | Null on the settlement date |
-| `theta` | `theta` | float, nullable | Per calendar day; null on the settlement date |
-| `rho` | `rho` | float, nullable | Null on the settlement date |
+| `delta` | `vendor_delta` | float, nullable | As given; discounted and spot-based before Jun 25, 2018 |
+| `vega` | `vendor_vega` | float, nullable | As given |
+| `gamma` | `vendor_gamma` | float, nullable | As given |
+| `theta` | `vendor_theta` | float, nullable | As given |
+| `rho` | `vendor_rho` | float, nullable | As given; not used |
 | (derived) | `as_of_local` | local date-time | The date at the option snapshot time on the exchange clock, without time zone (CONV-1) |
 | (derived) | `index_as_of` | timestamp | The date at the index snapshot time (16:00 ET) |
 | (derived) | `vendor_root` | string | Parsed from the vendor symbol (DATA-13) |
@@ -1041,6 +1069,9 @@ Each milestone ends usable on its own, with a demo.
 | (derived) | `forward_source` | `vendor` / `parity` / `vendor_single_price` | DATA-14 |
 | (derived) | `parity_forward`, `parity_discount`, `parity_strikes` | float, float, integer | The parity fit for the expiration on that date (DATA-14) |
 | (derived) | `vendor_methodology` | `single_price` / `per_series_forward` | The vendor period of the row (DATA-13) |
+| (derived) | `iv` | float, nullable | Internal IV (CONV-10): `vendor_iv`, rescaled only if the source's clock differs (DATA-15); null on the settlement date |
+| (derived) | `delta`, `gamma`, `vega`, `theta` | float, nullable | Internal greeks (CONV-10): copied from the vendor from `internal_greeks_from`, recomputed with Black-76 before it; null on the settlement date |
+| (derived) | `greeks_source` | `vendor` / `recomputed` | Where the internal greeks came from (DATA-13) |
 | (derived) | `import_id` | string | The import that supplied the data |
 
 ## Appendix B — Example Strategies
@@ -1199,6 +1230,8 @@ stress_mode: monitor
 | Settlement date | The last trading day on or before the expiration date; differs from it for the Saturday-dated monthlies before 2015. |
 | Normalized root | `SPX` (AM-settled) or `SPXW` (PM-settled), the root a vendor root maps to (REF-1). |
 | SET | The AM settlement value of the S&P 500 index. Not available in Phase 1. |
+| Internal conventions | ProphetoVol's own definitions of time, prices, IV and greeks (§5.4), which every data source's adapter converts into (DATA-15). |
+| Adapter | A data source's ingest: it converts the source's files into normalized snapshots in the internal conventions (DATA-15). |
 | Forward | The forward of one expiration on one date: the vendor's per-series forward (`stock price for iv`) from Jun 25, 2018, and before that a forward fitted from put-call parity on the strikes nearest the money (DATA-14). |
 | Structure | One instance of a strategy's legs, opened together and managed together. |
 | Unit | One structure with each leg at its ratio. |
