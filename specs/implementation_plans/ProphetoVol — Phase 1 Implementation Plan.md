@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Phase 0 done; Phase 1 in progress.** · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and Phase 0's findings. Plan phases 0–4 done (Oct 25, 2026); Phase 5 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v6, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -9,7 +9,7 @@ Oct 25, 2026 · @Chuck · **Status: Agreed (v3), updated for requirements v6 and
 - **One milestone in detail at a time.** The design that spans milestones (§4: storage, market data access, the engine and registry interfaces, run output, jobs, audit) is settled now, because M1's storage must serve M2's engine. **M1 is planned in detail** (§6). M2–M4 are planned at phase level (§7–§9), and each is detailed and reviewed with you before it starts, using what the previous milestone taught us.
 - **Back end first.** M1–M3 are the service, the engine and the CLI, tested in pytest. The HTTP API and the GUI are M4, as thin clients of the same service (ARC-1).
 - **Check before building.** Phase 0 (§5) tests the assumptions the design rests on, above all whether market data can be read fast enough to meet the run-time target (NFR-1), using your real vendor files.
-- **Working rhythm.** Each phase ends with every suite green and its implementation notes added to §16. **Changes are left uncommitted**: you do all git operations (branches, commits, pushes). Decisions and deviations are recorded as they happen.
+- **Working rhythm.** Each phase ends with every suite green, its implementation notes added to §16, and the requirement status tracker (*ProphetoVol — Phase 1 Requirement Status*) updated in the same change. **Changes are left uncommitted**: you do all git operations (branches, commits, pushes). Decisions and deviations are recorded as they happen.
 - **No shared code with the data profiler.** Where copying and adapting a profiler module is quicker than writing it (§13, decision 13), it is copied into this repository and becomes ProphetoVol's own code.
 - **If a requirement turns out wrong** during implementation, the requirements get a new version, agreed with you, before the code departs from them.
 
@@ -357,6 +357,8 @@ Delivers requirements §13 (server, API, GUI, demo) and TEST-9. Detailed with yo
 - **Phase 24: Demo, end-to-end tests and checkpoint 4.** `prophetovol demo` (INT-51); Playwright tests of T1–T9; accessibility checks (NFR-5); README. **Checkpoint 4.**
 
 ## 10. Requirement Traceability
+
+Where each requirement is planned. Whether it is done, and in which phase, is recorded per requirement ID in *ProphetoVol — Phase 1 Requirement Status*.
 
 | Requirements | Phases |
 | --- | --- |

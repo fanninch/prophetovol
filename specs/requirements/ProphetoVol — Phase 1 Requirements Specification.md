@@ -2,6 +2,8 @@
 
 Oct 25, 2026 · @Chuck · **Status: Agreed (v6). This document defines what Phase 1 implements.** · Implementation plan: *ProphetoVol — Phase 1 Implementation Plan*. Companion document: *ProphetoVol — Project Roadmap* ("the roadmap"), which records the later phases, which are not yet specified, and the reasoning behind decisions made here. Where the two differ, this document governs Phase 1.
 
+**Editorial updates** (Oct 25, 2026; no requirement changed): SPEC-55's heading says *settlement date*, matching its text; open item 6 records that the performance targets are set. Implementation progress per requirement is tracked in *ProphetoVol — Phase 1 Requirement Status*.
+
 **Changes in v6** (agreed Oct 25, 2026), from the real vendor data examined in Phase 0 of the implementation plan (SPX, 2007 to Aug 2024):
 
 - **Contract identity and symbols.** Older files use five-character OPRA codes, which are not unique on a date. Every row gets a normalized OSI-style `osi_symbol` and `root`; the vendor's symbol and root are kept. A contract is identified by `(underlying, root, expiration, strike, option_type)` (DATA-2, DATA-13, DATA-20, RES-1).
@@ -490,7 +492,7 @@ These meanings apply everywhere (specs, results, documentation). They are kept i
   - `close_structure` (default): close the remaining legs and the hedge at the same step.
   - `keep_remaining`: keep the remaining legs open.
   - `roll_leg`: re-select the expired leg as a leg roll.
-- **SPEC-55** **PM-settled legs whose expiration date has no step are force-closed early.** When a run skips missing trading days (`allow_missing_days`, RUN-11) and a PM-settled leg's settlement date (CONV-3) is one of them, there is no index level to settle against. The leg is force-closed at the last step before its settlement date through the fill model, with a `forced_close_missing_expiry` event, following SPEC-51's rule when that step has no valid quote. The engine knows which days are missing from the run's step schedule, fixed at pre-flight; this reads no future market data. Closing early is preferred to settling against a substitute index level, which would add profit or loss that never existed. `expiry_handling` applies as for any forced close.
+- **SPEC-55** **PM-settled legs whose settlement date has no step are force-closed early.** When a run skips missing trading days (`allow_missing_days`, RUN-11) and a PM-settled leg's settlement date (CONV-3) is one of them, there is no index level to settle against. The leg is force-closed at the last step before its settlement date through the fill model, with a `forced_close_missing_expiry` event, following SPEC-51's rule when that step has no valid quote. The engine knows which days are missing from the run's step schedule, fixed at pre-flight; this reads no future market data. Closing early is preferred to settling against a substitute index level, which would add profit or loss that never existed. `expiry_handling` applies as for any forced close.
 
 ### 8.7 Delta hedging
 
@@ -980,7 +982,7 @@ tests/
 | 3 | SPXW contracts on third Fridays | **Resolved in v6:** across 2007 – Aug 2024 no two roots list the same date, expiration, strike and type; the contract key includes the root regardless (DATA-2) |
 | 4 | AM settlement values | Not supplied by the vendor; settlement-source plug-in point kept (REF-21) |
 | 5 | Product, package and CLI names | **Resolved in v3:** ProphetoVol; package and CLI `prophetovol` (ARC-7) |
-| 6 | Performance targets | To be confirmed in the implementation plan (NFR-1) |
+| 6 | Performance targets | **Set** in the implementation plan, §12 (agreed); ingest and data access measured in its Phase 0, the whole run confirmed in its Phase 15 (NFR-1) |
 | 7 | Default commission and fill model | Defaults in RUN-1; the user should set realistic values |
 | 8 | Settlement styles of the historical roots (`JX*` weeklies, `SPXPM`, old quarterlies) | PM, by the owner's knowledge of the products (REF-1). The vendor's greeks treat `JX*` and `SPXPM` as expiring at 09:30. To be revisited if a run shows issues |
 | 9 | Normalizing every root to `SPX` or `SPXW` | Adopted in v6 to be tried in practice; to be revisited if it causes issues (REF-1) |

@@ -4,8 +4,10 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 in progress. The requirements and the implementation plan are in
-[`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
+**Status:** Phase 1 is being built: plan phases 0–4 of 24 are done (repository foundation, conventions and calendar,
+storage and catalog, jobs and audit); milestone M1 (data foundation) is in progress. The requirements, the
+implementation plan and the [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
+are in [`specs/`](specs/README.md). This README grows as features land; install, the demo, importing
 data, publishing a spec and running a backtest are added as those phases are built.
 
 ## Install
