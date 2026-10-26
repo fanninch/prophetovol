@@ -1,0 +1,11 @@
+# ivolatility end-of-day option files (REF-5, REF-6). Timing confirmed on real data in Phase 0
+# of the Phase 1 implementation plan.
+source_id: ivolatility_eod
+description: ivolatility.com end-of-day option chains (22-column CSV)
+frequency: end_of_day
+timezone: America/New_York
+option_snapshot_time: "16:15"   # quotes, IV, greeks, forward
+index_snapshot_time: "16:00"    # adjusted close
+time_to_expiry_convention: act_365_exchange_clock_to_minute
+per_series_forward_from: 2018-06-25   # before this date, `stock price for iv` is one price per date (DATA-14)
+parity_strikes: 6                     # strikes nearest the money used for parity forwards (DATA-14)
