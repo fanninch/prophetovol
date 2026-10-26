@@ -631,3 +631,25 @@ Recorded per phase: what was built, what changed from the plan, and test counts.
   - the calendar's 4,446 sessions from 2007-01-03 to 2024-08-30, matching the vendor files, and the unscheduled closures of 2012, 2018 and 2025
   - every historical root's mapping, and the underlying validation rules
   - registry rules and settlement values
+
+**Phase 3 (storage adapter and catalog), Oct 25, 2026**
+
+- **`core/`:**
+  - `records.py`: `DataImport`, `ImportFile`, `DataVersionRecord`, `DefinitionVersion`, `JobRecord`, `AttemptRecord`, and the status enums (`ImportStatus`, `VersionState`, `JobStatus`, `AttemptOutcome`); every instant is an aware UTC datetime
+  - `paging.py`: `Page[T]` and `check_page` (offset ≥ 0, 1 ≤ limit ≤ 500, INT-11)
+  - `ids.py`: `new_id`, `utc_now`, `canonical_json`, `content_hash` (VER-2); service-side only, never used by the engine
+- **`storage/adapter.py`:** the `StorageAdapter` ABC with the operations Phases 3–7 need: lifecycle and readers; versioned definitions; imports with their files and the duplicate-hash lookup (DATA-12); staged market partitions and versions, snapshot reads for review, and discard; jobs; attempts (append-only: no update or delete operation exists). **Commit, overlap, delete, purge and point-in-time reads are added in Phase 7, run writes in Phase 14**, so the interface only declares what is implemented.
+- **`storage/duckdb/schema.py`:** `Migration`, `apply_migrations` (each migration in its own transaction, recorded in `schema_version`; refuses a database newer than the code and badly numbered migrations), catalog migration 1 and results migration 1 (empty until Phase 14).
+- **`storage/duckdb/adapter.py`:** `DuckDBAdapter.open` creates the home folders, opens both databases, maps a file held by another process to `HomeLockedError` with the remedy (INT-41), and migrates. `reader()` builds an adapter on new cursors (ARC-4). Every catalog read is an Ibis expression (DATA-81). Market partitions are written with PyArrow (zstd, row groups of 20,000) to a `.partial` file, then renamed into place.
+- **`runs/service.py`:** `BacktestService.open` (home resolution, storage, calendar, seeding), `reader()`, `close()`, context manager, `underlying()`, `data_source()` and the two lists.
+- **Changed from the plan, with reasons:**
+  - **One `definitions` table** (kind, key, version, body, hash, actor, channel, time) instead of a table per kind (§4.2's `underlyings`, `data_sources`, and later `strategy_specs`, `stress_definitions`). Every versioned definition follows VER-1 and VER-2 identically, so one table and one code path serve them all; the kind is a column.
+  - **Instants are stored as `TIMESTAMP` holding UTC, not `TIMESTAMPTZ`.** Phase 3 found that DuckDB cursors do not inherit a connection's `TimeZone` setting, and that reading `TIMESTAMPTZ` values into Python needs `pytz`, which is not a dependency. Naive-UTC storage needs neither; the adapter converts to and from aware UTC, and refuses naive datetimes on the way in.
+  - **The attempts table's time column is `attempted_at`** (`at` is reserved in DuckDB); `AttemptRecord.attempted_at` matches.
+  - **Market files are read with `hive_partitioning=False`.** DuckDB otherwise turns the `underlying=/year=/month=` folders into extra columns, the behaviour Phase 0 warned about (§15.3).
+  - **Reference data is seeded only where absent.** The first open publishes the shipped SPX and `ivolatility_eod` definitions as version 1; later opens never overwrite them, so changes made through the service (REF-2) are kept. A future package version with changed defaults will need an explicit upgrade step; recorded for later.
+- **Tests:** 121, all passing in about 8 seconds (unit 99, contract 18, meta 2, packaging 2). New:
+  - the contract suite's Phase 3 cases (TEST-7), parametrized by adapter: lifecycle and reopening, definition versioning (unchanged content publishes nothing, key order irrelevant), imports (round trip, updates, newest-first paging with totals and filters, paging validation, duplicate-hash lookup ignoring discarded imports), staged partitions and versions (listing, filters, snapshot reads by date and column, a partition written once, discard), jobs, attempts, readers on other threads while the owner writes
+  - migrations: order, idempotence, rollback of a failing migration, refusal of newer databases
+  - the file layout, naive-UTC storage, and refusing to discard an activated import
+  - the service: seeding with the opener's actor and channel, no reseeding or overwriting on reopen, `PROPHETOVOL_HOME`, readers, and **a real second process holding the home directory**, reported as in use and free again once it closes
