@@ -28,7 +28,19 @@ prophetovol --version
 ## Home directory
 
 ProphetoVol keeps its catalog, results and market data in a home directory, chosen in this order:
-`--home DIR`, then the `PROPHETOVOL_HOME` environment variable, then `~/.prophetovol`.
+`--home DIR`, then the `PROPHETOVOL_HOME` environment variable, then `~/.prophetovol`. It is
+created on first use:
+
+| Path | Contents |
+| --- | --- |
+| `catalog.duckdb` | reference data and other versioned definitions, imports, data versions, jobs, attempts |
+| `results.duckdb` | run output |
+| `market/underlying=<U>/year=<YYYY>/month=<MM>/<import_id>.parquet` | market snapshots, one file per import per month |
+| `uploads/`, `logs/` | files being ingested; the server log |
+
+Only one process can open a home directory at a time (for example, the CLI cannot use it while
+`prophetovol serve` is running); a second process gets a message saying so. The first open
+publishes the shipped reference data as version 1; later changes to it are never overwritten.
 
 ## Reference data and conventions
 
@@ -66,7 +78,7 @@ The wheel is pure Python (`py3-none-any`).
 | Path | Contents |
 | --- | --- |
 | `src/prophetovol/` | the package: `core`, `registry`, `reference`, `storage`, `data`, `pricing`, `engine`, `stress`, `results`, `runs`, `server`, `cli`, `testdata` |
-| `tests/` | `unit/`, `meta/` (documentation rules), `packaging/` (the wheel) |
+| `tests/` | `unit/`, `contract/` (the storage adapter contract suite), `meta/` (documentation rules), `packaging/` (the wheel) |
 | `specs/` | roadmap, requirements and implementation plans |
 
 Docstrings are reStructuredText with Sphinx field lists (`:param:`, `:returns:`, `:raises:`), so a
