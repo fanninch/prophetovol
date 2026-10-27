@@ -4077,6 +4077,965 @@ prophetovol.registry.params.triggers.TradingDaysHeldAtLeastParams
      "type": "object"
    }
 
+prophetovol.results.records.PortfolioSnapshot
+---------------------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "The whole run's totals at a step (RES-10).",
+     "properties": {
+       "as_of": {
+         "description": "The step's as-of instant (UTC).",
+         "format": "date-time",
+         "title": "As Of",
+         "type": "string"
+       },
+       "cash_flow": {
+         "description": "Sum of the step's position cash flows, in dollars.",
+         "title": "Cash Flow",
+         "type": "number"
+       },
+       "contracts_held": {
+         "description": "Option contracts held after the step's trades, in absolute terms.",
+         "title": "Contracts Held",
+         "type": "number"
+       },
+       "cumulative_pnl": {
+         "description": "The run's P&L from its start to this step, in dollars.",
+         "title": "Cumulative Pnl",
+         "type": "number"
+       },
+       "dollar_delta": {
+         "description": "Sum of the positions' dollar deltas (null ones count as 0).",
+         "title": "Dollar Delta",
+         "type": "number"
+       },
+       "dollar_gamma_1pct": {
+         "description": "Sum of the positions' dollar gammas for a 1% move.",
+         "title": "Dollar Gamma 1Pct",
+         "type": "number"
+       },
+       "dollar_theta": {
+         "description": "Sum of the positions' dollar thetas.",
+         "title": "Dollar Theta",
+         "type": "number"
+       },
+       "dollar_vega": {
+         "description": "Sum of the positions' dollar vegas.",
+         "title": "Dollar Vega",
+         "type": "number"
+       },
+       "equity": {
+         "description": "capital + cumulative_pnl, in dollars (ENG-32).",
+         "title": "Equity",
+         "type": "number"
+       },
+       "fees": {
+         "description": "Sum of the step's fees, in dollars.",
+         "title": "Fees",
+         "type": "number"
+       },
+       "flags": {
+         "description": "Step flags, for example missing_day_before.",
+         "items": {
+           "type": "string"
+         },
+         "title": "Flags",
+         "type": "array"
+       },
+       "index_level": {
+         "description": "The index level of the step's snapshot.",
+         "title": "Index Level",
+         "type": "number"
+       },
+       "market_value": {
+         "description": "Sum of the step's position market values, in dollars.",
+         "title": "Market Value",
+         "type": "number"
+       },
+       "open_structures": {
+         "description": "Structures open after the step's trades.",
+         "title": "Open Structures",
+         "type": "integer"
+       },
+       "period_pnl": {
+         "description": "Sum of the step's position period P&L, in dollars.",
+         "title": "Period Pnl",
+         "type": "number"
+       },
+       "period_return": {
+         "description": "period_pnl / capital: the step's return on the run's capital.",
+         "title": "Period Return",
+         "type": "number"
+       },
+       "run_id": {
+         "description": "The run's id.",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "step": {
+         "description": "The step's number, from 1.",
+         "title": "Step",
+         "type": "integer"
+       },
+       "worst_stress_loss": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The worst stress loss across attached definitions, in dollars; null until stress arrives (M3) or with none attached.",
+         "title": "Worst Stress Loss"
+       }
+     },
+     "required": [
+       "run_id",
+       "step",
+       "as_of",
+       "index_level",
+       "market_value",
+       "cash_flow",
+       "fees",
+       "period_pnl",
+       "cumulative_pnl",
+       "equity",
+       "period_return",
+       "dollar_delta",
+       "dollar_gamma_1pct",
+       "dollar_vega",
+       "dollar_theta",
+       "open_structures",
+       "contracts_held",
+       "worst_stress_loss",
+       "flags"
+     ],
+     "title": "PortfolioSnapshot",
+     "type": "object"
+   }
+
+prophetovol.results.records.PositionSnapshot
+--------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "MarkSource": {
+         "description": "Where a position's mark at a step came from (RES-1, ENG-21, ENG-22).",
+         "enum": [
+           "mid",
+           "stale",
+           "fill",
+           "settlement",
+           "index"
+         ],
+         "title": "MarkSource",
+         "type": "string"
+       }
+     },
+     "description": "One security held or traded at a step, including the step it closes or settles at (RES-1, RES-2).\n\nThe hedge of a structure is the security ``hedge``: a synthetic index position whose price is the index\nlevel, with multiplier 1 and no option fields.",
+     "properties": {
+       "as_of": {
+         "description": "The step's as-of instant (UTC).",
+         "format": "date-time",
+         "title": "As Of",
+         "type": "string"
+       },
+       "ask": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's ask; null when the contract is absent from it.",
+         "title": "Ask"
+       },
+       "bid": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's bid; null when the contract is absent from it.",
+         "title": "Bid"
+       },
+       "cash_flow": {
+         "description": "The step's cash flows in dollars: trades (−Δq · price · multiplier − fees) and settlement (q · value · multiplier); positive is cash received.",
+         "title": "Cash Flow",
+         "type": "number"
+       },
+       "cumulative_pnl": {
+         "description": "The position's P&L since it opened, in dollars.",
+         "title": "Cumulative Pnl",
+         "type": "number"
+       },
+       "days_to_expiry": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "Time to expiry in fractional calendar days (CONV-1).",
+         "title": "Days To Expiry"
+       },
+       "delta": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's delta per contract (CONV-10); 1 for the hedge.",
+         "title": "Delta"
+       },
+       "dollar_delta": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "delta · quantity · multiplier · index level (CONV-7); for the hedge, quantity · index level (RES-2).",
+         "title": "Dollar Delta"
+       },
+       "dollar_gamma_1pct": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "gamma · quantity · multiplier · index level² · 0.01: the change in dollar delta for a 1% index move (CONV-7); 0 for the hedge.",
+         "title": "Dollar Gamma 1Pct"
+       },
+       "dollar_theta": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "theta · quantity · multiplier, per calendar day (CONV-7); 0 for the hedge.",
+         "title": "Dollar Theta"
+       },
+       "dollar_vega": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "vega · quantity · multiplier, per volatility point (CONV-7); 0 for the hedge.",
+         "title": "Dollar Vega"
+       },
+       "expiration": {
+         "anyOf": [
+           {
+             "format": "date",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The expiration date as listed.",
+         "title": "Expiration"
+       },
+       "expiry_timestamp": {
+         "anyOf": [
+           {
+             "format": "date-time",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The expiry instant (UTC).",
+         "title": "Expiry Timestamp"
+       },
+       "fees": {
+         "description": "Commissions and hedge costs paid at the step, in dollars, as a positive number; already included in cash_flow and the P&L (ENG-31).",
+         "title": "Fees",
+         "type": "number"
+       },
+       "flags": {
+         "description": "Data and handling flags, for example stale_mark, forced_close_stale, vendor_flagged, missing_day_before.",
+         "items": {
+           "type": "string"
+         },
+         "title": "Flags",
+         "type": "array"
+       },
+       "forward": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The series forward (DATA-14).",
+         "title": "Forward"
+       },
+       "forward_source": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "vendor, parity or vendor_single_price (DATA-14).",
+         "title": "Forward Source"
+       },
+       "gamma": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's gamma per contract (CONV-10).",
+         "title": "Gamma"
+       },
+       "index_level": {
+         "description": "The index level of the step's snapshot.",
+         "title": "Index Level",
+         "type": "number"
+       },
+       "iv": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's implied vol as a decimal (CONV-10).",
+         "title": "Iv"
+       },
+       "last_trading_date": {
+         "anyOf": [
+           {
+             "format": "date",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The last trading day (CONV-3).",
+         "title": "Last Trading Date"
+       },
+       "leg_id": {
+         "description": "The spec leg it fills, or hedge for the structure's index hedge.",
+         "title": "Leg Id",
+         "type": "string"
+       },
+       "mark": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "Price per unit used for the market value: the mid of a valid quote, the last valid mark when stale, the fill or settlement price at the closing step, or the index level for the hedge.",
+         "title": "Mark"
+       },
+       "mark_source": {
+         "$ref": "#/$defs/MarkSource",
+         "description": "mid, stale, fill, settlement or index (ENG-21, ENG-22)."
+       },
+       "market_value": {
+         "description": "quantity · mark · multiplier, in dollars (ENG-30).",
+         "title": "Market Value",
+         "type": "number"
+       },
+       "option_type": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "call or put; null for the hedge.",
+         "title": "Option Type"
+       },
+       "osi_symbol": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The contract's OSI symbol, its identity with the underlying (DATA-2); null for the hedge.",
+         "title": "Osi Symbol"
+       },
+       "period_pnl": {
+         "description": "market_value − previous market_value + cash_flow, in dollars (ENG-30).",
+         "title": "Period Pnl",
+         "type": "number"
+       },
+       "position_key": {
+         "description": "The position's id within the run: structure, leg (or hedge) and contract.",
+         "title": "Position Key",
+         "type": "string"
+       },
+       "quantity": {
+         "description": "Signed quantity after the step's trades: contracts for options, index units for the hedge; positive is long (CONV-8). 0 at the step it closes or settles.",
+         "title": "Quantity",
+         "type": "number"
+       },
+       "root": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The normalized root, SPX or SPXW; null for the hedge.",
+         "title": "Root"
+       },
+       "run_id": {
+         "description": "The run's id.",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "settlement_date": {
+         "anyOf": [
+           {
+             "format": "date",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The settlement date (CONV-3).",
+         "title": "Settlement Date"
+       },
+       "settlement_style": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "AM or PM; null for the hedge.",
+         "title": "Settlement Style"
+       },
+       "step": {
+         "description": "The step's number, from 1.",
+         "title": "Step",
+         "type": "integer"
+       },
+       "strike": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The strike; null for the hedge.",
+         "title": "Strike"
+       },
+       "structure_id": {
+         "description": "The structure the security belongs to, for example S3.",
+         "title": "Structure Id",
+         "type": "string"
+       },
+       "theta": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's theta per contract, per calendar day (CONV-10).",
+         "title": "Theta"
+       },
+       "time_to_expiry_years": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "Time to expiry in years on the exchange clock (CONV-1).",
+         "title": "Time To Expiry Years"
+       },
+       "trading_days_to_expiry": {
+         "anyOf": [
+           {
+             "type": "integer"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "Trading days to expiry (CONV-2).",
+         "title": "Trading Days To Expiry"
+       },
+       "vega": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The snapshot's vega per contract, per volatility point (CONV-10).",
+         "title": "Vega"
+       },
+       "vendor_root": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The vendor's option root.",
+         "title": "Vendor Root"
+       },
+       "vendor_symbol": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The vendor's option symbol, kept for tracing, never an identifier.",
+         "title": "Vendor Symbol"
+       }
+     },
+     "required": [
+       "run_id",
+       "step",
+       "as_of",
+       "structure_id",
+       "leg_id",
+       "position_key",
+       "osi_symbol",
+       "root",
+       "vendor_symbol",
+       "vendor_root",
+       "settlement_style",
+       "expiration",
+       "settlement_date",
+       "last_trading_date",
+       "expiry_timestamp",
+       "strike",
+       "option_type",
+       "quantity",
+       "time_to_expiry_years",
+       "days_to_expiry",
+       "trading_days_to_expiry",
+       "mark",
+       "mark_source",
+       "bid",
+       "ask",
+       "iv",
+       "index_level",
+       "forward",
+       "forward_source",
+       "market_value",
+       "cash_flow",
+       "fees",
+       "period_pnl",
+       "cumulative_pnl",
+       "delta",
+       "gamma",
+       "vega",
+       "theta",
+       "dollar_delta",
+       "dollar_gamma_1pct",
+       "dollar_vega",
+       "dollar_theta",
+       "flags"
+     ],
+     "title": "PositionSnapshot",
+     "type": "object"
+   }
+
+prophetovol.results.records.RunEvent
+------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "EventType": {
+         "description": "What a run event records (RES-20).",
+         "enum": [
+           "entry",
+           "entry_skipped",
+           "trigger_fired",
+           "roll",
+           "close",
+           "settlement",
+           "forced_close_am",
+           "forced_close_missing_expiry",
+           "hedge_trade",
+           "stress_scaled",
+           "stress_skipped",
+           "stress_halted",
+           "stress_would_have_acted",
+           "stress_breach",
+           "selection_failed",
+           "stale_mark",
+           "order_not_filled",
+           "condition_null_greek"
+         ],
+         "title": "EventType",
+         "type": "string"
+       }
+     },
+     "description": "Something that happened in a run (RES-20).",
+     "properties": {
+       "as_of": {
+         "description": "The step's as-of instant (UTC).",
+         "format": "date-time",
+         "title": "As Of",
+         "type": "string"
+       },
+       "details": {
+         "additionalProperties": true,
+         "description": "Structured details: legs, contracts, prices, conditions, reasons.",
+         "title": "Details",
+         "type": "object"
+       },
+       "level": {
+         "description": "warning for data issues and handling that deserve attention.",
+         "enum": [
+           "info",
+           "warning"
+         ],
+         "title": "Level",
+         "type": "string"
+       },
+       "message": {
+         "description": "What happened, for people.",
+         "title": "Message",
+         "type": "string"
+       },
+       "run_id": {
+         "description": "The run's id.",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "seq": {
+         "description": "The event's sequence number in the run, from 1.",
+         "title": "Seq",
+         "type": "integer"
+       },
+       "step": {
+         "description": "The step's number, from 1.",
+         "title": "Step",
+         "type": "integer"
+       },
+       "structure_id": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The structure concerned, where there is one.",
+         "title": "Structure Id"
+       },
+       "type": {
+         "$ref": "#/$defs/EventType",
+         "description": "What happened (RES-20)."
+       }
+     },
+     "required": [
+       "run_id",
+       "seq",
+       "step",
+       "as_of",
+       "type",
+       "level",
+       "structure_id",
+       "message",
+       "details"
+     ],
+     "title": "RunEvent",
+     "type": "object"
+   }
+
+prophetovol.results.records.StructureRecord
+-------------------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "One structure opened during a run, as it ended (§5.2 Structure).",
+     "properties": {
+       "closed_as_of": {
+         "anyOf": [
+           {
+             "format": "date-time",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "When it finished closing (UTC).",
+         "title": "Closed As Of"
+       },
+       "closed_step": {
+         "anyOf": [
+           {
+             "type": "integer"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The step it finished closing at; null if still open at the end.",
+         "title": "Closed Step"
+       },
+       "cumulative_pnl": {
+         "description": "Its P&L from opening, legs, hedge and fees together (SPEC-46), in dollars.",
+         "title": "Cumulative Pnl",
+         "type": "number"
+       },
+       "opened_as_of": {
+         "description": "When it opened (UTC).",
+         "format": "date-time",
+         "title": "Opened As Of",
+         "type": "string"
+       },
+       "opened_step": {
+         "description": "The step it opened at.",
+         "title": "Opened Step",
+         "type": "integer"
+       },
+       "parent_id": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The structure it replaced in a structure roll (SPEC-43).",
+         "title": "Parent Id"
+       },
+       "run_id": {
+         "description": "The run's id.",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "status": {
+         "description": "open, closing (a close waits for a valid quote) or closed, at the end of the run.",
+         "enum": [
+           "open",
+           "closing",
+           "closed"
+         ],
+         "title": "Status",
+         "type": "string"
+       },
+       "structure_id": {
+         "description": "The structure's id within the run, for example S3.",
+         "title": "Structure Id",
+         "type": "string"
+       },
+       "units": {
+         "description": "Structure units N; leg i holds N · ratio_i contracts (SPEC-70).",
+         "title": "Units",
+         "type": "number"
+       }
+     },
+     "required": [
+       "run_id",
+       "structure_id",
+       "parent_id",
+       "units",
+       "opened_step",
+       "opened_as_of",
+       "closed_step",
+       "closed_as_of",
+       "status",
+       "cumulative_pnl"
+     ],
+     "title": "StructureRecord",
+     "type": "object"
+   }
+
+prophetovol.results.records.TradeRecord
+---------------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "One fill: an option leg or a hedge, opening or closing (§5.2 Trade).",
+     "properties": {
+       "action": {
+         "description": "open or close for options; adjust for hedge trades.",
+         "enum": [
+           "open",
+           "close",
+           "adjust"
+         ],
+         "title": "Action",
+         "type": "string"
+       },
+       "as_of": {
+         "description": "The step's as-of instant (UTC).",
+         "format": "date-time",
+         "title": "As Of",
+         "type": "string"
+       },
+       "cash_flow": {
+         "description": "−quantity · price · multiplier − fees, in dollars.",
+         "title": "Cash Flow",
+         "type": "number"
+       },
+       "fees": {
+         "description": "Commission or hedge cost paid, in dollars, as a positive number.",
+         "title": "Fees",
+         "type": "number"
+       },
+       "forced": {
+         "description": "Whether it was a forced close (SPEC-51, SPEC-55).",
+         "title": "Forced",
+         "type": "boolean"
+       },
+       "leg_id": {
+         "description": "The leg, or hedge.",
+         "title": "Leg Id",
+         "type": "string"
+       },
+       "osi_symbol": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "description": "The contract; null for the hedge.",
+         "title": "Osi Symbol"
+       },
+       "position_key": {
+         "description": "The position traded.",
+         "title": "Position Key",
+         "type": "string"
+       },
+       "price": {
+         "description": "Fill price per unit: from the fill model, the last valid mark for a stale forced close, or the index level for the hedge.",
+         "title": "Price",
+         "type": "number"
+       },
+       "quantity": {
+         "description": "Signed quantity traded: positive bought, negative sold.",
+         "title": "Quantity",
+         "type": "number"
+       },
+       "reason": {
+         "description": "Why: entry, roll, a trigger's name, forced_close_am, forced_close_missing_expiry, expiry_handling, close or hedge.",
+         "title": "Reason",
+         "type": "string"
+       },
+       "run_id": {
+         "description": "The run's id.",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "step": {
+         "description": "The step's number, from 1.",
+         "title": "Step",
+         "type": "integer"
+       },
+       "structure_id": {
+         "description": "The structure traded.",
+         "title": "Structure Id",
+         "type": "string"
+       },
+       "trade_id": {
+         "description": "The trade's id within the run, for example T12.",
+         "title": "Trade Id",
+         "type": "string"
+       }
+     },
+     "required": [
+       "run_id",
+       "trade_id",
+       "step",
+       "as_of",
+       "structure_id",
+       "leg_id",
+       "position_key",
+       "osi_symbol",
+       "action",
+       "quantity",
+       "price",
+       "fees",
+       "cash_flow",
+       "reason",
+       "forced"
+     ],
+     "title": "TradeRecord",
+     "type": "object"
+   }
+
 prophetovol.runs.config.RunConfig
 ---------------------------------
 

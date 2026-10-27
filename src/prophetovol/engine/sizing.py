@@ -1,10 +1,13 @@
 """Sizing methods (SPEC-70 to SPEC-73).
 
-Phase 9 registers every method with its parameter model, so specs validate (decision 29); each
-implementation holds its validated parameters. The sizing behavior arrives in plan Phase 12.
+A sizing method's :meth:`units` gives an entry's structure units before rounding; :func:`round_units`
+applies the run's rounding (SPEC-72). A structure roll re-sizes at the roll step; a leg roll keeps
+its leg's quantity (SPEC-73). The hedge is never rounded (SPEC-62).
 """
 
 from __future__ import annotations
+
+import math
 
 from prophetovol.registry.catalog import SIZING_METHODS
 from prophetovol.registry.params.sizing import ContractsParams, NotionalParams
@@ -23,6 +26,15 @@ class Contracts:
     def __init__(self, params: ContractsParams) -> None:
         self.params = params
 
+    def units(self, index_level: float, multiplier: float) -> float:
+        """Structure units per entry, before rounding.
+
+        :param index_level: The entry step's index level (unused).
+        :param multiplier: The contract multiplier (unused).
+        :returns: ``quantity``.
+        """
+        return self.params.quantity
+
 
 @SIZING_METHODS.register(
     "notional", params=NotionalParams, version="1",
@@ -36,3 +48,25 @@ class Notional:
 
     def __init__(self, params: NotionalParams) -> None:
         self.params = params
+
+    def units(self, index_level: float, multiplier: float) -> float:
+        """Structure units per entry, before rounding.
+
+        :param index_level: The entry step's index level S.
+        :param multiplier: The contract multiplier m.
+        :returns: ``notional / (S · m)``.
+        """
+        return self.params.notional / (index_level * multiplier)
+
+
+def round_units(units: float, rounding: str) -> float | None:
+    """Apply the run's rounding to structure units (SPEC-72).
+
+    :param units: Units before rounding.
+    :param rounding: ``whole`` or ``fractional``.
+    :returns: Whole units rounded down (None when below one: the entry is skipped), or the units unchanged.
+    """
+    if rounding == "fractional":
+        return units
+    whole = float(math.floor(units + 1e-9))
+    return whole if whole >= 1 else None
