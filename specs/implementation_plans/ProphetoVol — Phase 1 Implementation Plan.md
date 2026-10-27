@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–10 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 11 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–11 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 12 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1251,3 +1251,39 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
     - TEST-4: every view method refusing a later as-of time; the view holding nothing but its slice
   - **`tests/contract/test_market_read_contract.py`, 5 tests:** exact versions in order across months; superseded versions readable; the horizon and index levels; purged versions refused; empty reads
 - **Next:** Phase 11 (selection and entries).
+
+
+**Phase 11 (selection and entries), Oct 27, 2026**
+
+- **`engine/selection.py`:** selection, with the behavior now on the registered implementations.
+  - **Eligibility** (SPEC-15, SPEC-26, SPEC-28): `eligible_rows` keeps the leg's option type and roots, drops contracts at or after their expiry and AM-settled contracts on or after their last trading day, and applies the quote filters: valid quote, `min_bid`, `min_open_interest` and the vendor flag.
+  - **Expiration filters** (SPEC-14): `passes_filter`, with `is_standard_monthly` by date (§7.5, answer 5), including the Saturday-dated and Good Friday cases.
+  - **Expiration selectors:** each has `choose(options, ctx)` over the eligible expirations that pass its filter.
+  - **Strike selectors:** each has `choose(candidates)` over the chosen expiration's eligible contracts. `usual_spacing` sets the default tolerance of `forward` and `strike_offset` (§7.5, answer 6).
+  - **`select_legs`** selects legs in dependency order and atomically, returning `SelectionResult`: the `SelectedContract`s with their snapshot rows, or the first `SelectionIssue` (leg, selector, reason) and no contract; plus warnings, such as a `nearest_any` pick. With `legs` and `fixed`, it selects one leg against held contracts, for leg rolls (SPEC-43).
+- **`engine/entries.py`:** `EntryState` and each schedule's `due(state, calendar)`.
+  - `once` until a structure has opened.
+  - `when_flat` below `max_open`, with the cooldown counted in trading days after a close by a close action or an expiry.
+  - `every_n_trading_days` counted on the calendar from the first step.
+  - `weekdays` with `holiday_shift`.
+- **`testdata/golden.py`:** `selection_chain`. Five dates around Good Friday 2024 and the April monthly; eleven expirations (PM dailies and weeklies, AM monthlies); strikes 50 apart with round deltas; and on Mar 27, rows set up for each quote filter, a null delta, a hole near the forward and per-expiration forwards.
+- **Smaller changes:**
+  - `strategy.validate.leg_order` is now public, as selection uses it.
+  - `engine.view.group_expirations` is shared by the view and selection.
+- **Interpretations made** (the requirements leave them open):
+  - **Order of filtering:** eligible contracts are found first, and expiration selectors choose among expirations that have one (SPEC-26).
+  - **Ties:** distances are compared rounded to 1e-9, so a target halfway between two values is a true tie. Delta selectors break ties by `tie_break`; `forward`, `same_strike_as` and `strike_offset` take the lower strike.
+  - **The usual spacing:** the most common gap among the ten listed strikes nearest the target, the smaller of equally common gaps. Listed means whatever their quotes, so a hole left by the quote filters is not absorbed. With fewer than two listed strikes, any distance matches.
+  - **`on_no_match`** applies to strike selectors, where SPEC-25 sits; an expiration selector that finds nothing always fails.
+  - **`when_flat` with `max_open` above 1:** enters while fewer than `max_open` structures are open.
+  - **`weekdays` shifting:** with `holiday_shift: next`, a listed holiday before the run's first step does not move an entry onto it.
+- **Changes from the plan:** the Saturday-dated monthly is tested with a hand-built 2008 view rather than an ingested older-conventions chain. Ingest would recompute the greeks, which selection by date does not need. Nothing else departs from §7.
+- **Tests:** 423, all passing: 417 run by default (unit 379, contract 33, meta 3, packaging 2), and the 6 real-data tests pass with `PROPHETOVOL_VENDOR_DATA` set. New:
+  - **`tests/unit/test_selection.py`, 27 tests,** with the expected values worked out in the comments:
+    - every expiration selector: Appendix B's same-day and dailies examples, the floored window, both tie-breaks, `trading_days_out` across Good Friday, `nth_expiration` across a weekend and a holiday, standard monthlies by date and AM-only
+    - an AM monthly not eligible on its last trading day; `next_after_leg` and `same_as_leg`
+    - every strike selector with tolerances, ties, `nearest_any`, null deltas, and a hole near the forward
+    - every quote filter; the Saturday-dated 2008 monthly
+    - example 2 in dependency order; atomic failure; a single-leg selection against held contracts
+  - **`tests/unit/test_entries.py`, 20 tests:** every schedule, with cooldown, `max_open` and `holiday_shift`, counted across Good Friday and Memorial Day.
+- **Next:** Phase 12 (book, marking, fills, sizing, hedging and accounting).

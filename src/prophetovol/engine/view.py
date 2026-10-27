@@ -159,17 +159,27 @@ class MarketDataView:
         """
         self._check(as_of)
         if self._expirations is None:
-            keys = ["root", "expiration"]
-            firsts = ["settlement_style", "settlement_date", "last_trading_date", "expiry_timestamp", "days_to_expiry",
-                      "trading_days_to_expiry"]
-            grouped = self._rows.select(keys + firsts).group_by(keys, use_threads=False).aggregate(
-                [(c, "min") for c in firsts] + [("root", "count")])
-            rows = grouped.to_pylist()
-            self._expirations = sorted(
-                (ExpirationInfo(root=r["root"], expiration=r["expiration"], settlement_style=r["settlement_style_min"],
-                                settlement_date=r["settlement_date_min"], last_trading_date=r["last_trading_date_min"],
-                                expiry_timestamp=r["expiry_timestamp_min"], days_to_expiry=r["days_to_expiry_min"],
-                                trading_days_to_expiry=r["trading_days_to_expiry_min"], contracts=r["root_count"])
-                 for r in rows),
-                key=lambda e: (e.expiry_timestamp, e.root))
+            self._expirations = group_expirations(self._rows)
         return list(self._expirations)
+
+
+def group_expirations(rows: pa.Table) -> list[ExpirationInfo]:
+    """The expirations listed in some rows of one snapshot, one per (root, expiration).
+
+    :param rows: Rows of one as-of time, with the expiration columns of :data:`ENGINE_COLUMNS`.
+    :returns: The expirations, ordered by expiry, then root.
+    """
+    if rows.num_rows == 0:
+        return []
+    keys = ["root", "expiration"]
+    firsts = ["settlement_style", "settlement_date", "last_trading_date", "expiry_timestamp", "days_to_expiry",
+              "trading_days_to_expiry"]
+    grouped = rows.select(keys + firsts).group_by(keys, use_threads=False).aggregate(
+        [(c, "min") for c in firsts] + [("root", "count")])
+    return sorted(
+        (ExpirationInfo(root=r["root"], expiration=r["expiration"], settlement_style=r["settlement_style_min"],
+                        settlement_date=r["settlement_date_min"], last_trading_date=r["last_trading_date_min"],
+                        expiry_timestamp=r["expiry_timestamp_min"], days_to_expiry=r["days_to_expiry_min"],
+                        trading_days_to_expiry=r["trading_days_to_expiry_min"], contracts=r["root_count"])
+         for r in grouped.to_pylist()),
+        key=lambda e: (e.expiry_timestamp, e.root))

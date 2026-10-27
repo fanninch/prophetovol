@@ -1242,7 +1242,7 @@ Version: ``1``.
 forward
 ~~~~~~~
 
-Chooses the strike nearest the series forward (DATA-14), within tolerance_points; by default the usual strike spacing around the forward in that expiration.
+Chooses the strike nearest the series forward (DATA-14), within tolerance_points; by default the usual strike spacing around the forward in that expiration. Ties go to the lower strike.
 
 Version: ``1``.
 
@@ -1299,7 +1299,7 @@ Version: ``1``.
 same_strike_as
 ~~~~~~~~~~~~~~
 
-Uses the referenced leg's strike, which must be listed in this leg's expiration (within tolerance_points, default 0: exactly the same strike).
+Uses the referenced leg's strike, which must be listed in this leg's expiration (within tolerance_points, default 0: exactly the same strike). Ties go to the lower strike.
 
 Version: ``1``.
 
@@ -1355,7 +1355,7 @@ Version: ``1``.
 strike_offset
 ~~~~~~~~~~~~~
 
-Chooses the listed strike nearest the referenced leg's strike plus an offset in points or percent, within tolerance_points; by default the usual strike spacing around the offset strike.
+Chooses the listed strike nearest the referenced leg's strike plus an offset in points or percent, within tolerance_points; by default the usual strike spacing around the offset strike. Ties go to the lower strike.
 
 Version: ``1``.
 

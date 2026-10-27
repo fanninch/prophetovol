@@ -130,7 +130,7 @@ def _schema_issue(error: Any, data: Any) -> SpecIssue:
     return SpecIssue(severity="error", path=path, message=message)
 
 
-def _leg_order(spec: StrategySpec) -> tuple[list[str], list[str] | None]:
+def leg_order(spec: StrategySpec) -> tuple[list[str], list[str] | None]:
     """The selection order of the legs, referenced legs first, keeping spec order where free.
 
     :param spec: A spec whose references all name other, existing legs.
@@ -300,7 +300,7 @@ def validate_spec(body: Any, underlyings: Mapping[str, Underlying]) -> tuple[Spe
 
     order: list[str] = []
     if not errors:
-        order, cycle = _leg_order(spec)
+        order, cycle = leg_order(spec)
         if cycle:
             error("legs", f"legs refer to each other in a cycle: {' -> '.join(cycle)}")
 
