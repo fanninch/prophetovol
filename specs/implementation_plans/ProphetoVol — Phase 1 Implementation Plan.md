@@ -1,12 +1,12 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 25, 2026 · @Chuck · **Status: Agreed (v4), updated for requirements v7 (internal conventions and data-source adapters). Plan phases 0–8 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5; updated for requirements v7. Plan phases 0–8 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
 - **Correct first.** Every number the tool reports must be reproducible and explainable. Hand-checked golden tests (TEST-1) and the accounting invariants (ENG-33) are written with the code they test, not afterwards.
 - **Follow the requirements' milestones.** M1 data foundation → M2 engine core → M3 stress and analytics → M4 server and GUI (requirements §21). Each milestone ends usable on its own, with a demo checkpoint.
-- **One milestone in detail at a time.** The design that spans milestones (§4: storage, market data access, the engine and registry interfaces, run output, jobs, audit) is settled now, because M1's storage must serve M2's engine. **M1 is planned in detail** (§6). M2–M4 are planned at phase level (§7–§9), and each is detailed and reviewed with you before it starts, using what the previous milestone taught us.
+- **One milestone in detail at a time.** The design that spans milestones (§4: storage, market data access, the engine and registry interfaces, run output, jobs, audit) is settled now, because M1's storage must serve M2's engine. **M1 is planned in detail** (§6), and **M2 in v5** (§7). M3 and M4 are planned at phase level (§8, §9), and each is detailed and reviewed with you before it starts, using what the previous milestone taught us.
 - **Back end first.** M1–M3 are the service, the engine and the CLI, tested in pytest. The HTTP API and the GUI are M4, as thin clients of the same service (ARC-1).
 - **Check before building.** Phase 0 (§5) tests the assumptions the design rests on, above all whether market data can be read fast enough to meet the run-time target (NFR-1), using your real vendor files.
 - **Working rhythm.** Each phase ends with every suite green, its implementation notes added to §16, and the requirement status tracker (*ProphetoVol — Phase 1 Requirement Status*) updated in the same change. **Changes are left uncommitted**: you do all git operations (branches, commits, pushes). Decisions and deviations are recorded as they happen.
@@ -328,17 +328,274 @@ Delivers requirements §6, §7, §13.3 and §15: package skeleton, service, stor
 | Meta | field descriptions, generated docs current, pure Python wheel |
 | Real data (optional) | ingest of a real year |
 
-## 7. Milestone 2: Engine Core (phase level)
+## 7. Milestone 2: Engine Core (detailed)
 
-Delivers requirements §5, §8, §9, §11, §12.1–12.3 and §17's golden and acceptance tests. Detailed with you before it starts.
+Delivers requirements §8, §9, §11 and §12.1–12.3, the spec and run parts of §5, and §17's golden tests (TEST-1 apart from the stress modes, which are M3), invariant, determinism, point-in-time and acceptance tests. Ends with checkpoint 2.
 
-- **Phase 9: Spec model, validation and publishing.** `StrategySpec`, legs and every selector, schedule, condition, action, hedge and sizing parameter model (SPEC-1 to SPEC-3, REG-1); the dry-run validator with field paths, including reference cycles, band bounds, explicit time units, SPEC-52 and SPEC-53 (SPEC-80); immutable versions with content hashes (VER-1, VER-2); YAML and JSON import and exact round-trip export (SPEC-81); the Appendix B specs as package content (SPEC-82). Tests: TEST-8.
-- **Phase 10: Run configuration, pre-flight and market data access.** `RunConfig` (RUN-1) and templates (RUN-2); pre-flight (RUN-10 to RUN-12) producing the step schedule, including SPEC-55 warnings; `MarketDataProvider` and `MarketDataView` with the point-in-time guard (ARC-3, §4.6). Tests: TEST-4.
-- **Phase 11: Selection and entries.** Expiration selectors and filters (SPEC-10 to SPEC-15), strike selectors and quote filters (SPEC-20 to SPEC-28), atomic multi-leg selection in dependency order (SPEC-3, SPEC-4), entry schedules (SPEC-30 to SPEC-35). Golden tests for each selector, including `nth_expiration` across a weekend and a holiday.
-- **Phase 12: Book, marking, fills, sizing, hedging and accounting.** Quotes and marks with stale handling (ENG-20 to ENG-25); fill models and costs (ENG-40 to ENG-43); sizing and rounding (SPEC-70 to SPEC-73); the hedge band with a fractional hedge (SPEC-60 to SPEC-64); accounting and invariants (ENG-30 to ENG-33); the `RunRecorder`. Golden tests: first-step cost per fill model, notional sizing both roundings, hedge band for example 3, full hedging for example 1, a stale mark.
-- **Phase 13: Triggers, rolls, expiry and settlement.** Conditions including dollars per unit (SPEC-41, SPEC-42, SPEC-46), actions and precedence (SPEC-43 to SPEC-45), PM settlement, AM forced closes with the last-valid-mark fallback, early closes for missing expiration days, `expiry_handling` (SPEC-50 to SPEC-55); the full ENG-1 step loop and the rules constructor (ENG-2, ENG-3). Golden tests for each of these.
-- **Phase 14: Run lifecycle, results storage and run CLI.** Run statuses, progress, cancellation and interrupted recovery (RUN-20 to RUN-22); the results tables and the single end-of-run write (RUN-23) with its contract-suite cases; provenance (RUN-30); recording read data versions so invalidation works (RUN-40); events (RES-20); `spec` and `run` CLI commands (INT-40).
-- **Phase 15: Acceptance, determinism and checkpoint 2.** Appendix B end to end (TEST-11), invariants over many seeded runs (TEST-2), determinism (TEST-3), the run-time measurement against NFR-1, an optional real-data run (TEST-10). **Checkpoint 2:** run the three examples on real data from the CLI and inspect the snapshots and events.
+*Detailed and agreed Oct 27, 2026, as plan v5.* It expands the phase-level outline agreed in v4, using what M1 taught us (§7.1). Its decisions are 27–33 in §13, and your answers to the questions asked before Phase 9 are in §7.5.
+
+### 7.1 What M1 changes for M2
+
+- **Data volume per step.** Real 2023 data has about 16,000 contracts per step: 4.04M rows over 250 days, including the dailies. Phase 0's 6,400 per step was for a 45-day window. The engine therefore works on one step's Arrow columns with NumPy masks; it never builds a Python object per contract. Only held contracts and the few chosen at selection become objects.
+- **Versioned definitions already exist.** The catalog's `definitions` table versions and hashes underlyings and data sources (VER-1, VER-2). Specs and run-configuration templates reuse it rather than the separate tables §4.2 listed (decision 27).
+- **Readable output from the start.** Checkpoint 1 showed what makes CLI output hard to read: instants instead of dates, unaligned tables, detail before summary. The spec and run commands use the helpers that fixed it: aligned tables, trading dates, plurals, summaries first, and `--json` for scripts.
+- **Foreground jobs work.** The CLI's foreground jobs, with Ctrl+C as cancellation and the job recorded in the catalog, worked through checkpoint 1. Runs use the same path (decision 7).
+- **Generated documentation grows.** `docs generate` adds the spec, run configuration and result models, and the new registries.
+- **Real data for checkpoint 2.** The demo home has 2008 and 2023. Checkpoint 2 needs Apr–Jun 2024, the dates of Appendix B's run configuration, and the run-time measurement needs ten years (Phase 15).
+
+### 7.2 Package layout added in M2
+
+```
+strategy/          model.py (StrategySpec, Leg, Trigger, …), validate.py (dry run), io.py (YAML/JSON,
+                   canonical form, export), examples/ (Appendix B specs as package data)
+registry/params/   selection.py, schedules.py, triggers.py, hedge.py, sizing.py, fills.py
+engine/            view.py, schedule.py, book.py, orders.py, selection.py, entries.py, triggers.py,
+                   expiry.py, marking.py, fills.py, sizing.py, hedging.py, accounting.py,
+                   invariants.py, constructor.py, gate.py, loop.py
+results/           records.py (position and portfolio snapshots, trades, structures, events),
+                   recorder.py (RunRecorder)
+runs/              config.py (RunConfig, templates), preflight.py, provider.py (MarketDataProvider),
+                   coordinator.py (RunCoordinator)
+cli/               spec and run commands
+```
+
+`strategy/` is a package beside those in §3 (decision 28). The spec is neither a registry's parameters nor engine code, and the API, the GUI forms and the documentation read it without importing the engine (as decision 2 does for parameter models).
+
+### 7.3 Engine types shared by phases 11–13
+
+- **Contract key:** `(root, expiration, strike, option_type)`, encoded by `osi_symbol` (DATA-2); the underlying is the run's.
+- **`MarketDataView`:** one step's rows as Arrow columns, holding only the columns the engine uses, with the step's `as_of` and `index_level`. It offers:
+  - lookup by contract key, through an index built on first use
+  - the step's expirations with their settlement style, settlement date, last trading date, expiry and days to expiry
+  - column arrays for vectorized selection
+
+  Every method takes or implies an as-of time and raises `PointInTimeError` for a later one (ARC-3).
+- **`Book`:** structures in opening order. Each `Structure` has:
+  - its id, its parent's id (after a structure roll), its units `N`, and the step and date it opened
+  - its legs, in spec order. Each leg holds its current position: the contract, signed quantity, entry fill, last valid mark and the step of that mark, and a count of stale steps.
+  - its hedge holding `h`
+  - its ledger: cumulative P&L and fees
+  - its status: `open`, `closing` (a close is waiting for a fill) or `closed`
+- **`Order`:** `open` or `close`, with the structure id, the leg id or `hedge`, the contract key, the signed quantity, a reason (entry, the trigger's name, roll, `forced_close_am`, `forced_close_missing_expiry`, `expiry_handling` or hedge) and whether it is forced. **`Fill`:** the order, its price, fees and mark source (`fill`, or `stale` for a forced close at the last valid mark).
+- **Constructor** (ENG-2): `propose(view, book, step) → orders with reasons`, covering ENG-1 steps 4–6. The loop owns steps 1–3 and 7–9, so an agent constructor (roadmap) replaces only this.
+- **`OrderGate`** (ENG-1 step 7): sizing happens first, then the gate. M2 ships a pass-through gate; M3 replaces it with the stress modes without changing the loop (decision 32).
+- **`RunRecorder`:** columnar buffers appended per step, finished into Arrow tables for the single write at the end (RUN-23).
+- **Order of everything** (ENG-10):
+  - structures in opening order, legs in spec order, triggers in their listed order
+  - orders sorted by structure, then leg
+  - no iteration over sets or dicts affects output
+
+### Phase 9: Spec model, validation and publishing
+
+- **Registries and parameter models** for every M2 component type (REG-1, REG-2), in `registry/params/`. Each is registered now with its parameter model, description and version, and with its implementation class, whose behavior arrives in phases 11–13 (decision 29). Nothing runs an implementation before Phase 13, and specs validate from Phase 9 on.
+  - expiration selectors `target_days`, `trading_days_out`, `nth_expiration`, `same_as_leg`, `next_after_leg`, with the expiration filter model (SPEC-14)
+  - strike selectors `delta`, `atm`, `forward`, `same_strike_as`, `strike_offset`, with `on_no_match`
+  - entry schedules `once`, `when_flat`, `every_n_trading_days`, `weekdays`
+  - the seven trigger conditions, with `unit` where SPEC-41 has it, and the actions `close` and `roll`
+  - hedge rules `none` and `band`; sizing `contracts` and `notional`
+  - fill models `mid`, `cross_spread`, `mid_plus_fraction`; the constructor `rules`
+- **`strategy/model.py`:** `StrategySpec` (SPEC-1), `Leg` (SPEC-2), `Trigger` (SPEC-40), the quote filters (SPEC-28) and `expiry_handling` (SPEC-54).
+  - Selector, schedule, condition, hedge and sizing fields are discriminated unions assembled from the registries (§4.5), keyed on `selector`, `schedule`, `condition`, `rule` and `method`, as in Appendix B.
+  - Every field is described (DOC-1), with units, defaults and interactions (DOC-2), for example that `cooldown_trading_days` does not delay a roll.
+- **`strategy/validate.py`: the dry run** (SPEC-80). It returns a report of errors and warnings, each with a field path such as `legs[1].strike.leg` and a message. Publishing applies the same function. Checks:
+  - schema validity, with pydantic's locations turned into field paths
+  - unique leg ids; references to existing legs, and not to the leg itself
+  - no reference cycles; the cycle is named, and the dependency order is kept for selection (SPEC-3)
+  - band bounds `lower ≤ target ≤ upper`
+  - roots allowed by the underlying (REF-1); trigger scopes and leg-scoped conditions naming existing legs
+  - known registry names, with the known names listed when one is wrong
+  - units on time parameters (§7.5, question 3)
+  - SPEC-52 as an error with the requirement's exact message, and SPEC-53 as a warning (§7.5, question 4)
+- **Publishing** (VER-1, VER-2): `publish_spec` validates, then stores the canonical JSON as a new version (kind `strategy_spec`, key = the spec's `id`). Unchanged content publishes nothing and says so. A spec with errors is refused with its report. Both operations are audited: `spec.validate`, and `spec.publish`, recorded as rejected with the reasons (AUD-2).
+- **`strategy/io.py`:** YAML and JSON import (SPEC-81). Export writes the canonical form as YAML, in model field order with every default stated, so re-importing gives the same canonical JSON and the same content hash.
+- **`strategy/examples/`:** Appendix B's three specs as package data (SPEC-82), used by the tests now and by `prophetovol demo` in M4.
+- **Service:** `validate_spec`, `publish_spec`, `get_spec(id, version)`, `list_specs`, `spec_versions`, `export_spec`.
+- **CLI** (INT-40), brought forward from Phase 14 (decision 33): `spec validate <file>`, `spec publish <file>`, `spec list`, `spec show <id>[@version]`, `spec export <id>[@version] [--out FILE]`. They are small, and they let you write and check specs from Phase 9 on.
+- **Documentation:** the spec models and the new registries in `docs/reference/`.
+- **Tests** (TEST-8):
+  - every validation rule, with its field path
+  - each registry's names, descriptions and schemas; the three Appendix B specs valid
+  - SPEC-52's exact message; SPEC-53's warning, and its absence when a qualifying trigger exists
+  - a cycle named; band bounds; an unknown name listing the known ones
+  - YAML and JSON imports equal
+  - export round trips, identical canonical JSON and hash, for every example and for a spec using every implementation
+  - an unchanged republish publishing nothing; versions incrementing; refused publishes in the attempts log
+  - each `spec` CLI command
+
+### Phase 10: Run configuration, pre-flight and market data access
+
+- **`runs/config.py`: `RunConfig`** (RUN-1). It has every field of the requirements' table with its default and a description, `fraction` for `mid_plus_fraction`, and STR-40's description of `stress_mode`. Defaults are resolved (`underlying` from the spec), and the resolved configuration has a canonical hash (VER-3).
+  - Until M3, attaching stress definitions, or a `stress_mode` other than `monitor`, is refused with a message saying stress arrives in M3 (decision 32).
+  - Templates (RUN-2) are named, versioned definitions (kind `run_config_template`), saved and listed through the service. A run always stores the full resolved configuration.
+- **`runs/preflight.py`** (RUN-10 to RUN-12): every problem at once, in a `PreflightReport` of errors and warnings, plus the step schedule. It is available on its own as a readiness check and audited (`run.preflight`). It checks:
+  - the spec version validates, and the configuration is valid
+  - every trading day in the range (REF-10) has an active snapshot, from the data versions without reading Parquet, and no snapshot is empty
+  - each snapshot has the columns the selectors need, from the market schema
+  - missing days block the run unless `allow_missing_days` is set. Then they are skipped, and the next step's snapshots are flagged `missing_day_before`. A missing day is reported with a warning that PM-settled contracts expiring on it will be closed at the step before (SPEC-55).
+- **`engine/schedule.py`: `StepSchedule`.** It is immutable and holds the steps (sequence, date and as-of time at the data source's snapshot time) and the skipped days. It answers what SPEC-55 needs, "does this date have a step" and "the last step before a date", without reading market data.
+- **`runs/provider.py`: `MarketDataProvider`** (§4.6, service side).
+  - It loads chunks of three months of steps. Each chunk is one Ibis expression over the chunk's own partition files, whose paths come from a new adapter operation.
+  - It reads only the versions captured when the run started (decision 30), as a small in-memory semi-join, and only the columns the engine uses.
+  - It reads only expirations within the spec's horizon, the most calendar days to expiry any of its selectors can reach (decision 31). Held contracts stay inside the horizon, because their days to expiry only fall.
+  - It gives the engine one view per step, never itself.
+- **`engine/view.py`: `MarketDataView`** (§7.3) with the point-in-time guard (ARC-3).
+- **Contract suite:** market file listing for a date range.
+- **Tests:**
+  - configuration defaults, descriptions and a hash independent of key order; templates versioned
+  - pre-flight on generated data: a complete range passes. A missing day blocks the run, then with `allow_missing_days` is skipped and flags the next step. A missing PM settlement date is warned, an empty snapshot is reported, and several problems are reported together.
+  - the provider returns the same rows per step as `read_active_snapshot` for a sample of steps, applies the horizon filter, and handles a run starting mid-chunk and crossing a year end. A commit made after the run starts does not change what it reads.
+  - TEST-4: every view method refuses a later as-of time, and the engine is never given the provider
+  - a timing check of per-step access on generated data, recorded rather than asserted tightly
+
+### Phase 11: Selection and entries
+
+- **`engine/selection.py`:**
+  - **eligibility** (SPEC-15): an expiration is never eligible at or after its expiry, and an AM-settled one never on or after its last trading day
+  - **filters** (SPEC-14), including `standard_monthly_only` (§7.5, question 5)
+  - **expiration selectors** (SPEC-10 to SPEC-13): `min_days` and `max_days` defaults floored at 0, both tie-breaks, `trading_days_out` with its tolerance, `nth_expiration` counting only expirations that pass the filter, `same_as_leg` and `next_after_leg`
+  - **strike selectors** (SPEC-20 to SPEC-24): tolerances and both tie-breaks, and the strike-spacing default, which is the usual spacing around the target (§7.5, answer 6). `on_no_match: nearest_any` records a warning event (SPEC-25).
+  - **quote filters** (SPEC-28); null deltas excluded from delta-based selectors (SPEC-26, SPEC-27)
+  - **legs resolved in dependency order and atomically** (SPEC-3, SPEC-4). If any leg fails, no structure opens, and a `selection_failed` event names the leg, its selector and the reason, for example "nearest delta 0.07 away, tolerance 0.05".
+- **`engine/entries.py`:** the four schedules (SPEC-30 to SPEC-35), with `max_open` and a failed entry retried at the next scheduled step.
+  - `when_flat`'s cooldown counts trading days after a `close` action or an expiry; a roll re-establishes at once.
+  - `every_n_trading_days` counts trading days on the calendar from the run's first step (ENG-4). A due day that is a skipped missing day has no entry.
+  - `weekdays` applies `holiday_shift`.
+- **`testdata/golden.py`:** chains for each selector, `nth_expiration` across a weekend and a holiday, a Saturday-dated AM monthly, ties, and null deltas.
+- **Tests** (TEST-1, selection part), through views built from golden chains after the ordinary ingest:
+  - each expiration selector, including Appendix B's 0DTE (`days: 0.5, max_days: 1`) and dailies (`trading_days_out n: 1` with the PM filter) examples
+  - each strike selector and `on_no_match`
+  - eligibility at the expiry boundary and on an AM last trading day
+  - every quote filter and null deltas
+  - an atomic failure and its event; example 2's legs in dependency order
+  - each schedule, with cooldown, `max_open` and `holiday_shift`
+
+### Phase 12: Book, marking, fills, sizing, hedging and accounting
+
+- **`engine/marking.py`** (ENG-20 to ENG-25):
+  - a valid quote and its mid
+  - the last valid mark carried forward, flagged `stale_mark` with an event, and a warning event at each step beyond `stale_mark_warning_steps`
+  - settled and force-closed legs' final marks; the hedge marked at the index level
+- **`engine/fills.py`** (ENG-40 to ENG-43):
+  - the three fill models; commission per contract per side; hedge cost in basis points of traded notional
+  - an order on an invalid quote: opening orders dropped (`order_not_filled`), closing orders retried at the next step with the stale mark kept, and forced closes at the last valid mark without fill cost
+- **`engine/sizing.py`** (SPEC-70 to SPEC-73): `contracts`, and `notional` at the entry step's index level.
+  - `whole` rounding rounds down, and an entry below one unit is skipped with an event; or `fractional`.
+  - A structure roll re-sizes; a leg roll keeps its quantity.
+- **`engine/hedging.py`** (SPEC-60 to SPEC-64):
+  - the band measure per structure after the step's option trades; trade to `target` when it is outside the band
+  - the fractional hedge, never rounded
+  - null deltas counting as zero after settlement
+  - the hedge closed with its structure (§7.5, question 2), trading at the index level (ENG-25)
+- **`engine/accounting.py`** (ENG-30 to ENG-32): per security, market value, cash flows, fees, period and cumulative P&L; equity; dollar greeks (CONV-7), and `h · S` for the hedge (RES-2).
+- **`engine/invariants.py`** (ENG-33): the three invariants to 1e-6 dollars (decision 6). A violation fails the run with a diagnostic naming the step and the security.
+- **`results/records.py` and `results/recorder.py`:**
+  - the position snapshot with every RES-1 field
+  - the portfolio snapshot (RES-10), with the worst stress loss null until M3
+  - trades, structures, and events (RES-20)
+  - pydantic models with described fields for the schema and documentation (DOC-1), recorded as columnar buffers
+- **Golden tests** (TEST-1, book part), each run checked against the invariants:
+  - the first-step cost under each fill model, with commission
+  - notional sizing with `whole` and `fractional` rounding, including a size below one unit being skipped
+  - example 3's hedge band: no trade inside the band, and the exact hedge back to +0.03 outside it
+  - example 1's full hedging at every step
+  - a stale mark carried across a missing quote, with the warning after `stale_mark_warning_steps`; a closing order retried
+  - dollar greeks worked out by hand
+
+### Phase 13: Triggers, rolls, expiry, settlement and the step loop
+
+- **`engine/triggers.py`:**
+  - the conditions (SPEC-41) with their units. A condition needing a null greek is false and records `condition_null_greek` (SPEC-42).
+  - P&L per unit (SPEC-46), from the structure's ledger including its hedge and fees. It keeps accumulating across leg rolls and starts again after a structure roll.
+  - the actions (SPEC-43) and their precedence, with every fired trigger in the event (SPEC-44); a roll whose opening side fails selection (SPEC-45)
+  - a roll whose closing side cannot fill (§7.5, question 1)
+- **`engine/expiry.py`:**
+  - PM settlement at intrinsic value against the index level at expiry, through `pm_index_close` (SPEC-50)
+  - AM forced closes on the last trading day through the fill model, or at the last valid mark with `forced_close_stale` (SPEC-51)
+  - early closes of PM legs whose settlement date is skipped (SPEC-55)
+  - `expiry_handling` (SPEC-54)
+- **`engine/constructor.py` and `engine/loop.py`:**
+  - `RulesConstructor` (ENG-2)
+  - `engine/gate.py`: the pass-through `OrderGate` at step 7 (decision 32)
+  - `run_engine` with ENG-1's nine steps as separate functions in one visible sequence (§4.7)
+  - several structures of one spec at once (ENG-3)
+  - every time quantity from timestamps and the calendar (ENG-4)
+- **Golden tests** (TEST-1, rules part):
+  - the long PM call held to expiry and settled (the chain from Phase 5)
+  - a short AM call force-closed with and without a valid quote
+  - a PM leg closed at the step before its skipped settlement date
+  - a profit target and a stop per unit, including after a leg roll
+  - a leg roll on a delta trigger
+  - a structure roll on calendar days and on trading days
+  - precedence when several triggers fire; each `expiry_handling`; a null-greek condition
+
+### Phase 14: Run lifecycle, results storage and the run CLI
+
+- **`runs/coordinator.py`:** a run is a job of kind `run`. The coordinator runs pre-flight, captures the versions, then the provider, the engine, and one results write (RUN-23).
+  - **statuses** (RUN-20): runs left `queued` or `running` are marked `failed` with reason `interrupted` on open, through Phase 4's recovery
+  - **progress** (RUN-21): steps done of the total, with the current as-of time
+  - **cancellation** at the next step boundary keeps the results (RUN-22)
+  - **failures:** an engine failure stores the results up to the failure, marked *partial*; a failed write stores nothing and marks the run `failed`
+- **Storage:**
+  - Catalog migration 3 extends Phase 7's `runs` table: the spec reference and hash, stress references (empty in M2), the configuration and its hash, provenance, status, error, the partial flag, times, actor and channel. It also adds `run_registry_versions`.
+  - `run_data_versions` is filled from the captured versions, so Phase 7's invalidation works on real runs (RUN-40).
+  - Results migration 2: `position_snapshots`, `portfolio_snapshots`, `trades`, `structures` and `events`, plus the structure-snapshot view (RES-11). Stress snapshots and statistics come in M3.
+  - Adapter: `write_run_results` in one transaction, and paged reads of a run's snapshots, structures and events.
+  - Contract suite (TEST-7): atomic run writes, and a failed write leaving nothing.
+- **Provenance** (RUN-30): the spec reference and hash, the configuration and its hash, the data versions read, the underlying and data-source versions, the registry versions used, the software and calendar versions, actor, channel, times, status and error.
+- **CLI** (INT-40):
+  - `run preflight --spec <id>@<v> --config <file>`
+  - `run start --spec <id>@<v> --config <file>`: a foreground job with a progress line; Ctrl+C cancels it and keeps the results
+  - `run list`
+  - `run show <run_id>`: status, the provenance summary, final equity and P&L, counts and flags, with `--structures` and `--events` tables
+  - `run cancel <run_id>`, for background runs
+  - `run export` and `--stress` arrive with M3 (phases 18 and 16)
+- **README:** publishing a spec and running a backtest (DOC-4).
+- **Check-in with you** (§7.5, answer 8): one Appendix B run on generated data through the run CLI, before Phase 15.
+- **Tests:**
+  - each status; a cancellation mid-run keeping results to the last finished step
+  - an injected engine failure storing partial results; an injected write failure storing nothing
+  - interrupted recovery; complete provenance
+  - the *data superseded* flag after a version the run read is replaced or deleted
+  - the run commands on generated data; readers listing runs while a run writes
+
+### Phase 15: Acceptance, determinism, run time and checkpoint 2
+
+- **Acceptance** (TEST-11): the three Appendix B examples end to end on generated data through the service, each with its own checks:
+  - **example 1:** hedged to flat after every step, and rolled on each of its three conditions
+  - **example 2:** four legs sharing one expiration, with the shorts at one strike, and structure rolls at 25 days or fewer
+  - **example 3:** net delta per unit inside the band after every step's hedge, and the spread re-established at 15 days
+- **Invariants on many seeded runs** (TEST-2): generator seeds × the three examples × variations in fill model, rounding and size.
+- **Determinism** (TEST-3): the same inputs twice give identical stored results, apart from run ids and times (decision 14).
+- **Run time** (NFR-1): a single-structure spec over ten years with the data local, measured on real data in a scratch home outside the repository, against the 60-second target. If it misses, I profile it and decide the remedy with you before checkpoint 2.
+- **Optional real-data run** (TEST-10): a sample run on real data in the real-data suite.
+- **Checkpoint 2 (demo with you):** import Apr–Jun 2024 (and any other years you like), publish the three examples, and run each from the CLI with Appendix B's configuration. Then inspect the snapshots, structures and events, and review a sample of the golden tests' hand calculations (R5).
+
+### 7.4 M2 test summary
+
+| Suite | Additions |
+| --- | --- |
+| Unit | spec model, registries, validation, YAML round trip, run configuration, pre-flight, provider, view, each engine module |
+| Golden | TEST-1 except the stress modes (M3) |
+| Contract | market file listing, atomic run writes |
+| Acceptance | Appendix B's three examples (TEST-11) |
+| Property | invariants on seeded runs (TEST-2), determinism (TEST-3) |
+| CLI | the `spec` and `run` commands |
+| Real data (optional) | a sample run; the ten-year run-time measurement in a scratch home |
+
+### 7.5 Answers to the questions before Phase 9
+
+Asked with the v5 draft; answered by you on Oct 27, 2026.
+
+1. **A roll whose closing side cannot fill** (an invalid quote, ENG-41): **the opening side waits.** It is selected and executed at the step where the close fills; until then the structure stays as it is and the close is retried. You noted that in M3 the stress gate also checks any opening order against the risk tolerance, so a new short opened while another cannot be closed would be caught there as well.
+2. **A structure close where one leg cannot fill:** handled the same way. The other legs close at once, and the unfilled leg is retried each step (ENG-41). The structure is `closing` until it fills. The hedge keeps being rebalanced on the remaining leg and is closed at the step the last leg closes.
+3. **Units on day conditions:** `unit` keeps its `calendar_days` default (SPEC-41), and the dry run warns when it is left out ("calendar_days assumed"). No requirements change.
+4. **SPEC-53:**
+   - A leg counts as covered by a `leg_days_to_expiry_at_or_below` or `structure_min_days_to_expiry_at_or_below` condition with `days ≥ 1`, in `trading_days` or in `calendar_days`. The intent is to close or roll at least one trading day before expiry, away from the expiration-day data.
+   - Over a long weekend a calendar-day trigger can miss. The forced close (SPEC-51) then applies, which you accepted, and the warning text says so.
+5. **`standard_monthly_only`:** decided by date, whatever the root. A standard monthly is an expiration whose settlement date is the third Friday of its month, or the trading day before it when that Friday is a holiday; the Saturday-dated monthlies settle on that Friday. Adding `settlement_styles: [AM]` gives the AM-settled monthlies only.
+6. **"The series' strike spacing"**, the default `tolerance_points` of `forward` and `strike_offset` when a spec gives none: **the usual spacing around the target**, the most common gap between adjacent listed strikes near the target in that expiration. A hole in the chain, for example from quote filters, gives no match and a `selection_failed` event rather than a strike far from the target. Not a configuration setting: a spec can always state `tolerance_points`.
+7. **Golden-test hand checks:** each expected value's derivation is written beside its assertion, and you review a sample at checkpoint 2.
+8. **A check-in after Phase 14:** yes. We look at one Appendix B run on generated data through the run CLI before Phase 15.
 
 ## 8. Milestone 3: Stress and Analytics (phase level)
 
@@ -369,7 +626,7 @@ Where each requirement is planned. Whether it is done, and in which phase, is re
 | ARC-3 (point in time) | 10 |
 | ARC-6, INT-1 to INT-3 (local server, security) | 19 |
 | TIME-1 to TIME-3, CONV-1 to CONV-9 | 2; applied throughout 9–18 |
-| VER-1 to VER-4 | 7 (data versions); 9 (specs); 14 (runs); 16 (stress) |
+| VER-1 to VER-4 | 7 (data versions); 9 (specs); 10 (run configurations); 14 (runs); 16 (stress) |
 | REG-1 to REG-4 | 2 (mechanism); 9, 11–13, 16 (implementations) |
 | DATA-1 to DATA-21 (format, ingest, derived columns, parity forwards, validation) | 6; 2 (time and expiry functions); 0 (speed, data findings) |
 | DATA-30 to DATA-70 (overlap, versions, delete, purge, invalidation, coverage) | 7 |
@@ -379,7 +636,7 @@ Where each requirement is planned. Whether it is done, and in which phase, is re
 | SPEC-4, SPEC-10 to SPEC-35 | 11 |
 | SPEC-40 to SPEC-55 | 13 |
 | SPEC-60 to SPEC-73 | 12 |
-| ENG-1 to ENG-4 | 13 (loop, constructor); 10 (schedule) |
+| ENG-1 to ENG-4 | 13 (loop, constructor, pass-through order gate); 10 (schedule); 17 (stress gate) |
 | ENG-10 (determinism) | 12–15 |
 | ENG-20 to ENG-43 | 12 |
 | STR-1 to STR-52 | 16, 17 |
@@ -390,7 +647,7 @@ Where each requirement is planned. Whether it is done, and in which phase, is re
 | INT-10 to INT-13 (API) | 20 |
 | INT-20 to INT-24 (jobs) | 4; 19 (endpoints) |
 | INT-30 to INT-37 (GUI) | 21–23 |
-| INT-40, INT-41 (CLI) | 8 (data); 14 (spec, run); 16 (stress); 24 (demo) |
+| INT-40, INT-41 (CLI) | 8 (data); 9 (spec); 14 (run); 16 (stress); 24 (demo) |
 | INT-50 to INT-52 (synthetic data, demo, vendor data) | 5; 24 |
 | DOC-1 to DOC-4 | 1 (meta-tests); 8 (generation); every phase (descriptions) |
 | AUD-1 to AUD-4 | 4; 6, 7, 9, 14 (recorded) |
@@ -469,6 +726,16 @@ Added with Phase 7 (details in §16, Phase 7):
 25. **Purge and discard use a recoverable file journal.** Backups and prepared replacements precede an atomically published manifest. The catalog transaction records the operation id; reopening restores uncommitted originals or cleans committed backups. Reader cursors share a lock for lifecycle writes and file reads.
 26. **Invalidation executes inside the lifecycle job's catalog transaction**, as §4.2 specifies, rather than as a separately scheduled job that could leave flags temporarily stale. Phase 7 creates the minimal `runs`, `run_data_versions` and `run_invalidations` tables; Phase 14 extends them through subsequent migrations.
 
+Added in v5, with M2 detailed (§7), agreed Oct 27, 2026:
+
+27. **Specs and run-configuration templates are stored in the existing `definitions` table** (kinds `strategy_spec` and `run_config_template`), which already versions and hashes underlyings and data sources (VER-1, VER-2), instead of the separate tables §4.2 listed.
+28. **A `strategy/` package** holds the spec model, its validation, YAML and JSON import and export, and the Appendix B examples, so the API, forms and documentation read the spec without importing the engine.
+29. **Every M2 registry is created in Phase 9** with its parameter models, descriptions and versions, so specs validate from Phase 9; each implementation's behavior lands in the phase that builds it.
+30. **A run reads the data versions active when it starts.** They are captured once, so a commit, delete or purge during a run cannot change what it reads, and they are what `run_data_versions` records (RUN-40, VER-3).
+31. **The provider reads only expirations within the spec's horizon**, the most calendar days to expiry any of its selectors can reach. Selectors without a bound (`nth_expiration`, `next_after_leg`) read every expiration (NFR-1, third bullet).
+32. **The stress gate is an `OrderGate` interface** with a pass-through implementation in M2. Attaching stress definitions, and stress modes other than `monitor`, are refused until M3, which replaces the gate without changing the loop.
+33. **The `spec` CLI commands move from Phase 14 to Phase 9.**
+
 ## 14. Risks
 
 | Risk | Mitigation |
@@ -483,6 +750,7 @@ Added with Phase 7 (details in §16, Phase 7):
 | R6: the spec model's discriminated unions become hard to read in schemas and forms. | Built from the registries so they stay consistent; M4's form design is detailed with you before it starts. |
 | R7: a 2 GB import or a large purge rewrite takes long on a laptop. | Streaming and per-partition progress with cancellation; Phase 0 measures ingest. |
 | R8: vendor data committed by accident. | Kept outside the repository by default; `.gitignore` patterns as a second defence; tests never write vendor data into the tree. |
+| R10: the Python engine is too slow per step on dense chains (about 16,000 contracts per step in 2023). | One step's Arrow columns with vectorized masks, never a Python object per contract; the provider's horizon filter; a per-step timing check from Phase 10; the whole run measured in Phase 15 and the remedy agreed with you if it misses. |
 | R9: scope of four milestones. | Each milestone usable on its own with a demo; M2–M4 re-planned with you before they start. |
 
 ## 15. Phase 0 Findings
