@@ -4,10 +4,10 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–9 of 24 are done. Milestone M1 (data foundation)
+**Status:** Phase 1 is being built. Plan phases 0–10 of 24 are done. Milestone M1 (data foundation)
 is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
-and coverage through the `prophetovol` CLI. M2 (engine core) has begun with strategy specs:
-validation, publishing and YAML round trips. The requirements, the implementation plan and the
+and coverage through the `prophetovol` CLI. M2 (engine core) has begun: strategy specs (validation,
+publishing, YAML round trips), run configurations and pre-flight checks. The requirements, the implementation plan and the
 [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
 milestones M2 to M4.
@@ -143,6 +143,24 @@ trigger closing it at least one trading day before expiry, since the engine then
 on its last trading day (SPEC-53). Published versions are immutable and hashed; every change
 publishes a new version. `prophetovol registry list` and `registry show` describe every selector,
 schedule, condition, hedge rule and sizing method with its parameters. Runs arrive in Phase 14.
+
+Until the `run` commands arrive, a run's **pre-flight check** is available from Python. It reports
+every problem at once (spec, configuration, missing trading days, empty snapshots) and fixes the
+run's steps:
+
+```python
+from prophetovol.core.context import CallContext
+from prophetovol.runs.service import BacktestService
+
+with BacktestService.open() as svc:
+    report = svc.preflight_run("short_call_hedged", {"start_date": "2024-04-11", "end_date": "2024-06-24",
+                                                     "capital": 1_000_000}, CallContext.for_channel("library"))
+    print(len(report.schedule.steps), "steps;", [w.message for w in report.warnings])
+```
+
+A failed check raises `PreflightFailed`, whose `report` lists the errors and warnings. Missing days
+block a run unless the configuration sets `allow_missing_days: true`. Configurations can be saved
+as named, versioned templates with `save_run_template`.
 
 ## Jobs and the attempts log
 

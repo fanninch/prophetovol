@@ -1918,6 +1918,125 @@ prophetovol.data.quality.QualityReport
      "type": "object"
    }
 
+prophetovol.engine.schedule.Step
+--------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "One step of a run (TIME-1).",
+     "properties": {
+       "after_missing_days": {
+         "description": "Trading days skipped just before this step (allow_missing_days); its snapshots are flagged missing_day_before.",
+         "items": {
+           "format": "date",
+           "type": "string"
+         },
+         "title": "After Missing Days",
+         "type": "array"
+       },
+       "as_of": {
+         "description": "The step's as-of instant (UTC): the snapshot time of the data source on that day, as stored with the market snapshot.",
+         "format": "date-time",
+         "title": "As Of",
+         "type": "string"
+       },
+       "day": {
+         "description": "The trading day of the step.",
+         "format": "date",
+         "title": "Day",
+         "type": "string"
+       },
+       "seq": {
+         "description": "The step's number, from 1.",
+         "minimum": 1,
+         "title": "Seq",
+         "type": "integer"
+       }
+     },
+     "required": [
+       "seq",
+       "day",
+       "as_of"
+     ],
+     "title": "Step",
+     "type": "object"
+   }
+
+prophetovol.engine.schedule.StepSchedule
+----------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "Step": {
+         "description": "One step of a run (TIME-1).",
+         "properties": {
+           "after_missing_days": {
+             "description": "Trading days skipped just before this step (allow_missing_days); its snapshots are flagged missing_day_before.",
+             "items": {
+               "format": "date",
+               "type": "string"
+             },
+             "title": "After Missing Days",
+             "type": "array"
+           },
+           "as_of": {
+             "description": "The step's as-of instant (UTC): the snapshot time of the data source on that day, as stored with the market snapshot.",
+             "format": "date-time",
+             "title": "As Of",
+             "type": "string"
+           },
+           "day": {
+             "description": "The trading day of the step.",
+             "format": "date",
+             "title": "Day",
+             "type": "string"
+           },
+           "seq": {
+             "description": "The step's number, from 1.",
+             "minimum": 1,
+             "title": "Seq",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "seq",
+           "day",
+           "as_of"
+         ],
+         "title": "Step",
+         "type": "object"
+       }
+     },
+     "description": "The steps of a run and the trading days it skips (RUN-11).",
+     "properties": {
+       "missing_days": {
+         "description": "Trading days in the range without an active snapshot, skipped.",
+         "items": {
+           "format": "date",
+           "type": "string"
+         },
+         "title": "Missing Days",
+         "type": "array"
+       },
+       "steps": {
+         "description": "The steps, in order.",
+         "items": {
+           "$ref": "#/$defs/Step"
+         },
+         "title": "Steps",
+         "type": "array"
+       }
+     },
+     "required": [
+       "steps"
+     ],
+     "title": "StepSchedule",
+     "type": "object"
+   }
+
 prophetovol.reference.models.DataSource
 ---------------------------------------
 
@@ -3955,6 +4074,859 @@ prophetovol.registry.params.triggers.TradingDaysHeldAtLeastParams
        "days"
      ],
      "title": "TradingDaysHeldAtLeastParams",
+     "type": "object"
+   }
+
+prophetovol.runs.config.RunConfig
+---------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "Frequency": {
+         "description": "How often a run steps (TIME-1). Phase 1 supports end of day only.",
+         "enum": [
+           "end_of_day"
+         ],
+         "title": "Frequency",
+         "type": "string"
+       },
+       "Rounding": {
+         "description": "How structure units are rounded (SPEC-72); the hedge is never rounded (SPEC-62).",
+         "enum": [
+           "whole",
+           "fractional"
+         ],
+         "title": "Rounding",
+         "type": "string"
+       },
+       "StressMode": {
+         "description": "How attached stress definitions act on a run (STR-30).",
+         "enum": [
+           "monitor",
+           "scale_to_limit",
+           "halt_run"
+         ],
+         "title": "StressMode",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "The configuration of one run (RUN-1). Every field has a default except the dates and the capital.",
+     "properties": {
+       "allow_missing_days": {
+         "default": false,
+         "description": "Skip trading days without an active snapshot instead of refusing the run (RUN-11). Skipped days flag the next step; PM-settled contracts settling on a skipped day are closed at the step before (SPEC-55). Default false.",
+         "title": "Allow Missing Days",
+         "type": "boolean"
+       },
+       "capital": {
+         "description": "Capital in dollars: the base of equity, returns and percentage limits (ENG-32). No interest or margin is modeled.",
+         "exclusiveMinimum": 0,
+         "title": "Capital",
+         "type": "number"
+       },
+       "commission_per_contract": {
+         "default": 0.0,
+         "description": "Commission in dollars per option contract per side (ENG-42). Default 0: set it to your all-in broker and exchange fee.",
+         "minimum": 0,
+         "title": "Commission Per Contract",
+         "type": "number"
+       },
+       "data_source": {
+         "default": "ivolatility_eod",
+         "description": "The data source whose snapshots the run reads; it sets the snapshot timing (§7.2). Default ivolatility_eod.",
+         "title": "Data Source",
+         "type": "string"
+       },
+       "end_date": {
+         "description": "Last date of the run, inclusive.",
+         "format": "date",
+         "title": "End Date",
+         "type": "string"
+       },
+       "fill_model": {
+         "default": "cross_spread",
+         "description": "How orders fill (ENG-40): mid; cross_spread (default), buying at the ask and selling at the bid; or mid_plus_fraction, the mid plus fraction of the half-spread against the trader.",
+         "enum": [
+           "mid",
+           "cross_spread",
+           "mid_plus_fraction"
+         ],
+         "title": "Fill Model",
+         "type": "string"
+       },
+       "fraction": {
+         "anyOf": [
+           {
+             "maximum": 1,
+             "minimum": 0,
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "For mid_plus_fraction only, and required there: the share of the half-spread paid, from 0 (the mid) to 1 (crossing the spread).",
+         "title": "Fraction"
+       },
+       "frequency": {
+         "$ref": "#/$defs/Frequency",
+         "default": "end_of_day",
+         "description": "How often the run steps; end_of_day, one step per trading day, is the only Phase 1 frequency (TIME-1)."
+       },
+       "hedge_cost_bps": {
+         "default": 0.0,
+         "description": "Hedge cost in basis points of traded hedge notional (ENG-42). Default 0.",
+         "minimum": 0,
+         "title": "Hedge Cost Bps",
+         "type": "number"
+       },
+       "label": {
+         "default": "",
+         "description": "A short name for the run, for you.",
+         "title": "Label",
+         "type": "string"
+       },
+       "notes": {
+         "default": "",
+         "description": "Free text about the run, for you.",
+         "title": "Notes",
+         "type": "string"
+       },
+       "rounding": {
+         "$ref": "#/$defs/Rounding",
+         "default": "whole",
+         "description": "Rounding of structure units (SPEC-72): whole (default) rounds down and skips an entry below one unit with an event; fractional keeps fractions. The hedge is never rounded."
+       },
+       "stale_mark_warning_steps": {
+         "default": 5,
+         "description": "After this many consecutive steps marked at a stale price, a warning event is recorded at each further stale step (ENG-21). Default 5.",
+         "minimum": 1,
+         "title": "Stale Mark Warning Steps",
+         "type": "integer"
+       },
+       "start_date": {
+         "description": "First date of the run; trading days from it are steps.",
+         "format": "date",
+         "title": "Start Date",
+         "type": "string"
+       },
+       "stress_discount_rate": {
+         "default": 0.0,
+         "description": "Continuously compounded rate r in stress revaluation's discount factor exp(−rT) (STR-20), as a decimal. Default 0.",
+         "title": "Stress Discount Rate",
+         "type": "number"
+       },
+       "stress_mode": {
+         "$ref": "#/$defs/StressMode",
+         "default": "monitor",
+         "description": "How attached stress definitions act on the run's opening orders (STR-30 to STR-35). monitor (default): stress is computed and reported at every step and never affects trades; steps at which a gated mode would have acted are flagged with what it would have done. scale_to_limit: each step's opening orders (entries and the opening sides of rolls) are reduced to the largest size at which the post-trade book, including the hedge the new orders would need under the spec's hedge rule, stays within every attached loss limit; stress P&L is linear in size, so q_max = min(Q, min over scenarios with loss per unit l_s > 0 of (X − L_s) / l_s), rounded down under whole rounding; if no size passes the orders are skipped; an event is recorded either way. halt_run: if the step's opening orders would breach any attached limit they are not executed, the step's closing orders and hedges are, and the run ends with status halted, recording the scenario, the loss and the limit. Closing orders and hedge trades are never gated. A book that breaches a limit at a step with no opening orders is reported and flagged, with no forced reduction. With several definitions attached, an order must pass all their limits. Stress arrives in milestone M3; until then only monitor is accepted."
+       },
+       "underlying": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Symbol of the underlying; null (default) takes the spec's. When given it must equal the spec's.",
+         "title": "Underlying"
+       }
+     },
+     "required": [
+       "start_date",
+       "end_date",
+       "capital"
+     ],
+     "title": "RunConfig",
+     "type": "object"
+   }
+
+prophetovol.runs.config.RunConfigTemplate
+-----------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "Frequency": {
+         "description": "How often a run steps (TIME-1). Phase 1 supports end of day only.",
+         "enum": [
+           "end_of_day"
+         ],
+         "title": "Frequency",
+         "type": "string"
+       },
+       "Rounding": {
+         "description": "How structure units are rounded (SPEC-72); the hedge is never rounded (SPEC-62).",
+         "enum": [
+           "whole",
+           "fractional"
+         ],
+         "title": "Rounding",
+         "type": "string"
+       },
+       "RunConfig": {
+         "additionalProperties": false,
+         "description": "The configuration of one run (RUN-1). Every field has a default except the dates and the capital.",
+         "properties": {
+           "allow_missing_days": {
+             "default": false,
+             "description": "Skip trading days without an active snapshot instead of refusing the run (RUN-11). Skipped days flag the next step; PM-settled contracts settling on a skipped day are closed at the step before (SPEC-55). Default false.",
+             "title": "Allow Missing Days",
+             "type": "boolean"
+           },
+           "capital": {
+             "description": "Capital in dollars: the base of equity, returns and percentage limits (ENG-32). No interest or margin is modeled.",
+             "exclusiveMinimum": 0,
+             "title": "Capital",
+             "type": "number"
+           },
+           "commission_per_contract": {
+             "default": 0.0,
+             "description": "Commission in dollars per option contract per side (ENG-42). Default 0: set it to your all-in broker and exchange fee.",
+             "minimum": 0,
+             "title": "Commission Per Contract",
+             "type": "number"
+           },
+           "data_source": {
+             "default": "ivolatility_eod",
+             "description": "The data source whose snapshots the run reads; it sets the snapshot timing (§7.2). Default ivolatility_eod.",
+             "title": "Data Source",
+             "type": "string"
+           },
+           "end_date": {
+             "description": "Last date of the run, inclusive.",
+             "format": "date",
+             "title": "End Date",
+             "type": "string"
+           },
+           "fill_model": {
+             "default": "cross_spread",
+             "description": "How orders fill (ENG-40): mid; cross_spread (default), buying at the ask and selling at the bid; or mid_plus_fraction, the mid plus fraction of the half-spread against the trader.",
+             "enum": [
+               "mid",
+               "cross_spread",
+               "mid_plus_fraction"
+             ],
+             "title": "Fill Model",
+             "type": "string"
+           },
+           "fraction": {
+             "anyOf": [
+               {
+                 "maximum": 1,
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "For mid_plus_fraction only, and required there: the share of the half-spread paid, from 0 (the mid) to 1 (crossing the spread).",
+             "title": "Fraction"
+           },
+           "frequency": {
+             "$ref": "#/$defs/Frequency",
+             "default": "end_of_day",
+             "description": "How often the run steps; end_of_day, one step per trading day, is the only Phase 1 frequency (TIME-1)."
+           },
+           "hedge_cost_bps": {
+             "default": 0.0,
+             "description": "Hedge cost in basis points of traded hedge notional (ENG-42). Default 0.",
+             "minimum": 0,
+             "title": "Hedge Cost Bps",
+             "type": "number"
+           },
+           "label": {
+             "default": "",
+             "description": "A short name for the run, for you.",
+             "title": "Label",
+             "type": "string"
+           },
+           "notes": {
+             "default": "",
+             "description": "Free text about the run, for you.",
+             "title": "Notes",
+             "type": "string"
+           },
+           "rounding": {
+             "$ref": "#/$defs/Rounding",
+             "default": "whole",
+             "description": "Rounding of structure units (SPEC-72): whole (default) rounds down and skips an entry below one unit with an event; fractional keeps fractions. The hedge is never rounded."
+           },
+           "stale_mark_warning_steps": {
+             "default": 5,
+             "description": "After this many consecutive steps marked at a stale price, a warning event is recorded at each further stale step (ENG-21). Default 5.",
+             "minimum": 1,
+             "title": "Stale Mark Warning Steps",
+             "type": "integer"
+           },
+           "start_date": {
+             "description": "First date of the run; trading days from it are steps.",
+             "format": "date",
+             "title": "Start Date",
+             "type": "string"
+           },
+           "stress_discount_rate": {
+             "default": 0.0,
+             "description": "Continuously compounded rate r in stress revaluation's discount factor exp(−rT) (STR-20), as a decimal. Default 0.",
+             "title": "Stress Discount Rate",
+             "type": "number"
+           },
+           "stress_mode": {
+             "$ref": "#/$defs/StressMode",
+             "default": "monitor",
+             "description": "How attached stress definitions act on the run's opening orders (STR-30 to STR-35). monitor (default): stress is computed and reported at every step and never affects trades; steps at which a gated mode would have acted are flagged with what it would have done. scale_to_limit: each step's opening orders (entries and the opening sides of rolls) are reduced to the largest size at which the post-trade book, including the hedge the new orders would need under the spec's hedge rule, stays within every attached loss limit; stress P&L is linear in size, so q_max = min(Q, min over scenarios with loss per unit l_s > 0 of (X − L_s) / l_s), rounded down under whole rounding; if no size passes the orders are skipped; an event is recorded either way. halt_run: if the step's opening orders would breach any attached limit they are not executed, the step's closing orders and hedges are, and the run ends with status halted, recording the scenario, the loss and the limit. Closing orders and hedge trades are never gated. A book that breaches a limit at a step with no opening orders is reported and flagged, with no forced reduction. With several definitions attached, an order must pass all their limits. Stress arrives in milestone M3; until then only monitor is accepted."
+           },
+           "underlying": {
+             "anyOf": [
+               {
+                 "type": "string"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Symbol of the underlying; null (default) takes the spec's. When given it must equal the spec's.",
+             "title": "Underlying"
+           }
+         },
+         "required": [
+           "start_date",
+           "end_date",
+           "capital"
+         ],
+         "title": "RunConfig",
+         "type": "object"
+       },
+       "StressMode": {
+         "description": "How attached stress definitions act on a run (STR-30).",
+         "enum": [
+           "monitor",
+           "scale_to_limit",
+           "halt_run"
+         ],
+         "title": "StressMode",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "A named, versioned run configuration kept for reuse (RUN-2).",
+     "properties": {
+       "config": {
+         "$ref": "#/$defs/RunConfig",
+         "description": "The configuration. A run started from the template may override its dates."
+       },
+       "description": {
+         "default": "",
+         "description": "What the template is for, for people.",
+         "title": "Description",
+         "type": "string"
+       },
+       "name": {
+         "description": "The template's name; versions are published under it.",
+         "maxLength": 100,
+         "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+         "title": "Name",
+         "type": "string"
+       }
+     },
+     "required": [
+       "name",
+       "config"
+     ],
+     "title": "RunConfigTemplate",
+     "type": "object"
+   }
+
+prophetovol.runs.preflight.PreflightIssue
+-----------------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "One pre-flight finding (RUN-11).",
+     "properties": {
+       "message": {
+         "description": "What is wrong and, where possible, how to fix it.",
+         "title": "Message",
+         "type": "string"
+       },
+       "path": {
+         "description": "What the finding is about, for example spec.legs[0].strike, config.end_date or data; empty for the run as a whole.",
+         "title": "Path",
+         "type": "string"
+       },
+       "severity": {
+         "description": "error blocks the run; warning does not.",
+         "enum": [
+           "error",
+           "warning"
+         ],
+         "title": "Severity",
+         "type": "string"
+       }
+     },
+     "required": [
+       "severity",
+       "path",
+       "message"
+     ],
+     "title": "PreflightIssue",
+     "type": "object"
+   }
+
+prophetovol.runs.preflight.PreflightReport
+------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "DataVersionRecord": {
+         "description": "The market snapshot one import supplied for one underlying and as-of time (DATA-40, DATA-41).",
+         "properties": {
+           "as_of": {
+             "description": "The snapshot's as-of instant (UTC).",
+             "format": "date-time",
+             "title": "As Of",
+             "type": "string"
+           },
+           "as_of_date": {
+             "description": "The snapshot's date.",
+             "format": "date",
+             "title": "As Of Date",
+             "type": "string"
+           },
+           "contracts": {
+             "description": "Number of option contracts in the snapshot.",
+             "minimum": 0,
+             "title": "Contracts",
+             "type": "integer"
+           },
+           "import_id": {
+             "description": "The import that supplied the snapshot.",
+             "title": "Import Id",
+             "type": "string"
+           },
+           "quality_flags": {
+             "description": "Quality checks that flagged this snapshot.",
+             "items": {
+               "type": "string"
+             },
+             "title": "Quality Flags",
+             "type": "array"
+           },
+           "state": {
+             "$ref": "#/$defs/VersionState",
+             "description": "staged, active, superseded, deleted, discarded or purged. At most one version per underlying and as-of time is active."
+           },
+           "state_changed_at": {
+             "description": "When the version entered its current state (UTC).",
+             "format": "date-time",
+             "title": "State Changed At",
+             "type": "string"
+           },
+           "underlying": {
+             "description": "The underlying.",
+             "title": "Underlying",
+             "type": "string"
+           }
+         },
+         "required": [
+           "underlying",
+           "as_of",
+           "as_of_date",
+           "import_id",
+           "state",
+           "contracts",
+           "state_changed_at"
+         ],
+         "title": "DataVersionRecord",
+         "type": "object"
+       },
+       "Frequency": {
+         "description": "How often a run steps (TIME-1). Phase 1 supports end of day only.",
+         "enum": [
+           "end_of_day"
+         ],
+         "title": "Frequency",
+         "type": "string"
+       },
+       "PreflightIssue": {
+         "description": "One pre-flight finding (RUN-11).",
+         "properties": {
+           "message": {
+             "description": "What is wrong and, where possible, how to fix it.",
+             "title": "Message",
+             "type": "string"
+           },
+           "path": {
+             "description": "What the finding is about, for example spec.legs[0].strike, config.end_date or data; empty for the run as a whole.",
+             "title": "Path",
+             "type": "string"
+           },
+           "severity": {
+             "description": "error blocks the run; warning does not.",
+             "enum": [
+               "error",
+               "warning"
+             ],
+             "title": "Severity",
+             "type": "string"
+           }
+         },
+         "required": [
+           "severity",
+           "path",
+           "message"
+         ],
+         "title": "PreflightIssue",
+         "type": "object"
+       },
+       "Rounding": {
+         "description": "How structure units are rounded (SPEC-72); the hedge is never rounded (SPEC-62).",
+         "enum": [
+           "whole",
+           "fractional"
+         ],
+         "title": "Rounding",
+         "type": "string"
+       },
+       "RunConfig": {
+         "additionalProperties": false,
+         "description": "The configuration of one run (RUN-1). Every field has a default except the dates and the capital.",
+         "properties": {
+           "allow_missing_days": {
+             "default": false,
+             "description": "Skip trading days without an active snapshot instead of refusing the run (RUN-11). Skipped days flag the next step; PM-settled contracts settling on a skipped day are closed at the step before (SPEC-55). Default false.",
+             "title": "Allow Missing Days",
+             "type": "boolean"
+           },
+           "capital": {
+             "description": "Capital in dollars: the base of equity, returns and percentage limits (ENG-32). No interest or margin is modeled.",
+             "exclusiveMinimum": 0,
+             "title": "Capital",
+             "type": "number"
+           },
+           "commission_per_contract": {
+             "default": 0.0,
+             "description": "Commission in dollars per option contract per side (ENG-42). Default 0: set it to your all-in broker and exchange fee.",
+             "minimum": 0,
+             "title": "Commission Per Contract",
+             "type": "number"
+           },
+           "data_source": {
+             "default": "ivolatility_eod",
+             "description": "The data source whose snapshots the run reads; it sets the snapshot timing (§7.2). Default ivolatility_eod.",
+             "title": "Data Source",
+             "type": "string"
+           },
+           "end_date": {
+             "description": "Last date of the run, inclusive.",
+             "format": "date",
+             "title": "End Date",
+             "type": "string"
+           },
+           "fill_model": {
+             "default": "cross_spread",
+             "description": "How orders fill (ENG-40): mid; cross_spread (default), buying at the ask and selling at the bid; or mid_plus_fraction, the mid plus fraction of the half-spread against the trader.",
+             "enum": [
+               "mid",
+               "cross_spread",
+               "mid_plus_fraction"
+             ],
+             "title": "Fill Model",
+             "type": "string"
+           },
+           "fraction": {
+             "anyOf": [
+               {
+                 "maximum": 1,
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "For mid_plus_fraction only, and required there: the share of the half-spread paid, from 0 (the mid) to 1 (crossing the spread).",
+             "title": "Fraction"
+           },
+           "frequency": {
+             "$ref": "#/$defs/Frequency",
+             "default": "end_of_day",
+             "description": "How often the run steps; end_of_day, one step per trading day, is the only Phase 1 frequency (TIME-1)."
+           },
+           "hedge_cost_bps": {
+             "default": 0.0,
+             "description": "Hedge cost in basis points of traded hedge notional (ENG-42). Default 0.",
+             "minimum": 0,
+             "title": "Hedge Cost Bps",
+             "type": "number"
+           },
+           "label": {
+             "default": "",
+             "description": "A short name for the run, for you.",
+             "title": "Label",
+             "type": "string"
+           },
+           "notes": {
+             "default": "",
+             "description": "Free text about the run, for you.",
+             "title": "Notes",
+             "type": "string"
+           },
+           "rounding": {
+             "$ref": "#/$defs/Rounding",
+             "default": "whole",
+             "description": "Rounding of structure units (SPEC-72): whole (default) rounds down and skips an entry below one unit with an event; fractional keeps fractions. The hedge is never rounded."
+           },
+           "stale_mark_warning_steps": {
+             "default": 5,
+             "description": "After this many consecutive steps marked at a stale price, a warning event is recorded at each further stale step (ENG-21). Default 5.",
+             "minimum": 1,
+             "title": "Stale Mark Warning Steps",
+             "type": "integer"
+           },
+           "start_date": {
+             "description": "First date of the run; trading days from it are steps.",
+             "format": "date",
+             "title": "Start Date",
+             "type": "string"
+           },
+           "stress_discount_rate": {
+             "default": 0.0,
+             "description": "Continuously compounded rate r in stress revaluation's discount factor exp(−rT) (STR-20), as a decimal. Default 0.",
+             "title": "Stress Discount Rate",
+             "type": "number"
+           },
+           "stress_mode": {
+             "$ref": "#/$defs/StressMode",
+             "default": "monitor",
+             "description": "How attached stress definitions act on the run's opening orders (STR-30 to STR-35). monitor (default): stress is computed and reported at every step and never affects trades; steps at which a gated mode would have acted are flagged with what it would have done. scale_to_limit: each step's opening orders (entries and the opening sides of rolls) are reduced to the largest size at which the post-trade book, including the hedge the new orders would need under the spec's hedge rule, stays within every attached loss limit; stress P&L is linear in size, so q_max = min(Q, min over scenarios with loss per unit l_s > 0 of (X − L_s) / l_s), rounded down under whole rounding; if no size passes the orders are skipped; an event is recorded either way. halt_run: if the step's opening orders would breach any attached limit they are not executed, the step's closing orders and hedges are, and the run ends with status halted, recording the scenario, the loss and the limit. Closing orders and hedge trades are never gated. A book that breaches a limit at a step with no opening orders is reported and flagged, with no forced reduction. With several definitions attached, an order must pass all their limits. Stress arrives in milestone M3; until then only monitor is accepted."
+           },
+           "underlying": {
+             "anyOf": [
+               {
+                 "type": "string"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Symbol of the underlying; null (default) takes the spec's. When given it must equal the spec's.",
+             "title": "Underlying"
+           }
+         },
+         "required": [
+           "start_date",
+           "end_date",
+           "capital"
+         ],
+         "title": "RunConfig",
+         "type": "object"
+       },
+       "Step": {
+         "description": "One step of a run (TIME-1).",
+         "properties": {
+           "after_missing_days": {
+             "description": "Trading days skipped just before this step (allow_missing_days); its snapshots are flagged missing_day_before.",
+             "items": {
+               "format": "date",
+               "type": "string"
+             },
+             "title": "After Missing Days",
+             "type": "array"
+           },
+           "as_of": {
+             "description": "The step's as-of instant (UTC): the snapshot time of the data source on that day, as stored with the market snapshot.",
+             "format": "date-time",
+             "title": "As Of",
+             "type": "string"
+           },
+           "day": {
+             "description": "The trading day of the step.",
+             "format": "date",
+             "title": "Day",
+             "type": "string"
+           },
+           "seq": {
+             "description": "The step's number, from 1.",
+             "minimum": 1,
+             "title": "Seq",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "seq",
+           "day",
+           "as_of"
+         ],
+         "title": "Step",
+         "type": "object"
+       },
+       "StepSchedule": {
+         "description": "The steps of a run and the trading days it skips (RUN-11).",
+         "properties": {
+           "missing_days": {
+             "description": "Trading days in the range without an active snapshot, skipped.",
+             "items": {
+               "format": "date",
+               "type": "string"
+             },
+             "title": "Missing Days",
+             "type": "array"
+           },
+           "steps": {
+             "description": "The steps, in order.",
+             "items": {
+               "$ref": "#/$defs/Step"
+             },
+             "title": "Steps",
+             "type": "array"
+           }
+         },
+         "required": [
+           "steps"
+         ],
+         "title": "StepSchedule",
+         "type": "object"
+       },
+       "StressMode": {
+         "description": "How attached stress definitions act on a run (STR-30).",
+         "enum": [
+           "monitor",
+           "scale_to_limit",
+           "halt_run"
+         ],
+         "title": "StressMode",
+         "type": "string"
+       },
+       "VersionState": {
+         "description": "The state of one data version (DATA-40, DATA-50, DATA-51).",
+         "enum": [
+           "staged",
+           "active",
+           "superseded",
+           "deleted",
+           "discarded",
+           "purged"
+         ],
+         "title": "VersionState",
+         "type": "string"
+       }
+     },
+     "description": "Everything pre-flight found, and the run it would start (RUN-10 to RUN-12).",
+     "properties": {
+       "config": {
+         "anyOf": [
+           {
+             "$ref": "#/$defs/RunConfig"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The resolved configuration; null if it is invalid."
+       },
+       "config_hash": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The resolved configuration's hash (VER-3).",
+         "title": "Config Hash"
+       },
+       "data_versions": {
+         "description": "The data version each step will read, in step order: the versions active at pre-flight (decision 30). Empty when there are errors.",
+         "items": {
+           "$ref": "#/$defs/DataVersionRecord"
+         },
+         "title": "Data Versions",
+         "type": "array"
+       },
+       "errors": {
+         "description": "Findings that block the run.",
+         "items": {
+           "$ref": "#/$defs/PreflightIssue"
+         },
+         "title": "Errors",
+         "type": "array"
+       },
+       "schedule": {
+         "anyOf": [
+           {
+             "$ref": "#/$defs/StepSchedule"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The run's steps and skipped days; null when there are errors."
+       },
+       "spec_hash": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The spec version's content hash (VER-2).",
+         "title": "Spec Hash"
+       },
+       "spec_id": {
+         "description": "The strategy spec's id.",
+         "title": "Spec Id",
+         "type": "string"
+       },
+       "spec_version": {
+         "anyOf": [
+           {
+             "type": "integer"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The spec version checked; null if it was not found.",
+         "title": "Spec Version"
+       },
+       "warnings": {
+         "description": "Findings that do not block the run.",
+         "items": {
+           "$ref": "#/$defs/PreflightIssue"
+         },
+         "title": "Warnings",
+         "type": "array"
+       }
+     },
+     "required": [
+       "spec_id"
+     ],
+     "title": "PreflightReport",
      "type": "object"
    }
 

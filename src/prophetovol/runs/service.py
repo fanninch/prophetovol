@@ -33,7 +33,10 @@ from prophetovol.reference.defaults import default_data_sources, default_underly
 from prophetovol.reference.models import DataSource, Underlying
 from prophetovol.registry.mechanism import ImplementationInfo, RegistryInfo
 from prophetovol.runs.audit import audited
+from prophetovol.runs.config import RunConfig, RunConfigTemplate
 from prophetovol.runs.jobs import JobContext, JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
+from prophetovol.runs.preflight import PreflightFailed, PreflightIssue, PreflightReport, check_data
+from prophetovol.runs.provider import MarketDataProvider, spec_horizon_days
 from prophetovol.storage.adapter import StorageAdapter
 from prophetovol.storage.duckdb.adapter import DuckDBAdapter
 from prophetovol.strategy.io import canonical_body, spec_to_yaml
@@ -48,6 +51,21 @@ DATA_SOURCE = "data_source"
 
 STRATEGY_SPEC = "strategy_spec"
 """Definition kind of strategy specs (VER-1, decision 27)."""
+
+RUN_CONFIG_TEMPLATE = "run_config_template"
+"""Definition kind of run-configuration templates (RUN-2, decision 27)."""
+
+
+def _prefixed(prefix: str, path: str) -> str:
+    """Join a field path under a prefix, for pre-flight findings.
+
+    :param prefix: ``spec`` or ``config``.
+    :param path: The path inside it; may be empty or start with an index.
+    :returns: For example ``spec.legs[0].strike``.
+    """
+    if not path:
+        return prefix
+    return prefix + path if path.startswith("[") else f"{prefix}.{path}"
 
 
 class BacktestService:
@@ -291,6 +309,107 @@ class BacktestService:
         """
         # The catalog stores canonical JSON with sorted keys; rebuilding through the model restores field order.
         return spec_to_yaml(canonical_body(self.get_spec(spec_id, version)))
+
+    # --- run configuration and pre-flight (§11.1, §11.2) ---------------------------------------
+
+    @audited("run.save_template")
+    def save_run_template(self, body: Any, context: CallContext) -> tuple[DefinitionVersion, bool]:
+        """Validate and save a named run-configuration template as a new version (RUN-2).
+
+        :param body: The template: ``name``, ``description`` and ``config``.
+        :param context: Who is saving, through which channel.
+        :returns: The latest version and whether this call created it (unchanged content saves nothing).
+        :raises ValidationFailed: If the template is invalid; every issue has its field path.
+        """
+        try:
+            template = RunConfigTemplate.model_validate(body)
+        except pydantic.ValidationError as exc:
+            raise ValidationFailed.from_pydantic(exc) from None
+        return self.storage.save_definition(RUN_CONFIG_TEMPLATE, template.name, template.model_dump(mode="json"), context)
+
+    def get_run_template(self, name: str, version: int | None = None) -> RunConfigTemplate:
+        """A saved run-configuration template.
+
+        :param name: The template's name.
+        :param version: The version; the latest when omitted.
+        :returns: The template.
+        :raises NotFoundError: If the template or the version does not exist.
+        """
+        return RunConfigTemplate.model_validate(self.storage.get_definition(RUN_CONFIG_TEMPLATE, name, version).body)
+
+    def list_run_templates(self) -> list[DefinitionVersion]:
+        """The latest version of every saved template, by name.
+
+        :returns: The versions.
+        """
+        return self.storage.list_definitions(RUN_CONFIG_TEMPLATE)
+
+    @audited("run.preflight")
+    def preflight_run(self, spec_id: str, config: Any, context: CallContext,
+                      spec_version: int | None = None) -> PreflightReport:
+        """Check everything a run needs and fix its step schedule, without starting it (RUN-10 to RUN-12).
+
+        Every problem is reported at once. The data versions in the report are the ones the run will read
+        (decision 30).
+
+        :param spec_id: The strategy spec's id.
+        :param config: The run configuration (RUN-1), as a mapping or a :class:`RunConfig`.
+        :param context: Who is checking, through which channel.
+        :param spec_version: The spec version; the latest when omitted.
+        :returns: The report, with any warnings, when the run can start.
+        :raises NotFoundError: If the spec or the version does not exist.
+        :raises PreflightFailed: If anything blocks the run; the exception carries the whole report.
+        """
+        spec_def = self.get_spec_version(spec_id, spec_version)
+        spec_report, spec = validate_spec(spec_def.body, self._underlyings())
+        errors = [PreflightIssue(severity="error", path=_prefixed("spec", e.path), message=e.message)
+                  for e in spec_report.errors]
+        warnings = [PreflightIssue(severity="warning", path=_prefixed("spec", w.path), message=w.message)
+                    for w in spec_report.warnings]
+        resolved: RunConfig | None = None
+        try:
+            parsed = config if isinstance(config, RunConfig) else RunConfig.model_validate(config)
+        except pydantic.ValidationError as exc:
+            parsed = None
+            errors += [PreflightIssue(severity="error", path=_prefixed("config", ".".join(map(str, e["loc"]))),
+                                      message=e["msg"].removeprefix("Value error, ")) for e in exc.errors()]
+        if parsed is not None and spec is not None:
+            try:
+                resolved = parsed.resolved(spec.underlying)
+            except ValueError as exc:
+                errors.append(PreflightIssue(severity="error", path="config.underlying", message=str(exc)))
+        schedule, versions = None, []
+        if resolved is not None:
+            if resolved.data_source not in self.list_data_sources():
+                errors.append(PreflightIssue(severity="error", path="config.data_source", message=(
+                    f"unknown data source {resolved.data_source!r} (known: {', '.join(self.list_data_sources())})")))
+            else:
+                active = self.storage.list_versions(resolved.underlying, states=[VersionState.ACTIVE])
+                in_range = {v.import_id for v in active if resolved.start_date <= v.as_of_date <= resolved.end_date}
+                sources = {i: self.storage.get_import(i).data_source for i in in_range}
+                schedule, versions, data_errors, data_warnings = check_data(resolved, self.calendar, active, sources)
+                errors += data_errors
+                warnings += data_warnings
+        report = PreflightReport(
+            spec_id=spec_def.key, spec_version=spec_def.version, spec_hash=spec_def.content_hash, config=resolved,
+            config_hash=resolved.config_hash() if resolved is not None else None, errors=errors, warnings=warnings,
+            schedule=schedule if not errors else None, data_versions=versions if not errors else [])
+        if not report.ok:
+            raise PreflightFailed(report)
+        return report
+
+    def market_data(self, report: PreflightReport, spec: StrategySpec) -> MarketDataProvider:
+        """The market data provider of a run that passed pre-flight (plan §4.6).
+
+        :param report: The run's pre-flight report.
+        :param spec: The run's spec, whose selectors set the horizon read (decision 31).
+        :returns: The provider; its views go to the engine, never the provider itself.
+        :raises ConfigurationError: If the report has errors.
+        """
+        if not report.ok or report.schedule is None or report.config is None:
+            raise ConfigurationError("market data is available only for a run that passed pre-flight")
+        return MarketDataProvider(self.storage, report.config.underlying, report.schedule, report.data_versions,
+                                  spec_horizon_days(spec))
 
     # --- jobs (§13.3) ------------------------------------------------------------------------
 

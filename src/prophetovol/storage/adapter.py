@@ -6,7 +6,8 @@ implementation, DuckDB plus Parquet (``storage.duckdb``), and every implementati
 contract suite in ``tests/contract`` (DATA-84).
 
 The interface grows with the plan's phases: this version has the catalog, staged market data,
-jobs, attempts and the Phase 7 data lifecycle. Run results arrive with Phase 14.
+jobs, attempts, the Phase 7 data lifecycle and Phase 10's chunked market reads for runs. Run results
+arrive with Phase 14.
 
 An adapter object is used from one thread at a time. Request threads use :meth:`reader`, which
 returns an adapter on independent cursors of the same databases (ARC-4).
@@ -310,4 +311,30 @@ class StorageAdapter(ABC):
         :param columns: Columns to return; all when omitted.
         :param cutoff: Latest allowed aware instant; asking for later data raises PointInTimeError.
         :returns: Active rows or an empty table when no snapshot is active.
+        """
+
+    @abstractmethod
+    def read_market_chunk(self, underlying: str, versions: list[DataVersionRecord], columns: list[str] | None = None,
+                          max_days_to_expiry: float | None = None) -> pa.Table:
+        """Read the rows of exactly these data versions, whatever their state now (plan §4.6, decision 30).
+
+        A run reads its steps in chunks through this, with the versions captured at pre-flight.
+
+        :param underlying: The underlying.
+        :param versions: The versions to read, one per as-of time.
+        :param columns: The columns to return; all when omitted.
+        :param max_days_to_expiry: Only rows whose ``days_to_expiry`` is at most this (the spec's horizon,
+            decision 31); every row when omitted.
+        :returns: The rows, ordered by as-of time, then root, expiration, option type and strike where present.
+        :raises NotFoundError: If a version's file no longer exists (it was purged).
+        """
+
+    @abstractmethod
+    def read_index_levels(self, underlying: str, versions: list[DataVersionRecord]) -> dict[datetime, float]:
+        """The index level of each of these data versions' snapshots.
+
+        :param underlying: The underlying.
+        :param versions: The versions, one per as-of time.
+        :returns: The index level by as-of instant (aware, UTC).
+        :raises NotFoundError: If a version's file no longer exists.
         """
