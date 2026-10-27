@@ -1,0 +1,42 @@
+# Appendix B, example 2: long butterfly, unhedged (SPEC-82).
+# Buy a 60-day butterfly: short at-the-money call and put at the same strike, long 25-delta call and
+# put wings; roll at 25 days or fewer. Choice made: put and call wings (an iron butterfly); the short
+# put uses the short call's strike so both shorts share one strike.
+id: long_butterfly_60d
+description: 60-day SPX iron butterfly, short ATM straddle, long 25-delta wings, rolled at 25 days to expiry.
+underlying: SPX
+legs:
+  - id: short_call
+    option_type: call
+    side: short
+    ratio: 1
+    expiration: {selector: target_days, days: 60}
+    strike: {selector: atm}
+  - id: short_put
+    option_type: put
+    side: short
+    ratio: 1
+    expiration: {selector: same_as_leg, leg: short_call}
+    strike: {selector: same_strike_as, leg: short_call}
+  - id: long_call
+    option_type: call
+    side: long
+    ratio: 1
+    expiration: {selector: same_as_leg, leg: short_call}
+    strike: {selector: delta, target: 0.25}
+  - id: long_put
+    option_type: put
+    side: long
+    ratio: 1
+    expiration: {selector: same_as_leg, leg: short_call}
+    strike: {selector: delta, target: 0.25}
+entry: {schedule: when_flat}
+triggers:
+  - name: roll_at_25_days
+    scope: structure
+    action: roll
+    any_of:
+      - {condition: structure_min_days_to_expiry_at_or_below, days: 25, unit: calendar_days}
+expiry_handling: close_structure
+hedge: {rule: none}
+sizing: {method: contracts, quantity: 10}

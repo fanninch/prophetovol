@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5; updated for requirements v7. Plan phases 0–8 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 9 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–35 from Phase 9; updated for requirements v7. Plan phases 0–9 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 10 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -736,6 +736,11 @@ Added in v5, with M2 detailed (§7), agreed Oct 27, 2026:
 32. **The stress gate is an `OrderGate` interface** with a pass-through implementation in M2. Attaching stress definitions, and stress modes other than `monitor`, are refused until M3, which replaces the gate without changing the loop.
 33. **The `spec` CLI commands move from Phase 14 to Phase 9.**
 
+Added with Phase 9 (details in §16, Phase 9):
+
+34. **Spec unions are assembled from the parameter-model tuples in `registry/params/`**, not from the live registries, so `strategy/` imports no engine code (decisions 2 and 28). The engine modules register implementations with the same models, and a test keeps the tuples and the registries identical. This refines §4.5's "built from the registry's parameter models".
+35. **`prophetovol spec examples [--out DIR]`** lists the shipped Appendix B specs and writes them to a folder. Like `testdata generate` (decision 8), it is a command beyond INT-40, so the examples can be read, edited and published without opening the package.
+
 ## 14. Risks
 
 | Risk | Mitigation |
@@ -1140,3 +1145,48 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
   - a closed output pipe exiting quietly, while other `OSError`s stay unexpected
   - in `tests/unit/test_ingest.py`: the low-count ratio, where an 80% day passes at the default, is flagged at 0.9 with the ratio in the description, and 1.5 is refused
 - **M1 is complete.** Next: Phase 9 (spec model, validation and publishing), the start of M2.
+
+
+**Phase 9 (spec model, validation and publishing), Oct 27, 2026**
+
+- **Registries** (`registry/catalog.py`): nine new registries, `expiration_selector`, `strike_selector`, `entry_schedule`, `trigger_condition`, `trigger_action`, `hedge_rule`, `sizing_method`, `fill_model` and `constructor`, with every Phase 1 implementation (REG-1).
+  - The implementations register from `engine/selection.py`, `entries.py`, `triggers.py`, `hedging.py`, `sizing.py`, `fills.py` and `constructor.py`. Each class holds only its validated parameters; behavior arrives in phases 11–13 (decision 29).
+- **Parameter models** (`registry/params/`): `selection.py` (the five expiration selectors with `ExpirationFilter`, and the five strike selectors), `schedules.py`, `triggers.py`, `hedge.py`, `sizing.py` and `fills.py` (the fill models and `rules`).
+  - Each model carries its discriminator as a literal and describes every field with units, defaults and interactions (DOC-1, DOC-2).
+  - Model-level rules: `target_days`' window not empty; `strike_offset` takes points or percent, not both; band `lower ≤ target ≤ upper`; a stop's amount ≤ 0.
+- **`strategy/model.py`:** `StrategySpec`, `Leg`, `Trigger`, `TriggerScope`, `QuoteFilters`, `ExpiryHandling` and `Side` (SPEC-1, SPEC-2, SPEC-28, SPEC-40, SPEC-54).
+  - Selector, schedule, condition, hedge and sizing fields are discriminated unions (decision 34).
+  - `TriggerScope` reads and writes `structure` or `{leg: <id>}`, exactly as specs write them.
+- **`strategy/validate.py`:** the dry run (SPEC-80) returning `SpecValidationReport`, with errors and warnings located by paths such as `legs[1].strike.leg`, and the legs' selection order (SPEC-3).
+  - **Schema errors:** pydantic's locations, without the union tags; unknown implementation names list the known ones.
+  - **Rule checks:** unique leg ids and trigger names; references to other, existing legs; cycles named; roots allowed by the underlying; SPEC-52 with its exact message.
+  - **SPEC-53 warning** as answered in §7.5: a covering trigger has a days-to-expiry condition with `days ≥ 1`, in either unit. A structure-scoped trigger watching another leg covers a leg that never expires first (`same_as_leg`, `next_after_leg`, or `target_days` windows that cannot overlap), so Appendix B example 3 gets no warning.
+  - **Unit warning:** when `unit` is left out of a day condition (§7.5, answer 3).
+  - `SpecInvalid` carries the whole report, warnings included.
+- **`strategy/io.py`:** YAML or JSON import (JSON for `.json`); the canonical form, every field in model order with defaults stated; YAML export; the shipped examples. **`strategy/examples/`:** Appendix B's three specs as package data (SPEC-82), included in the wheel.
+- **Service:**
+  - audited `validate_spec` and `publish_spec` (`spec.validate`, `spec.publish`, AUD-2). Specs are stored as definitions of kind `strategy_spec` (decision 27), and unchanged content publishes nothing (VER-1, VER-2).
+  - `get_spec_version`, `get_spec`, `list_specs`, `spec_versions`, `export_spec`
+- **CLI** (INT-40, decision 33): `spec validate`, `spec publish`, `spec list`, `spec show <id>[@version] [--versions]`, `spec export <id>[@version] [--out]`, and `spec examples [--out] [--force]` (decision 35). Findings show as one aligned table of severity, field and message.
+- **Reference documentation** regenerated: the spec models and the new registries.
+- **Tracker script:** a general `milestones` key sets any milestone's status by name. The tracker's phase table now lists phases 9–15 one by one.
+- **Changes from the plan:**
+  - The unions come from the parameter-model tuples (decision 34).
+  - `spec examples` was added (decision 35).
+  - Trigger names must be unique, which SPEC-80 does not list, because events record triggers by name.
+  - Schema errors are reported before the rule checks run. A spec with a schema error and a bad leg reference shows the reference error only after the schema is fixed, because the rule checks need a valid model.
+- **Found while building:**
+  - The catalog stores canonical JSON with sorted keys, so exporting a stored body put `description` first. Export now rebuilds the canonical form from the model, giving model order with the same hash.
+  - The CLI crashed with `UnicodeEncodeError` when its output was piped on Windows (cp1252) and contained `≤`. This affected Phase 8's `registry show` too. The CLI now replaces characters the output cannot encode, and validation messages use ASCII (`<=`, `>=`, `->`).
+- **Test mistakes corrected during development:** two CLI assertions assumed fixed column spacing in aligned tables; they now compare the cells.
+- **Tests:** 340, all passing: 334 run by default in about 70 seconds (unit 301, contract 28, meta 3, packaging 2), and the 6 real-data tests, rerun because they import through the CLI, pass with `PROPHETOVOL_VENDOR_DATA` set. New:
+  - `tests/unit/test_strategy.py`, 52 tests:
+    - the spec unions identical to the registries; every implementation registered; schemas described
+    - the Appendix B specs valid without warnings; selection order
+    - every validation rule with its field path, unknown names and the missing discriminator
+    - band bounds; SPEC-52, including the restriction inherited through `same_as_leg`; SPEC-53's qualifying conditions and coverage across legs; the unit warning
+    - exact export round trips for the examples and for a spec using every implementation; YAML and JSON imports equal
+    - publishing: versions, unchanged content, audited refusals, unknown specs and versions
+  - `tests/unit/test_spec_cli.py`, 5 tests: every `spec` command, invalid specs listing their findings, readable errors, and output on a cp1252 stream
+  - one tracker-script test for milestones
+- **Next:** Phase 10 (run configuration, pre-flight and market data access).

@@ -60,6 +60,8 @@ where = ["src"]
 [tool.setuptools.package-data]
 # Shipped reference data: underlyings and data sources (REF-1, REF-5).
 "prophetovol.reference.defaults" = ["underlyings/*.yaml", "data_sources/*.yaml"]
+# The Appendix B example strategy specs (SPEC-82).
+"prophetovol.strategy" = ["examples/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

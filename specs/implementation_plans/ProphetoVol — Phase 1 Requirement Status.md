@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 26, 2026 · @Chuck · **Up to date through plan Phase 8 and checkpoint 1.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 9 (spec model, validation and publishing).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,12 +13,12 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 41 done, 49 partial, 132 not started.
+**222 requirements:** 47 done, 52 partial, 123 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
 | **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
-| **M2 Engine core** | 9–15 | Not started |
+| **M2 Engine core** | 9–15 | **In progress:** phase 9 done (Oct 27, 2026); 10–15 to go |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
 
@@ -33,7 +33,14 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 6 | Ingest, normalization, validation and quality reports | Oct 26, 2026 |
 | 7 | Overlap, commit, versions, delete, purge, invalidation and coverage | Oct 25, 2026 |
 | 8 | Data CLI, documentation and checkpoint 1 | Oct 26, 2026 |
-| 9–24 | M2–M4 (see the implementation plan, §7–§9) | — |
+| 9 | Spec model, validation and publishing | Oct 27, 2026 |
+| 10 | Run configuration, pre-flight and market data access | — |
+| 11 | Selection and entries | — |
+| 12 | Book, marking, fills, sizing, hedging and accounting | — |
+| 13 | Triggers, rolls, expiry, settlement and the step loop | — |
+| 14 | Run lifecycle, results storage and the run CLI | — |
+| 15 | Acceptance, determinism, run time and checkpoint 2 | — |
+| 16–24 | M3–M4 (see the implementation plan, §8–§9) | — |
 
 | Area | Done | Partial | Not started |
 | --- | --- | --- | --- |
@@ -44,7 +51,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Registries (§5.5) | 1 | 2 | 1 |
 | Data module (§6) | 22 | 8 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
-| Strategy specification (§8) | 0 | 0 | 50 |
+| Strategy specification (§8) | 6 | 3 | 41 |
 | Engine (§9) | 0 | 0 | 19 |
 | Stress module (§10) | 0 | 1 | 17 |
 | Runs (§11) | 0 | 3 | 8 |
@@ -64,7 +71,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ARC-2 | The engine is a pure library with no I/O | Not started |  | Phase 9-13 |  |
 | ARC-3 | Point-in-time access through MarketDataView, enforced in code | Not started |  | Phase 10 |  |
 | ARC-4 | One writer: service owns read-write connections; write jobs one at a time; readers on cursors | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py` (readers), `unit/test_jobs.py` |
-| ARC-5 | Extensible component types are registries of named implementations | **Partial** | Phase 2 | remaining registries (9, 11-13, 16) | `unit/test_registry.py` |
+| ARC-5 | Extensible component types are registries of named implementations | **Partial** | Phase 2, 9 (the M2 registries) | stress registries (16) | `unit/test_registry.py`, `unit/test_strategy.py` |
 | ARC-6 | Single-user, local server bound to 127.0.0.1 | Not started |  | Phase 19 |  |
 | ARC-7 | Names: ProphetoVol; package and CLI `prophetovol`; home `~/.prophetovol` | **Done** | Phase 1 |  | `unit/test_package.py`, `packaging/test_wheel.py`, `unit/test_core.py` |
 
@@ -80,8 +87,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| VER-1 | Published definitions are immutable; every change is a new integer version | **Partial** | Phase 3, 4 | strategy specs (9), stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_audit.py` |
-| VER-2 | Each published version stores a content hash of its canonical JSON | **Partial** | Phase 3 | specs (9), stress definitions (16) | `contract/test_adapter_contract.py` |
+| VER-1 | Published definitions are immutable; every change is a new integer version | **Partial** | Phase 3, 4, 9 (strategy specs) | stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_audit.py`, `unit/test_strategy.py` |
+| VER-2 | Each published version stores a content hash of its canonical JSON | **Partial** | Phase 3, 9 (specs, hashed in canonical form) | stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_strategy.py` |
 | VER-3 | A run records by reference everything it used | Not started |  | Phase 14 |  |
 | VER-4 | Market snapshots are versioned per (underlying, as_of) | **Done** | Phase 3, 7 |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 
@@ -104,7 +111,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source) | selectors, schedules, conditions, actions, hedge, sizing, fills, constructor (9, 11-13); stress types and modes (16-17) | `unit/test_registry.py` |
+| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source), 9 (selectors, schedules, conditions, actions, hedge, sizing, fills and constructor registered with their parameter models) | their behavior (11-13); stress types and modes (16-17) | `unit/test_registry.py`, `unit/test_strategy.py` |
 | REG-2 | Every implementation declares name, description, documented parameter model, version | **Done** | Phase 2 | enforced at registration for every future implementation | `unit/test_registry.py` |
 | REG-3 | Registries are discoverable with descriptions and JSON Schemas | **Partial** | Phase 2 (service level), 8 (CLI `registry list/show`) | API (20) | `unit/test_registry.py`, `unit/test_data_cli.py` |
 | REG-4 | Condition types are pluggable | Not started |  | Phase 13 |  |
@@ -161,9 +168,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| SPEC-1 | StrategySpec contents | Not started |  | Phase 9 |  |
-| SPEC-2 | Leg fields | Not started |  | Phase 9 |  |
-| SPEC-3 | Leg references without cycles, resolved in dependency order | Not started |  | Phase 9 |  |
+| SPEC-1 | StrategySpec contents | **Done** | Phase 9 |  | `unit/test_strategy.py` |
+| SPEC-2 | Leg fields | **Done** | Phase 9 |  | `unit/test_strategy.py` |
+| SPEC-3 | Leg references without cycles, resolved in dependency order | **Partial** | Phase 9 (references checked, cycles named, selection order computed) | legs resolved in that order at selection (11) | `unit/test_strategy.py` |
 | SPEC-4 | Selection is atomic across legs | Not started |  | Phase 11 |  |
 | SPEC-10 | `target_days` expiration selector | Not started |  | Phase 11 |  |
 | SPEC-11 | `trading_days_out` expiration selector | Not started |  | Phase 11 |  |
@@ -186,7 +193,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-33 | `weekdays` entry schedule | Not started |  | Phase 11 |  |
 | SPEC-34 | `max_open` for schedules | Not started |  | Phase 11 |  |
 | SPEC-35 | Failed entries retried at the next scheduled step | Not started |  | Phase 11 |  |
-| SPEC-40 | Trigger structure | Not started |  | Phase 13 |  |
+| SPEC-40 | Trigger structure | **Done** | Phase 9 (trigger model: name, scope, action, any_of) |  | `unit/test_strategy.py` |
 | SPEC-41 | Phase 1 trigger conditions | Not started |  | Phase 13 |  |
 | SPEC-42 | Condition evaluation; null greeks evaluate false | Not started |  | Phase 13 |  |
 | SPEC-43 | Close and roll actions | Not started |  | Phase 13 |  |
@@ -195,8 +202,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-46 | Structure P&L per unit | Not started |  | Phase 13 |  |
 | SPEC-50 | PM-settled legs settle at intrinsic value | Not started |  | Phase 13 (pm_index_close ready from 2) |  |
 | SPEC-51 | AM-settled legs force-closed on their last trading day | Not started |  | Phase 13 |  |
-| SPEC-52 | Validation rejects holding AM-settled legs to expiration | Not started |  | Phase 13 |  |
-| SPEC-53 | Validation warns when the engine will force-close an AM leg | Not started |  | Phase 13 |  |
+| SPEC-52 | Validation rejects holding AM-settled legs to expiration | **Done** | Phase 9 |  | `unit/test_strategy.py` |
+| SPEC-53 | Validation warns when the engine will force-close an AM leg | **Done** | Phase 9 (covering trigger: a days-to-expiry condition with days >= 1, plan §7.5) |  | `unit/test_strategy.py` |
 | SPEC-54 | `expiry_handling` options | Not started |  | Phase 13 |  |
 | SPEC-55 | PM legs closed early when the settlement date is a missing day | Not started |  | Phase 13 |  |
 | SPEC-60 | `none` hedge rule | Not started |  | Phase 12 |  |
@@ -208,9 +215,9 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-71 | `notional` sizing | Not started |  | Phase 12 |  |
 | SPEC-72 | Rounding of structure units | Not started |  | Phase 12 |  |
 | SPEC-73 | Re-sizing on rolls | Not started |  | Phase 12 |  |
-| SPEC-80 | Dry-run validation with field paths | Not started |  | Phase 9 |  |
-| SPEC-81 | Authoring and exact YAML round trip | Not started |  | Phase 9; GUI editor 22 |  |
-| SPEC-82 | Appendix B examples ship as sample specs | Not started |  | Phase 9 |  |
+| SPEC-80 | Dry-run validation with field paths | **Done** | Phase 9 |  | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
+| SPEC-81 | Authoring and exact YAML round trip | **Partial** | Phase 9 (YAML and JSON import through the CLI and the service; exact round-trip export) | API (20), GUI editor (22) | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
+| SPEC-82 | Appendix B examples ship as sample specs | **Partial** | Phase 9 (shipped as package data, validated; `spec examples`) | acceptance tests (15) | `unit/test_strategy.py` |
 
 ## Engine (§9)
 
@@ -312,7 +319,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | INT-35 | GUI: Run page | Not started |  | Phase 23 |  |
 | INT-36 | GUI: Jobs panel | Not started |  | Phase 21 |  |
 | INT-37 | Charts as tables; desktop-first layout; browsers | Not started |  | Phase 21-23 |  |
-| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`), 8 (`data`, `registry`, `jobs`, `docs`) | spec and run (14), stress (16), demo (24) | `unit/test_cli.py`, `unit/test_data_cli.py` |
+| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`), 8 (`data`, `registry`, `jobs`, `docs`), 9 (`spec validate|publish|list|show|export`, and `spec examples`) | run (14), stress (16), demo (24) | `unit/test_cli.py`, `unit/test_data_cli.py`, `unit/test_spec_cli.py` |
 | INT-41 | CLI and server cannot share a home; both say so with the remedy | **Partial** | Phase 3 (service reports it), 8 (CLI message with the remedy) | server message (19) | `unit/test_service.py`, `unit/test_data_cli.py` |
 | INT-50 | Synthetic data generator in the vendor format | **Done** | Phase 5 | also an older-conventions mode (five-character codes, historical roots, Saturday expirations, single price, discounted deltas) | `unit/test_generator.py` |
 | INT-51 | `prophetovol demo` | Not started |  | Phase 24 |  |
@@ -322,8 +329,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| DOC-1 | One pydantic definition per configurable item, every field described | **Partial** | Phase 1 (meta-test), applied in 2-8; 8 (generated reference docs, checked current by a meta-test) | applies to every later model | `meta/test_documentation.py` |
-| DOC-2 | Descriptions state units, signs, defaults and interactions | **Partial** | Phase 2-4 | applies to every later model |  |
+| DOC-1 | One pydantic definition per configurable item, every field described | **Partial** | Phase 1 (meta-test), applied in 2-9; 8 (generated reference docs, checked current by a meta-test) | applies to every later model | `meta/test_documentation.py` |
+| DOC-2 | Descriptions state units, signs, defaults and interactions | **Partial** | Phase 2-4, 9 (spec and parameter models) | applies to every later model |  |
 | DOC-3 | Conventions published as a document generated from the module | **Done** | Phase 2 (conventions module), 8 (`docs/reference/conventions.rst` generated by `docs generate`) |  | `unit/test_conventions.py`, `meta/test_documentation.py` |
 | DOC-4 | reST docstrings with Sphinx fields; README coverage | **Partial** | Phase 1 (meta-test enforces docstrings and `:param`), 8 (README: install, test data, import, review, coverage, delete, purge) | README sections for spec, run (14) and demo (24) | `meta/test_documentation.py` |
 
@@ -332,7 +339,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
 | AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4, 6, 7 (lifecycle jobs and attempts) | Runs (14) | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
-| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4, 6, 7 (preview, commit, delete, purge and execution) | Each new operation is audited as it is added | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
+| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4, 6, 7 (preview, commit, delete, purge and execution), 9 (spec.validate, spec.publish) | Each new operation is audited as it is added | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
 | AUD-3 | Software versions recorded on every run | **Partial** | Phase 1 (collector) | recorded on runs (14) | `unit/test_core.py` |
 | AUD-4 | Content hashes for definitions and import files | **Done** | Phase 3 (stored), 6 (file hashing at ingest) | specs (9) get hashes through the same `save_definition` | `contract/test_adapter_contract.py`, `unit/test_ingest.py` |
 
@@ -364,6 +371,6 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s), 8 (2008 and 2023 imported and checked through the CLI in about 60 s together) | whole run (15) |  |
 | NFR-2 | GUI responsiveness | Not started |  | Phase 21-24 |  |
-| NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages), 8 (CLI: short expected errors; unexpected ones logged to `logs/server.log`) | API presentation (19) | `unit/test_core.py`, `unit/test_service.py`, `unit/test_data_cli.py` |
+| NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages), 8 (CLI: short expected errors; unexpected ones logged to `logs/server.log`), 9 (CLI output never fails on characters a Windows pipe cannot encode) | API presentation (19) | `unit/test_core.py`, `unit/test_service.py`, `unit/test_data_cli.py` |
 | NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4, 7 (confirmed scope; recoverable purge/discard) | Immutable run results (14) | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
 | NFR-5 | Accessibility | Not started |  | Phase 21-24 |  |

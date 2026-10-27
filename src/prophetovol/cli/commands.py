@@ -1,4 +1,4 @@
-"""Data, registry, job and documentation commands: presentation over BacktestService (INT-40)."""
+"""Data, spec, registry, job and documentation commands: presentation over BacktestService (INT-40)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from prophetovol.core.context import CallContext
 from prophetovol.core.records import JobStatus, VersionState
 from prophetovol.data.lifecycle import CoverageMonth, DataSelection
 from prophetovol.runs.service import BacktestService
+from prophetovol.strategy.io import example_spec_texts, parse_spec_text, read_spec_file
+from prophetovol.strategy.validate import SpecInvalid
 
 
 @contextmanager
@@ -458,3 +460,158 @@ def docs_generate(state, output, check):
     with _service(state) as (svc, context):
         paths = svc.generate_docs(output, context, check)
         click.echo(f"{'Checked' if check else 'Generated'} {len(paths)} reference documents in {output}.")
+
+
+def _spec_ref(ref):
+    """Split ``<id>[@<version>]`` into the id and the version (None for the latest)."""
+    spec_id, sep, version = ref.partition("@")
+    if not spec_id or (sep and not version.isdigit()):
+        raise click.BadParameter(f"{ref!r} is not <id> or <id>@<version>, for example short_call_hedged@2")
+    return spec_id, int(version) if sep else None
+
+
+def _spec_issues(report):
+    """Show a validation report's errors and warnings as one table, errors first."""
+    rows = [(i.severity, i.path or "-", i.message) for i in [*report.errors, *report.warnings]]
+    if rows:
+        _table(["Severity", "Field", "Message"], rows)
+
+
+@click.group()
+def spec():
+    """Validate, publish, list, show and export strategy specs."""
+
+
+@spec.command("validate")
+@click.argument("file", type=click.Path(path_type=Path))
+@click.pass_obj
+def spec_validate(state, file):
+    """Check a YAML or JSON spec without publishing it (a dry run).
+    \f
+    :param state: Shared CLI options.
+    :param file: The spec file; JSON when it ends in .json, YAML otherwise.
+    """
+    with _service(state) as (svc, context):
+        body = read_spec_file(file)
+        try:
+            report = svc.validate_spec(body, context)
+        except SpecInvalid as exc:
+            _spec_issues(exc.report)
+            raise click.ClickException(f"{exc.report.spec_id or file} is not valid: "
+                                       f"{_n(len(exc.report.errors), 'error')}, "
+                                       f"{_n(len(exc.report.warnings), 'warning')}.") from None
+        click.echo(f"Valid: {report.spec_id}, {_n(len(report.warnings), 'warning')}.")
+        _spec_issues(report)
+        click.echo(f"Legs are selected in this order: {', '.join(report.leg_order)}.")
+
+
+@spec.command("publish")
+@click.argument("file", type=click.Path(path_type=Path))
+@click.pass_obj
+def spec_publish(state, file):
+    """Validate a spec and publish it as a new version; unchanged content publishes nothing.
+    \f
+    :param state: Shared CLI options.
+    :param file: The spec file; JSON when it ends in .json, YAML otherwise.
+    """
+    with _service(state) as (svc, context):
+        body = read_spec_file(file)
+        try:
+            result = svc.publish_spec(body, context)
+        except SpecInvalid as exc:
+            _spec_issues(exc.report)
+            raise click.ClickException(f"{exc.report.spec_id or file} was not published: "
+                                       f"{_n(len(exc.report.errors), 'error')}.") from None
+        d = result.definition
+        if result.created:
+            click.echo(f"Published {d.key} version {d.version} (hash {d.content_hash[:12]}).")
+        else:
+            click.echo(f"Unchanged: {d.key} version {d.version} already has this content; nothing published.")
+        _spec_issues(result.report)
+
+
+@spec.command("list")
+@click.pass_obj
+def spec_list(state):
+    """List published specs with their latest versions.
+    \f
+    :param state: Shared CLI options.
+    """
+    with _service(state) as (svc, _):
+        specs = svc.list_specs()
+        _table(["Spec", "Version", "Published", "By", "Hash", "Description"],
+               [(d.key, d.version, _local_time(d.created_at), d.actor, d.content_hash[:12],
+                 textwrap.shorten(d.body.get("description", ""), width=70, placeholder="...") or None) for d in specs])
+        click.echo(f"{_n(len(specs), 'spec')}.")
+
+
+@spec.command("show")
+@click.argument("ref")
+@click.option("--versions", "all_versions", is_flag=True, help="Also list every version of the spec.")
+@click.pass_obj
+def spec_show(state, ref, all_versions):
+    """Show a published spec as YAML; REF is <id> or <id>@<version>.
+    \f
+    :param state: Shared CLI options.
+    :param ref: The spec id, optionally with @version.
+    :param all_versions: Also list every version.
+    """
+    spec_id, version = _spec_ref(ref)
+    with _service(state) as (svc, _):
+        d = svc.get_spec_version(spec_id, version)
+        versions = svc.spec_versions(spec_id)
+        click.echo(f"Spec: {d.key} version {d.version} of {len(versions)}")
+        click.echo(f"Hash: {d.content_hash}")
+        click.echo(f"Published: {_local_time(d.created_at)} by {d.actor} ({d.channel})")
+        if all_versions:
+            click.echo("")
+            _table(["Version", "Published", "By", "Hash"],
+                   [(v.version, _local_time(v.created_at), v.actor, v.content_hash[:12]) for v in versions])
+        click.echo("")
+        click.echo(svc.export_spec(spec_id, version), nl=False)
+
+
+@spec.command("export")
+@click.argument("ref")
+@click.option("--out", "output", type=click.Path(dir_okay=False, path_type=Path), default=None,
+              help="Write to this file instead of the terminal.")
+@click.pass_obj
+def spec_export(state, ref, output):
+    """Export a published spec as YAML that import accepts; REF is <id> or <id>@<version>.
+    \f
+    :param state: Shared CLI options.
+    :param ref: The spec id, optionally with @version.
+    :param output: File to write; the terminal when omitted.
+    """
+    spec_id, version = _spec_ref(ref)
+    with _service(state) as (svc, _):
+        text = svc.export_spec(spec_id, version)
+    if output is None:
+        click.echo(text, nl=False)
+        return
+    output.write_text(text, encoding="utf-8")
+    click.echo(f"Wrote {spec_id} to {output}.")
+
+
+@spec.command("examples")
+@click.option("--out", "output", type=click.Path(file_okay=False, path_type=Path), default=None,
+              help="Write the example files into this folder.")
+@click.option("--force", is_flag=True, help="Overwrite example files that already exist in the folder.")
+def spec_examples(output, force):
+    """List the example specs shipped with ProphetoVol (Appendix B), or write them to a folder.
+    \f
+    :param output: Folder to write the files into; only list them when omitted.
+    :param force: Overwrite existing files.
+    """
+    texts = example_spec_texts()
+    docs = {name: parse_spec_text(text, name) for name, text in texts.items()}
+    _table(["File", "Spec", "Description"], [(name, doc["id"], doc.get("description")) for name, doc in docs.items()])
+    if output is None:
+        return
+    output.mkdir(parents=True, exist_ok=True)
+    existing = sorted(name for name in texts if (output / name).exists())
+    if existing and not force:
+        raise click.ClickException(f"{', '.join(existing)} already in {output}; use --force to overwrite.")
+    for name, text in texts.items():
+        (output / name).write_text(text, encoding="utf-8")
+    click.echo(f"Wrote {_n(len(texts), 'example')} to {output}.")

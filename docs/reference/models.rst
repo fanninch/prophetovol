@@ -2269,6 +2269,1335 @@ prophetovol.registry.mechanism.RegistryInfo
      "type": "object"
    }
 
+prophetovol.registry.params.fills.CrossSpreadParams
+---------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``cross_spread``: buy at the ask, sell at the bid (the default fill model).",
+     "properties": {
+       "fill_model": {
+         "const": "cross_spread",
+         "description": "Selects this fill model.",
+         "title": "Fill Model",
+         "type": "string"
+       }
+     },
+     "required": [
+       "fill_model"
+     ],
+     "title": "CrossSpreadParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.fills.MidParams
+-------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``mid``: fill at the mid of the valid quote.",
+     "properties": {
+       "fill_model": {
+         "const": "mid",
+         "description": "Selects this fill model.",
+         "title": "Fill Model",
+         "type": "string"
+       }
+     },
+     "required": [
+       "fill_model"
+     ],
+     "title": "MidParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.fills.MidPlusFractionParams
+-------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``mid_plus_fraction``: fill at the mid plus a fraction of the half-spread against the trader.",
+     "properties": {
+       "fill_model": {
+         "const": "mid_plus_fraction",
+         "description": "Selects this fill model.",
+         "title": "Fill Model",
+         "type": "string"
+       },
+       "fraction": {
+         "description": "Share of the half-spread paid: 0 is the mid, 1 crosses the spread.",
+         "maximum": 1,
+         "minimum": 0,
+         "title": "Fraction",
+         "type": "number"
+       }
+     },
+     "required": [
+       "fill_model",
+       "fraction"
+     ],
+     "title": "MidPlusFractionParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.fills.RulesParams
+---------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``rules`` takes no parameters: it applies the run's strategy spec (ENG-2).",
+     "properties": {},
+     "title": "RulesParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.hedge.BandParams
+--------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``band``: keep the structure's net delta per unit within a band (SPEC-61).\n\nNet delta per unit is ``(Σ q_i · δ_i + h / m) / N``: leg quantities ``q_i`` in signed contracts,\nthe snapshot's deltas ``δ_i``, the hedge holding ``h`` in index units, multiplier ``m`` and ``N``\nstructure units. After the step's option trades, if it is outside ``[lower, upper]``, the hedge\nis traded so it equals ``target``.",
+     "properties": {
+       "lower": {
+         "description": "Lowest net delta per unit left unhedged, for example 0.0. lower ≤ target ≤ upper.",
+         "title": "Lower",
+         "type": "number"
+       },
+       "rule": {
+         "const": "band",
+         "description": "Selects this hedge rule.",
+         "title": "Rule",
+         "type": "string"
+       },
+       "scope": {
+         "const": "structure",
+         "default": "structure",
+         "description": "What the band applies to; structure is the only Phase 1 scope.",
+         "title": "Scope",
+         "type": "string"
+       },
+       "target": {
+         "description": "Net delta per unit the hedge restores when the measure leaves the band, for example 0.03.",
+         "title": "Target",
+         "type": "number"
+       },
+       "upper": {
+         "description": "Highest net delta per unit left unhedged, for example 0.08 (long 8 deltas per spread). lower = upper = target = 0 hedges to flat at every step.",
+         "title": "Upper",
+         "type": "number"
+       }
+     },
+     "required": [
+       "rule",
+       "lower",
+       "upper",
+       "target"
+     ],
+     "title": "BandParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.hedge.NoHedgeParams
+-----------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``none``: no hedging (SPEC-60).",
+     "properties": {
+       "rule": {
+         "const": "none",
+         "description": "Selects this hedge rule.",
+         "title": "Rule",
+         "type": "string"
+       }
+     },
+     "required": [
+       "rule"
+     ],
+     "title": "NoHedgeParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.schedules.EveryNTradingDaysParams
+-------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``every_n_trading_days``: open a structure every ``n`` trading days (SPEC-32).",
+     "properties": {
+       "max_open": {
+         "default": 1,
+         "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+         "minimum": 1,
+         "title": "Max Open",
+         "type": "integer"
+       },
+       "n": {
+         "description": "Trading days between entries, counted on the trading calendar from the run's first step (ENG-4). A due day that the run skips as a missing day has no entry.",
+         "minimum": 1,
+         "title": "N",
+         "type": "integer"
+       },
+       "schedule": {
+         "const": "every_n_trading_days",
+         "description": "Selects this entry schedule.",
+         "title": "Schedule",
+         "type": "string"
+       }
+     },
+     "required": [
+       "schedule",
+       "n"
+     ],
+     "title": "EveryNTradingDaysParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.schedules.OnceParams
+------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``once``: open one structure at the first step of the run (SPEC-30).",
+     "properties": {
+       "schedule": {
+         "const": "once",
+         "description": "Selects this entry schedule.",
+         "title": "Schedule",
+         "type": "string"
+       }
+     },
+     "required": [
+       "schedule"
+     ],
+     "title": "OnceParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.schedules.WeekdaysParams
+----------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "HolidayShift": {
+         "description": "What a ``weekdays`` schedule does when a listed weekday is not a trading day (SPEC-33).",
+         "enum": [
+           "next",
+           "skip"
+         ],
+         "title": "HolidayShift",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``weekdays``: open a structure on the listed weekdays (SPEC-33).",
+     "properties": {
+       "holiday_shift": {
+         "$ref": "#/$defs/HolidayShift",
+         "default": "skip",
+         "description": "When a listed weekday is not a trading day: skip (default) enters nothing that week for that day; next enters on the next trading day."
+       },
+       "max_open": {
+         "default": 1,
+         "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+         "minimum": 1,
+         "title": "Max Open",
+         "type": "integer"
+       },
+       "schedule": {
+         "const": "weekdays",
+         "description": "Selects this entry schedule.",
+         "title": "Schedule",
+         "type": "string"
+       },
+       "weekdays": {
+         "description": "Weekdays on which to enter, for example [MON, WED].",
+         "items": {
+           "$ref": "#/$defs/Weekday"
+         },
+         "minItems": 1,
+         "title": "Weekdays",
+         "type": "array"
+       }
+     },
+     "required": [
+       "schedule",
+       "weekdays"
+     ],
+     "title": "WeekdaysParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.schedules.WhenFlatParams
+----------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``when_flat``: open a structure whenever none of this spec is open (SPEC-31).",
+     "properties": {
+       "cooldown_trading_days": {
+         "default": 1,
+         "description": "Trading days to wait after a structure is closed by a close action or by expiry before re-entering. Default 1, so a close and a re-entry don't happen at the same step. It does not delay a roll, which re-establishes the structure immediately.",
+         "minimum": 0,
+         "title": "Cooldown Trading Days",
+         "type": "integer"
+       },
+       "max_open": {
+         "default": 1,
+         "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+         "minimum": 1,
+         "title": "Max Open",
+         "type": "integer"
+       },
+       "schedule": {
+         "const": "when_flat",
+         "description": "Selects this entry schedule.",
+         "title": "Schedule",
+         "type": "string"
+       }
+     },
+     "required": [
+       "schedule"
+     ],
+     "title": "WhenFlatParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.AtmParams
+-----------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       },
+       "StrikeTieBreak": {
+         "description": "Which strike wins when two are equally near the target delta (SPEC-20).",
+         "enum": [
+           "further_otm",
+           "nearer_otm"
+         ],
+         "title": "StrikeTieBreak",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``atm``: the 50-delta strike of the leg's own type (SPEC-21, CONV-5).",
+     "properties": {
+       "on_no_match": {
+         "$ref": "#/$defs/OnNoMatch",
+         "default": "skip_entry",
+         "description": "What happens when no strike is within tolerance (SPEC-25)."
+       },
+       "selector": {
+         "const": "atm",
+         "description": "Selects this strike selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tie_break": {
+         "$ref": "#/$defs/StrikeTieBreak",
+         "default": "further_otm",
+         "description": "Which of two strikes equally near 0.50 wins: further_otm (default) or nearer_otm."
+       },
+       "tolerance": {
+         "default": 0.05,
+         "description": "Largest absolute-delta distance from 0.50 that still matches.",
+         "minimum": 0,
+         "title": "Tolerance",
+         "type": "number"
+       }
+     },
+     "required": [
+       "selector"
+     ],
+     "title": "AtmParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.DeltaParams
+-------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       },
+       "StrikeTieBreak": {
+         "description": "Which strike wins when two are equally near the target delta (SPEC-20).",
+         "enum": [
+           "further_otm",
+           "nearer_otm"
+         ],
+         "title": "StrikeTieBreak",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``delta``: the strike whose absolute delta is nearest ``target`` (SPEC-20).",
+     "properties": {
+       "on_no_match": {
+         "$ref": "#/$defs/OnNoMatch",
+         "default": "skip_entry",
+         "description": "skip_entry (default): no structure opens at this step. nearest_any: take the nearest eligible strike regardless of tolerance, with a warning event (SPEC-25)."
+       },
+       "selector": {
+         "const": "delta",
+         "description": "Selects this strike selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "target": {
+         "description": "Target absolute delta (CONV-4): 0.25 means a 25-delta call (delta 0.25) or a 25-delta put (delta −0.25).",
+         "exclusiveMaximum": 1,
+         "exclusiveMinimum": 0,
+         "title": "Target",
+         "type": "number"
+       },
+       "tie_break": {
+         "$ref": "#/$defs/StrikeTieBreak",
+         "default": "further_otm",
+         "description": "Which of two strikes equally near the target wins: further_otm (default) or nearer_otm."
+       },
+       "tolerance": {
+         "default": 0.05,
+         "description": "Largest absolute-delta distance from target that still matches.",
+         "minimum": 0,
+         "title": "Tolerance",
+         "type": "number"
+       }
+     },
+     "required": [
+       "selector",
+       "target"
+     ],
+     "title": "DeltaParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.ExpirationFilter
+------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+     "properties": {
+       "roots": {
+         "anyOf": [
+           {
+             "items": {
+               "type": "string"
+             },
+             "minItems": 1,
+             "type": "array"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+         "title": "Roots"
+       },
+       "settlement_styles": {
+         "anyOf": [
+           {
+             "items": {
+               "$ref": "#/$defs/SettlementStyle"
+             },
+             "minItems": 1,
+             "type": "array"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+         "title": "Settlement Styles"
+       },
+       "standard_monthly_only": {
+         "default": false,
+         "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+         "title": "Standard Monthly Only",
+         "type": "boolean"
+       },
+       "weekdays": {
+         "anyOf": [
+           {
+             "items": {
+               "$ref": "#/$defs/Weekday"
+             },
+             "minItems": 1,
+             "type": "array"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+         "title": "Weekdays"
+       }
+     },
+     "title": "ExpirationFilter",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.ForwardParams
+---------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``forward``: the strike nearest the series forward (SPEC-22).",
+     "properties": {
+       "on_no_match": {
+         "$ref": "#/$defs/OnNoMatch",
+         "default": "skip_entry",
+         "description": "What happens when no strike is within tolerance (SPEC-25)."
+       },
+       "selector": {
+         "const": "forward",
+         "description": "Selects this strike selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tolerance_points": {
+         "anyOf": [
+           {
+             "minimum": 0,
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Largest distance in index points from the forward that still matches. Null means the usual strike spacing around the forward in that expiration (the most common gap between adjacent listed strikes there), so a hole in the chain skips the entry rather than taking a distant strike.",
+         "title": "Tolerance Points"
+       }
+     },
+     "required": [
+       "selector"
+     ],
+     "title": "ForwardParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.NextAfterLegParams
+--------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``next_after_leg``: the first eligible expiration strictly after another leg's (SPEC-13).",
+     "properties": {
+       "filter": {
+         "$ref": "#/$defs/ExpirationFilter",
+         "description": "Which expirations are eligible (SPEC-14)."
+       },
+       "leg": {
+         "description": "Id of the leg whose expiration this leg's must follow; it is selected first.",
+         "title": "Leg",
+         "type": "string"
+       },
+       "selector": {
+         "const": "next_after_leg",
+         "description": "Selects this expiration selector.",
+         "title": "Selector",
+         "type": "string"
+       }
+     },
+     "required": [
+       "selector",
+       "leg"
+     ],
+     "title": "NextAfterLegParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.NthExpirationParams
+---------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``nth_expiration``: the n-th eligible expiration after the as-of time (SPEC-12).",
+     "properties": {
+       "filter": {
+         "$ref": "#/$defs/ExpirationFilter",
+         "description": "Which expirations are eligible and counted (SPEC-14)."
+       },
+       "n": {
+         "description": "Which eligible expiration: 1 is the next one. Only expirations passing the filter are counted.",
+         "minimum": 1,
+         "title": "N",
+         "type": "integer"
+       },
+       "selector": {
+         "const": "nth_expiration",
+         "description": "Selects this expiration selector.",
+         "title": "Selector",
+         "type": "string"
+       }
+     },
+     "required": [
+       "selector",
+       "n"
+     ],
+     "title": "NthExpirationParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.SameAsLegParams
+-----------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``same_as_leg``: the same expiration as another leg (SPEC-13).",
+     "properties": {
+       "leg": {
+         "description": "Id of the leg whose expiration this leg uses; it is selected first (SPEC-3).",
+         "title": "Leg",
+         "type": "string"
+       },
+       "selector": {
+         "const": "same_as_leg",
+         "description": "Selects this expiration selector.",
+         "title": "Selector",
+         "type": "string"
+       }
+     },
+     "required": [
+       "selector",
+       "leg"
+     ],
+     "title": "SameAsLegParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.SameStrikeAsParams
+--------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``same_strike_as``: another leg's strike, listed in this leg's expiration (SPEC-23).",
+     "properties": {
+       "leg": {
+         "description": "Id of the leg whose strike this leg uses; it is selected first (SPEC-3).",
+         "title": "Leg",
+         "type": "string"
+       },
+       "on_no_match": {
+         "$ref": "#/$defs/OnNoMatch",
+         "default": "skip_entry",
+         "description": "What happens when no strike is within tolerance (SPEC-25)."
+       },
+       "selector": {
+         "const": "same_strike_as",
+         "description": "Selects this strike selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tolerance_points": {
+         "default": 0.0,
+         "description": "Largest distance in index points from that strike that still matches; 0 (default) means exactly the same strike.",
+         "minimum": 0,
+         "title": "Tolerance Points",
+         "type": "number"
+       }
+     },
+     "required": [
+       "selector",
+       "leg"
+     ],
+     "title": "SameStrikeAsParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.StrikeOffsetParams
+--------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``strike_offset``: another leg's strike plus an offset, to the nearest listed strike (SPEC-24).",
+     "properties": {
+       "leg": {
+         "description": "Id of the leg whose strike the offset starts from; it is selected first.",
+         "title": "Leg",
+         "type": "string"
+       },
+       "on_no_match": {
+         "$ref": "#/$defs/OnNoMatch",
+         "default": "skip_entry",
+         "description": "What happens when no strike is within tolerance (SPEC-25)."
+       },
+       "percent": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Signed offset as a percentage of that strike, for example 2.5 for +2.5%. Give points or percent, not both.",
+         "title": "Percent"
+       },
+       "points": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Signed offset in index points, for example 50 or −50. Give points or percent, not both.",
+         "title": "Points"
+       },
+       "selector": {
+         "const": "strike_offset",
+         "description": "Selects this strike selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tolerance_points": {
+         "anyOf": [
+           {
+             "minimum": 0,
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Largest distance in index points from the offset strike that still matches. Null means the usual strike spacing around it in that expiration.",
+         "title": "Tolerance Points"
+       }
+     },
+     "required": [
+       "selector",
+       "leg"
+     ],
+     "title": "StrikeOffsetParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.TargetDaysParams
+------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "ExpirationTieBreak": {
+         "description": "Which expiration wins when two are equally near the target.",
+         "enum": [
+           "later",
+           "earlier"
+         ],
+         "title": "ExpirationTieBreak",
+         "type": "string"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``target_days``: the expiration whose calendar days to expiry is nearest ``days`` (SPEC-10).",
+     "properties": {
+       "days": {
+         "description": "Target calendar days to expiry, fractional (CONV-1), for example 45, or 0.5 for a same-day expiration.",
+         "minimum": 0,
+         "title": "Days",
+         "type": "number"
+       },
+       "filter": {
+         "$ref": "#/$defs/ExpirationFilter",
+         "description": "Which expirations are eligible (SPEC-14)."
+       },
+       "max_days": {
+         "anyOf": [
+           {
+             "minimum": 0,
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Most calendar days to expiry an eligible expiration may have. Null means days + 10.",
+         "title": "Max Days"
+       },
+       "min_days": {
+         "anyOf": [
+           {
+             "minimum": 0,
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Fewest calendar days to expiry an eligible expiration may have. Null means days − 10, floored at 0.",
+         "title": "Min Days"
+       },
+       "selector": {
+         "const": "target_days",
+         "description": "Selects this expiration selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tie_break": {
+         "$ref": "#/$defs/ExpirationTieBreak",
+         "default": "later",
+         "description": "Which of two expirations equally near the target wins: later (default) or earlier."
+       }
+     },
+     "required": [
+       "selector",
+       "days"
+     ],
+     "title": "TargetDaysParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.selection.TradingDaysOutParams
+----------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "ExpirationTieBreak": {
+         "description": "Which expiration wins when two are equally near the target.",
+         "enum": [
+           "later",
+           "earlier"
+         ],
+         "title": "ExpirationTieBreak",
+         "type": "string"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``trading_days_out``: the expiration ``n`` trading days out (SPEC-11).",
+     "properties": {
+       "filter": {
+         "$ref": "#/$defs/ExpirationFilter",
+         "description": "Which expirations are eligible (SPEC-14)."
+       },
+       "n": {
+         "description": "Trading days to expiry (CONV-2) wanted: 1 is the next trading day's expiration, 0 an expiration settling today.",
+         "minimum": 0,
+         "title": "N",
+         "type": "integer"
+       },
+       "selector": {
+         "const": "trading_days_out",
+         "description": "Selects this expiration selector.",
+         "title": "Selector",
+         "type": "string"
+       },
+       "tie_break": {
+         "$ref": "#/$defs/ExpirationTieBreak",
+         "default": "later",
+         "description": "Which of two expirations equally near n wins: later (default) or earlier."
+       },
+       "tolerance": {
+         "default": 0,
+         "description": "How many trading days away from n an expiration may be and still match.",
+         "minimum": 0,
+         "title": "Tolerance",
+         "type": "integer"
+       }
+     },
+     "required": [
+       "selector",
+       "n"
+     ],
+     "title": "TradingDaysOutParams",
+     "type": "object"
+   }
+
 prophetovol.registry.params.settlement.PmIndexCloseParams
 ---------------------------------------------------------
 
@@ -2279,6 +3608,3050 @@ prophetovol.registry.params.settlement.PmIndexCloseParams
      "description": "``pm_index_close`` takes no parameters: the settlement value is the index close on the settlement date.",
      "properties": {},
      "title": "PmIndexCloseParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.sizing.ContractsParams
+--------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``contracts``: a fixed number of structure units per entry (SPEC-70).",
+     "properties": {
+       "method": {
+         "const": "contracts",
+         "description": "Selects this sizing method.",
+         "title": "Method",
+         "type": "string"
+       },
+       "quantity": {
+         "description": "Structure units per entry; leg i trades quantity × ratio_i contracts. Rounded as the run configuration says (whole or fractional, SPEC-72).",
+         "exclusiveMinimum": 0,
+         "title": "Quantity",
+         "type": "number"
+       }
+     },
+     "required": [
+       "method",
+       "quantity"
+     ],
+     "title": "ContractsParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.sizing.NotionalParams
+-------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``notional``: units from a dollar notional at the entry step's index level (SPEC-71).",
+     "properties": {
+       "method": {
+         "const": "notional",
+         "description": "Selects this sizing method.",
+         "title": "Method",
+         "type": "string"
+       },
+       "notional": {
+         "description": "Dollars of index exposure per entry: units = notional / (S × m), with S the index level at the entry step and m the multiplier.",
+         "exclusiveMinimum": 0,
+         "title": "Notional",
+         "type": "number"
+       }
+     },
+     "required": [
+       "method",
+       "notional"
+     ],
+     "title": "NotionalParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.CloseParams
+------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``close`` takes no parameters: it closes the leg, or the whole structure and its hedge (SPEC-43).",
+     "properties": {},
+     "title": "CloseParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.LegAbsDeltaAboveParams
+-----------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``leg_abs_delta_above``: fires when the leg's absolute delta is above a threshold.",
+     "properties": {
+       "condition": {
+         "const": "leg_abs_delta_above",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       },
+       "leg": {
+         "description": "Id of the leg whose contract's delta is read (CONV-10).",
+         "title": "Leg",
+         "type": "string"
+       },
+       "threshold": {
+         "description": "Fires when |delta| > threshold, for example 0.50.",
+         "maximum": 1,
+         "minimum": 0,
+         "title": "Threshold",
+         "type": "number"
+       }
+     },
+     "required": [
+       "condition",
+       "leg",
+       "threshold"
+     ],
+     "title": "LegAbsDeltaAboveParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.LegAbsDeltaBelowParams
+-----------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``leg_abs_delta_below``: fires when the leg's absolute delta is below a threshold.",
+     "properties": {
+       "condition": {
+         "const": "leg_abs_delta_below",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       },
+       "leg": {
+         "description": "Id of the leg whose contract's delta is read (CONV-10).",
+         "title": "Leg",
+         "type": "string"
+       },
+       "threshold": {
+         "description": "Fires when |delta| < threshold, for example 0.15.",
+         "maximum": 1,
+         "minimum": 0,
+         "title": "Threshold",
+         "type": "number"
+       }
+     },
+     "required": [
+       "condition",
+       "leg",
+       "threshold"
+     ],
+     "title": "LegAbsDeltaBelowParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.LegDaysToExpiryAtOrBelowParams
+-------------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "DayUnit": {
+         "description": "The unit a days-to-expiry condition measures in (SPEC-41, TIME-3).",
+         "enum": [
+           "calendar_days",
+           "trading_days"
+         ],
+         "title": "DayUnit",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``leg_days_to_expiry_at_or_below``: fires when the leg's time to expiry is at or below ``days``.",
+     "properties": {
+       "condition": {
+         "const": "leg_days_to_expiry_at_or_below",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       },
+       "days": {
+         "description": "Fires when the leg's time to expiry, measured in unit, is ≤ days.",
+         "minimum": 0,
+         "title": "Days",
+         "type": "number"
+       },
+       "leg": {
+         "description": "Id of the leg whose time to expiry is read.",
+         "title": "Leg",
+         "type": "string"
+       },
+       "unit": {
+         "$ref": "#/$defs/DayUnit",
+         "default": "calendar_days",
+         "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+       }
+     },
+     "required": [
+       "condition",
+       "leg",
+       "days"
+     ],
+     "title": "LegDaysToExpiryAtOrBelowParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.RollParams
+-----------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``roll`` takes no parameters: it closes and re-selects the leg, or the whole structure (SPEC-43, CONV-9).",
+     "properties": {},
+     "title": "RollParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.StructureMinDaysToExpiryAtOrBelowParams
+----------------------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "DayUnit": {
+         "description": "The unit a days-to-expiry condition measures in (SPEC-41, TIME-3).",
+         "enum": [
+           "calendar_days",
+           "trading_days"
+         ],
+         "title": "DayUnit",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "``structure_min_days_to_expiry_at_or_below``: fires when the shortest time to expiry among open legs is at or below ``days``.",
+     "properties": {
+       "condition": {
+         "const": "structure_min_days_to_expiry_at_or_below",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       },
+       "days": {
+         "description": "Fires when the shortest time to expiry among the structure's open legs, measured in unit, is ≤ days.",
+         "minimum": 0,
+         "title": "Days",
+         "type": "number"
+       },
+       "unit": {
+         "$ref": "#/$defs/DayUnit",
+         "default": "calendar_days",
+         "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+       }
+     },
+     "required": [
+       "condition",
+       "days"
+     ],
+     "title": "StructureMinDaysToExpiryAtOrBelowParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.StructurePnlPerUnitAtOrAboveParams
+-----------------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``structure_pnl_per_unit_at_or_above``: a profit target in dollars per structure unit (SPEC-46).",
+     "properties": {
+       "amount": {
+         "description": "Dollars per unit: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≥ amount. 250 on a 10-unit structure fires at $2,500.",
+         "title": "Amount",
+         "type": "number"
+       },
+       "condition": {
+         "const": "structure_pnl_per_unit_at_or_above",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       }
+     },
+     "required": [
+       "condition",
+       "amount"
+     ],
+     "title": "StructurePnlPerUnitAtOrAboveParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.StructurePnlPerUnitAtOrBelowParams
+-----------------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``structure_pnl_per_unit_at_or_below``: a stop in dollars per structure unit (SPEC-46).",
+     "properties": {
+       "amount": {
+         "description": "Dollars per unit, zero or negative: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≤ amount.",
+         "maximum": 0,
+         "title": "Amount",
+         "type": "number"
+       },
+       "condition": {
+         "const": "structure_pnl_per_unit_at_or_below",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       }
+     },
+     "required": [
+       "condition",
+       "amount"
+     ],
+     "title": "StructurePnlPerUnitAtOrBelowParams",
+     "type": "object"
+   }
+
+prophetovol.registry.params.triggers.TradingDaysHeldAtLeastParams
+-----------------------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "``trading_days_held_at_least``: fires once the structure has been held a number of trading days.",
+     "properties": {
+       "condition": {
+         "const": "trading_days_held_at_least",
+         "description": "Selects this condition.",
+         "title": "Condition",
+         "type": "string"
+       },
+       "days": {
+         "description": "Trading days since the structure was opened, counted on the trading calendar (ENG-4); fires when ≥ days.",
+         "minimum": 1,
+         "title": "Days",
+         "type": "integer"
+       }
+     },
+     "required": [
+       "condition",
+       "days"
+     ],
+     "title": "TradingDaysHeldAtLeastParams",
+     "type": "object"
+   }
+
+prophetovol.strategy.model.Leg
+------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "AtmParams": {
+         "additionalProperties": false,
+         "description": "``atm``: the 50-delta strike of the leg's own type (SPEC-21, CONV-5).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "atm",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/StrikeTieBreak",
+             "default": "further_otm",
+             "description": "Which of two strikes equally near 0.50 wins: further_otm (default) or nearer_otm."
+           },
+           "tolerance": {
+             "default": 0.05,
+             "description": "Largest absolute-delta distance from 0.50 that still matches.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector"
+         ],
+         "title": "AtmParams",
+         "type": "object"
+       },
+       "DeltaParams": {
+         "additionalProperties": false,
+         "description": "``delta``: the strike whose absolute delta is nearest ``target`` (SPEC-20).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "skip_entry (default): no structure opens at this step. nearest_any: take the nearest eligible strike regardless of tolerance, with a warning event (SPEC-25)."
+           },
+           "selector": {
+             "const": "delta",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "target": {
+             "description": "Target absolute delta (CONV-4): 0.25 means a 25-delta call (delta 0.25) or a 25-delta put (delta −0.25).",
+             "exclusiveMaximum": 1,
+             "exclusiveMinimum": 0,
+             "title": "Target",
+             "type": "number"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/StrikeTieBreak",
+             "default": "further_otm",
+             "description": "Which of two strikes equally near the target wins: further_otm (default) or nearer_otm."
+           },
+           "tolerance": {
+             "default": 0.05,
+             "description": "Largest absolute-delta distance from target that still matches.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector",
+           "target"
+         ],
+         "title": "DeltaParams",
+         "type": "object"
+       },
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "ExpirationTieBreak": {
+         "description": "Which expiration wins when two are equally near the target.",
+         "enum": [
+           "later",
+           "earlier"
+         ],
+         "title": "ExpirationTieBreak",
+         "type": "string"
+       },
+       "ForwardParams": {
+         "additionalProperties": false,
+         "description": "``forward``: the strike nearest the series forward (SPEC-22).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "forward",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Largest distance in index points from the forward that still matches. Null means the usual strike spacing around the forward in that expiration (the most common gap between adjacent listed strikes there), so a hole in the chain skips the entry rather than taking a distant strike.",
+             "title": "Tolerance Points"
+           }
+         },
+         "required": [
+           "selector"
+         ],
+         "title": "ForwardParams",
+         "type": "object"
+       },
+       "NextAfterLegParams": {
+         "additionalProperties": false,
+         "description": "``next_after_leg``: the first eligible expiration strictly after another leg's (SPEC-13).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "leg": {
+             "description": "Id of the leg whose expiration this leg's must follow; it is selected first.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "selector": {
+             "const": "next_after_leg",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "NextAfterLegParams",
+         "type": "object"
+       },
+       "NthExpirationParams": {
+         "additionalProperties": false,
+         "description": "``nth_expiration``: the n-th eligible expiration after the as-of time (SPEC-12).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible and counted (SPEC-14)."
+           },
+           "n": {
+             "description": "Which eligible expiration: 1 is the next one. Only expirations passing the filter are counted.",
+             "minimum": 1,
+             "title": "N",
+             "type": "integer"
+           },
+           "selector": {
+             "const": "nth_expiration",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "n"
+         ],
+         "title": "NthExpirationParams",
+         "type": "object"
+       },
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       },
+       "OptionType": {
+         "description": "Call or put.",
+         "enum": [
+           "call",
+           "put"
+         ],
+         "title": "OptionType",
+         "type": "string"
+       },
+       "SameAsLegParams": {
+         "additionalProperties": false,
+         "description": "``same_as_leg``: the same expiration as another leg (SPEC-13).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose expiration this leg uses; it is selected first (SPEC-3).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "selector": {
+             "const": "same_as_leg",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "SameAsLegParams",
+         "type": "object"
+       },
+       "SameStrikeAsParams": {
+         "additionalProperties": false,
+         "description": "``same_strike_as``: another leg's strike, listed in this leg's expiration (SPEC-23).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose strike this leg uses; it is selected first (SPEC-3).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "same_strike_as",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "default": 0.0,
+             "description": "Largest distance in index points from that strike that still matches; 0 (default) means exactly the same strike.",
+             "minimum": 0,
+             "title": "Tolerance Points",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "SameStrikeAsParams",
+         "type": "object"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Side": {
+         "description": "Long (bought) or short (sold); positive quantity is long (CONV-8).",
+         "enum": [
+           "long",
+           "short"
+         ],
+         "title": "Side",
+         "type": "string"
+       },
+       "StrikeOffsetParams": {
+         "additionalProperties": false,
+         "description": "``strike_offset``: another leg's strike plus an offset, to the nearest listed strike (SPEC-24).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose strike the offset starts from; it is selected first.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "percent": {
+             "anyOf": [
+               {
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Signed offset as a percentage of that strike, for example 2.5 for +2.5%. Give points or percent, not both.",
+             "title": "Percent"
+           },
+           "points": {
+             "anyOf": [
+               {
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Signed offset in index points, for example 50 or −50. Give points or percent, not both.",
+             "title": "Points"
+           },
+           "selector": {
+             "const": "strike_offset",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Largest distance in index points from the offset strike that still matches. Null means the usual strike spacing around it in that expiration.",
+             "title": "Tolerance Points"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "StrikeOffsetParams",
+         "type": "object"
+       },
+       "StrikeTieBreak": {
+         "description": "Which strike wins when two are equally near the target delta (SPEC-20).",
+         "enum": [
+           "further_otm",
+           "nearer_otm"
+         ],
+         "title": "StrikeTieBreak",
+         "type": "string"
+       },
+       "TargetDaysParams": {
+         "additionalProperties": false,
+         "description": "``target_days``: the expiration whose calendar days to expiry is nearest ``days`` (SPEC-10).",
+         "properties": {
+           "days": {
+             "description": "Target calendar days to expiry, fractional (CONV-1), for example 45, or 0.5 for a same-day expiration.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "max_days": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Most calendar days to expiry an eligible expiration may have. Null means days + 10.",
+             "title": "Max Days"
+           },
+           "min_days": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Fewest calendar days to expiry an eligible expiration may have. Null means days − 10, floored at 0.",
+             "title": "Min Days"
+           },
+           "selector": {
+             "const": "target_days",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/ExpirationTieBreak",
+             "default": "later",
+             "description": "Which of two expirations equally near the target wins: later (default) or earlier."
+           }
+         },
+         "required": [
+           "selector",
+           "days"
+         ],
+         "title": "TargetDaysParams",
+         "type": "object"
+       },
+       "TradingDaysOutParams": {
+         "additionalProperties": false,
+         "description": "``trading_days_out``: the expiration ``n`` trading days out (SPEC-11).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "n": {
+             "description": "Trading days to expiry (CONV-2) wanted: 1 is the next trading day's expiration, 0 an expiration settling today.",
+             "minimum": 0,
+             "title": "N",
+             "type": "integer"
+           },
+           "selector": {
+             "const": "trading_days_out",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/ExpirationTieBreak",
+             "default": "later",
+             "description": "Which of two expirations equally near n wins: later (default) or earlier."
+           },
+           "tolerance": {
+             "default": 0,
+             "description": "How many trading days away from n an expiration may be and still match.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "selector",
+           "n"
+         ],
+         "title": "TradingDaysOutParams",
+         "type": "object"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       }
+     },
+     "additionalProperties": false,
+     "description": "One leg of a structure (SPEC-2).",
+     "properties": {
+       "expiration": {
+         "description": "How the leg chooses its expiration (SPEC-10 to SPEC-15), for example {selector: target_days, days: 45}.",
+         "discriminator": {
+           "mapping": {
+             "next_after_leg": "#/$defs/NextAfterLegParams",
+             "nth_expiration": "#/$defs/NthExpirationParams",
+             "same_as_leg": "#/$defs/SameAsLegParams",
+             "target_days": "#/$defs/TargetDaysParams",
+             "trading_days_out": "#/$defs/TradingDaysOutParams"
+           },
+           "propertyName": "selector"
+         },
+         "oneOf": [
+           {
+             "$ref": "#/$defs/TargetDaysParams"
+           },
+           {
+             "$ref": "#/$defs/TradingDaysOutParams"
+           },
+           {
+             "$ref": "#/$defs/NthExpirationParams"
+           },
+           {
+             "$ref": "#/$defs/SameAsLegParams"
+           },
+           {
+             "$ref": "#/$defs/NextAfterLegParams"
+           }
+         ],
+         "title": "Expiration"
+       },
+       "hold_to_expiration": {
+         "default": false,
+         "description": "Hold the leg to settlement. Allowed only for PM-settled roots: AM-settled contracts are always closed on their last trading day (SPEC-51, SPEC-52).",
+         "title": "Hold To Expiration",
+         "type": "boolean"
+       },
+       "id": {
+         "description": "The leg's id, unique within the spec; other legs and triggers refer to it.",
+         "maxLength": 64,
+         "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+         "title": "Id",
+         "type": "string"
+       },
+       "option_type": {
+         "$ref": "#/$defs/OptionType",
+         "description": "call or put."
+       },
+       "ratio": {
+         "default": 1,
+         "description": "Contracts of this leg per unit of the structure. Default 1.",
+         "minimum": 1,
+         "title": "Ratio",
+         "type": "integer"
+       },
+       "roots": {
+         "anyOf": [
+           {
+             "items": {
+               "type": "string"
+             },
+             "minItems": 1,
+             "type": "array"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null (default) allows every root of the underlying.",
+         "title": "Roots"
+       },
+       "side": {
+         "$ref": "#/$defs/Side",
+         "description": "long or short."
+       },
+       "strike": {
+         "description": "How the leg chooses its strike (SPEC-20 to SPEC-25), for example {selector: delta, target: 0.30}.",
+         "discriminator": {
+           "mapping": {
+             "atm": "#/$defs/AtmParams",
+             "delta": "#/$defs/DeltaParams",
+             "forward": "#/$defs/ForwardParams",
+             "same_strike_as": "#/$defs/SameStrikeAsParams",
+             "strike_offset": "#/$defs/StrikeOffsetParams"
+           },
+           "propertyName": "selector"
+         },
+         "oneOf": [
+           {
+             "$ref": "#/$defs/DeltaParams"
+           },
+           {
+             "$ref": "#/$defs/AtmParams"
+           },
+           {
+             "$ref": "#/$defs/ForwardParams"
+           },
+           {
+             "$ref": "#/$defs/SameStrikeAsParams"
+           },
+           {
+             "$ref": "#/$defs/StrikeOffsetParams"
+           }
+         ],
+         "title": "Strike"
+       }
+     },
+     "required": [
+       "id",
+       "option_type",
+       "side",
+       "expiration",
+       "strike"
+     ],
+     "title": "Leg",
+     "type": "object"
+   }
+
+prophetovol.strategy.model.QuoteFilters
+---------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "Quote filters applied to every leg's selection (SPEC-28).",
+     "properties": {
+       "exclude_vendor_flagged": {
+         "default": false,
+         "description": "Exclude rows with the vendor's * flag, whose meaning is unconfirmed. Default false.",
+         "title": "Exclude Vendor Flagged",
+         "type": "boolean"
+       },
+       "min_bid": {
+         "default": 0.05,
+         "description": "Lowest bid an eligible contract may have, in index points. Default 0.05.",
+         "minimum": 0,
+         "title": "Min Bid",
+         "type": "number"
+       },
+       "min_open_interest": {
+         "default": 0,
+         "description": "Lowest open interest an eligible contract may have; 0 (default) means no filter.",
+         "minimum": 0,
+         "title": "Min Open Interest",
+         "type": "integer"
+       },
+       "require_valid_quote": {
+         "default": true,
+         "description": "Only contracts with a valid quote (ask > 0, bid ≥ 0, ask ≥ bid; ENG-20) are eligible. Default true.",
+         "title": "Require Valid Quote",
+         "type": "boolean"
+       }
+     },
+     "title": "QuoteFilters",
+     "type": "object"
+   }
+
+prophetovol.strategy.model.StrategySpec
+---------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "AtmParams": {
+         "additionalProperties": false,
+         "description": "``atm``: the 50-delta strike of the leg's own type (SPEC-21, CONV-5).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "atm",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/StrikeTieBreak",
+             "default": "further_otm",
+             "description": "Which of two strikes equally near 0.50 wins: further_otm (default) or nearer_otm."
+           },
+           "tolerance": {
+             "default": 0.05,
+             "description": "Largest absolute-delta distance from 0.50 that still matches.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector"
+         ],
+         "title": "AtmParams",
+         "type": "object"
+       },
+       "BandParams": {
+         "additionalProperties": false,
+         "description": "``band``: keep the structure's net delta per unit within a band (SPEC-61).\n\nNet delta per unit is ``(Σ q_i · δ_i + h / m) / N``: leg quantities ``q_i`` in signed contracts,\nthe snapshot's deltas ``δ_i``, the hedge holding ``h`` in index units, multiplier ``m`` and ``N``\nstructure units. After the step's option trades, if it is outside ``[lower, upper]``, the hedge\nis traded so it equals ``target``.",
+         "properties": {
+           "lower": {
+             "description": "Lowest net delta per unit left unhedged, for example 0.0. lower ≤ target ≤ upper.",
+             "title": "Lower",
+             "type": "number"
+           },
+           "rule": {
+             "const": "band",
+             "description": "Selects this hedge rule.",
+             "title": "Rule",
+             "type": "string"
+           },
+           "scope": {
+             "const": "structure",
+             "default": "structure",
+             "description": "What the band applies to; structure is the only Phase 1 scope.",
+             "title": "Scope",
+             "type": "string"
+           },
+           "target": {
+             "description": "Net delta per unit the hedge restores when the measure leaves the band, for example 0.03.",
+             "title": "Target",
+             "type": "number"
+           },
+           "upper": {
+             "description": "Highest net delta per unit left unhedged, for example 0.08 (long 8 deltas per spread). lower = upper = target = 0 hedges to flat at every step.",
+             "title": "Upper",
+             "type": "number"
+           }
+         },
+         "required": [
+           "rule",
+           "lower",
+           "upper",
+           "target"
+         ],
+         "title": "BandParams",
+         "type": "object"
+       },
+       "ContractsParams": {
+         "additionalProperties": false,
+         "description": "``contracts``: a fixed number of structure units per entry (SPEC-70).",
+         "properties": {
+           "method": {
+             "const": "contracts",
+             "description": "Selects this sizing method.",
+             "title": "Method",
+             "type": "string"
+           },
+           "quantity": {
+             "description": "Structure units per entry; leg i trades quantity × ratio_i contracts. Rounded as the run configuration says (whole or fractional, SPEC-72).",
+             "exclusiveMinimum": 0,
+             "title": "Quantity",
+             "type": "number"
+           }
+         },
+         "required": [
+           "method",
+           "quantity"
+         ],
+         "title": "ContractsParams",
+         "type": "object"
+       },
+       "DayUnit": {
+         "description": "The unit a days-to-expiry condition measures in (SPEC-41, TIME-3).",
+         "enum": [
+           "calendar_days",
+           "trading_days"
+         ],
+         "title": "DayUnit",
+         "type": "string"
+       },
+       "DeltaParams": {
+         "additionalProperties": false,
+         "description": "``delta``: the strike whose absolute delta is nearest ``target`` (SPEC-20).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "skip_entry (default): no structure opens at this step. nearest_any: take the nearest eligible strike regardless of tolerance, with a warning event (SPEC-25)."
+           },
+           "selector": {
+             "const": "delta",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "target": {
+             "description": "Target absolute delta (CONV-4): 0.25 means a 25-delta call (delta 0.25) or a 25-delta put (delta −0.25).",
+             "exclusiveMaximum": 1,
+             "exclusiveMinimum": 0,
+             "title": "Target",
+             "type": "number"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/StrikeTieBreak",
+             "default": "further_otm",
+             "description": "Which of two strikes equally near the target wins: further_otm (default) or nearer_otm."
+           },
+           "tolerance": {
+             "default": 0.05,
+             "description": "Largest absolute-delta distance from target that still matches.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector",
+           "target"
+         ],
+         "title": "DeltaParams",
+         "type": "object"
+       },
+       "EveryNTradingDaysParams": {
+         "additionalProperties": false,
+         "description": "``every_n_trading_days``: open a structure every ``n`` trading days (SPEC-32).",
+         "properties": {
+           "max_open": {
+             "default": 1,
+             "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+             "minimum": 1,
+             "title": "Max Open",
+             "type": "integer"
+           },
+           "n": {
+             "description": "Trading days between entries, counted on the trading calendar from the run's first step (ENG-4). A due day that the run skips as a missing day has no entry.",
+             "minimum": 1,
+             "title": "N",
+             "type": "integer"
+           },
+           "schedule": {
+             "const": "every_n_trading_days",
+             "description": "Selects this entry schedule.",
+             "title": "Schedule",
+             "type": "string"
+           }
+         },
+         "required": [
+           "schedule",
+           "n"
+         ],
+         "title": "EveryNTradingDaysParams",
+         "type": "object"
+       },
+       "ExpirationFilter": {
+         "additionalProperties": false,
+         "description": "Which expirations a selector may choose from (SPEC-14). Every condition given must hold.",
+         "properties": {
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null allows every root.",
+             "title": "Roots"
+           },
+           "settlement_styles": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/SettlementStyle"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed settlement styles, AM and/or PM. Null allows both.",
+             "title": "Settlement Styles"
+           },
+           "standard_monthly_only": {
+             "default": false,
+             "description": "Only standard monthly expirations: those whose settlement date is the third Friday of the month, or the trading day before it when that Friday is a holiday. Saturday-dated monthlies (before 2015) settle on that Friday and count. Decided by date whatever the root; add settlement_styles: [AM] for the AM-settled monthlies only.",
+             "title": "Standard Monthly Only",
+             "type": "boolean"
+           },
+           "weekdays": {
+             "anyOf": [
+               {
+                 "items": {
+                   "$ref": "#/$defs/Weekday"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed weekdays of the expiration date, for example [FRI]. Null allows every weekday.",
+             "title": "Weekdays"
+           }
+         },
+         "title": "ExpirationFilter",
+         "type": "object"
+       },
+       "ExpirationTieBreak": {
+         "description": "Which expiration wins when two are equally near the target.",
+         "enum": [
+           "later",
+           "earlier"
+         ],
+         "title": "ExpirationTieBreak",
+         "type": "string"
+       },
+       "ExpiryHandling": {
+         "description": "What happens to the rest of a structure when one of its legs settles or is force-closed (SPEC-54).",
+         "enum": [
+           "close_structure",
+           "keep_remaining",
+           "roll_leg"
+         ],
+         "title": "ExpiryHandling",
+         "type": "string"
+       },
+       "ForwardParams": {
+         "additionalProperties": false,
+         "description": "``forward``: the strike nearest the series forward (SPEC-22).",
+         "properties": {
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "forward",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Largest distance in index points from the forward that still matches. Null means the usual strike spacing around the forward in that expiration (the most common gap between adjacent listed strikes there), so a hole in the chain skips the entry rather than taking a distant strike.",
+             "title": "Tolerance Points"
+           }
+         },
+         "required": [
+           "selector"
+         ],
+         "title": "ForwardParams",
+         "type": "object"
+       },
+       "HolidayShift": {
+         "description": "What a ``weekdays`` schedule does when a listed weekday is not a trading day (SPEC-33).",
+         "enum": [
+           "next",
+           "skip"
+         ],
+         "title": "HolidayShift",
+         "type": "string"
+       },
+       "Leg": {
+         "additionalProperties": false,
+         "description": "One leg of a structure (SPEC-2).",
+         "properties": {
+           "expiration": {
+             "description": "How the leg chooses its expiration (SPEC-10 to SPEC-15), for example {selector: target_days, days: 45}.",
+             "discriminator": {
+               "mapping": {
+                 "next_after_leg": "#/$defs/NextAfterLegParams",
+                 "nth_expiration": "#/$defs/NthExpirationParams",
+                 "same_as_leg": "#/$defs/SameAsLegParams",
+                 "target_days": "#/$defs/TargetDaysParams",
+                 "trading_days_out": "#/$defs/TradingDaysOutParams"
+               },
+               "propertyName": "selector"
+             },
+             "oneOf": [
+               {
+                 "$ref": "#/$defs/TargetDaysParams"
+               },
+               {
+                 "$ref": "#/$defs/TradingDaysOutParams"
+               },
+               {
+                 "$ref": "#/$defs/NthExpirationParams"
+               },
+               {
+                 "$ref": "#/$defs/SameAsLegParams"
+               },
+               {
+                 "$ref": "#/$defs/NextAfterLegParams"
+               }
+             ],
+             "title": "Expiration"
+           },
+           "hold_to_expiration": {
+             "default": false,
+             "description": "Hold the leg to settlement. Allowed only for PM-settled roots: AM-settled contracts are always closed on their last trading day (SPEC-51, SPEC-52).",
+             "title": "Hold To Expiration",
+             "type": "boolean"
+           },
+           "id": {
+             "description": "The leg's id, unique within the spec; other legs and triggers refer to it.",
+             "maxLength": 64,
+             "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+             "title": "Id",
+             "type": "string"
+           },
+           "option_type": {
+             "$ref": "#/$defs/OptionType",
+             "description": "call or put."
+           },
+           "ratio": {
+             "default": 1,
+             "description": "Contracts of this leg per unit of the structure. Default 1.",
+             "minimum": 1,
+             "title": "Ratio",
+             "type": "integer"
+           },
+           "roots": {
+             "anyOf": [
+               {
+                 "items": {
+                   "type": "string"
+                 },
+                 "minItems": 1,
+                 "type": "array"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Allowed normalized option roots, for example [SPXW] (REF-1). Null (default) allows every root of the underlying.",
+             "title": "Roots"
+           },
+           "side": {
+             "$ref": "#/$defs/Side",
+             "description": "long or short."
+           },
+           "strike": {
+             "description": "How the leg chooses its strike (SPEC-20 to SPEC-25), for example {selector: delta, target: 0.30}.",
+             "discriminator": {
+               "mapping": {
+                 "atm": "#/$defs/AtmParams",
+                 "delta": "#/$defs/DeltaParams",
+                 "forward": "#/$defs/ForwardParams",
+                 "same_strike_as": "#/$defs/SameStrikeAsParams",
+                 "strike_offset": "#/$defs/StrikeOffsetParams"
+               },
+               "propertyName": "selector"
+             },
+             "oneOf": [
+               {
+                 "$ref": "#/$defs/DeltaParams"
+               },
+               {
+                 "$ref": "#/$defs/AtmParams"
+               },
+               {
+                 "$ref": "#/$defs/ForwardParams"
+               },
+               {
+                 "$ref": "#/$defs/SameStrikeAsParams"
+               },
+               {
+                 "$ref": "#/$defs/StrikeOffsetParams"
+               }
+             ],
+             "title": "Strike"
+           }
+         },
+         "required": [
+           "id",
+           "option_type",
+           "side",
+           "expiration",
+           "strike"
+         ],
+         "title": "Leg",
+         "type": "object"
+       },
+       "LegAbsDeltaAboveParams": {
+         "additionalProperties": false,
+         "description": "``leg_abs_delta_above``: fires when the leg's absolute delta is above a threshold.",
+         "properties": {
+           "condition": {
+             "const": "leg_abs_delta_above",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "leg": {
+             "description": "Id of the leg whose contract's delta is read (CONV-10).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "threshold": {
+             "description": "Fires when |delta| > threshold, for example 0.50.",
+             "maximum": 1,
+             "minimum": 0,
+             "title": "Threshold",
+             "type": "number"
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "threshold"
+         ],
+         "title": "LegAbsDeltaAboveParams",
+         "type": "object"
+       },
+       "LegAbsDeltaBelowParams": {
+         "additionalProperties": false,
+         "description": "``leg_abs_delta_below``: fires when the leg's absolute delta is below a threshold.",
+         "properties": {
+           "condition": {
+             "const": "leg_abs_delta_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "leg": {
+             "description": "Id of the leg whose contract's delta is read (CONV-10).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "threshold": {
+             "description": "Fires when |delta| < threshold, for example 0.15.",
+             "maximum": 1,
+             "minimum": 0,
+             "title": "Threshold",
+             "type": "number"
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "threshold"
+         ],
+         "title": "LegAbsDeltaBelowParams",
+         "type": "object"
+       },
+       "LegDaysToExpiryAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``leg_days_to_expiry_at_or_below``: fires when the leg's time to expiry is at or below ``days``.",
+         "properties": {
+           "condition": {
+             "const": "leg_days_to_expiry_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Fires when the leg's time to expiry, measured in unit, is ≤ days.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "leg": {
+             "description": "Id of the leg whose time to expiry is read.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "unit": {
+             "$ref": "#/$defs/DayUnit",
+             "default": "calendar_days",
+             "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "days"
+         ],
+         "title": "LegDaysToExpiryAtOrBelowParams",
+         "type": "object"
+       },
+       "NextAfterLegParams": {
+         "additionalProperties": false,
+         "description": "``next_after_leg``: the first eligible expiration strictly after another leg's (SPEC-13).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "leg": {
+             "description": "Id of the leg whose expiration this leg's must follow; it is selected first.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "selector": {
+             "const": "next_after_leg",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "NextAfterLegParams",
+         "type": "object"
+       },
+       "NoHedgeParams": {
+         "additionalProperties": false,
+         "description": "``none``: no hedging (SPEC-60).",
+         "properties": {
+           "rule": {
+             "const": "none",
+             "description": "Selects this hedge rule.",
+             "title": "Rule",
+             "type": "string"
+           }
+         },
+         "required": [
+           "rule"
+         ],
+         "title": "NoHedgeParams",
+         "type": "object"
+       },
+       "NotionalParams": {
+         "additionalProperties": false,
+         "description": "``notional``: units from a dollar notional at the entry step's index level (SPEC-71).",
+         "properties": {
+           "method": {
+             "const": "notional",
+             "description": "Selects this sizing method.",
+             "title": "Method",
+             "type": "string"
+           },
+           "notional": {
+             "description": "Dollars of index exposure per entry: units = notional / (S × m), with S the index level at the entry step and m the multiplier.",
+             "exclusiveMinimum": 0,
+             "title": "Notional",
+             "type": "number"
+           }
+         },
+         "required": [
+           "method",
+           "notional"
+         ],
+         "title": "NotionalParams",
+         "type": "object"
+       },
+       "NthExpirationParams": {
+         "additionalProperties": false,
+         "description": "``nth_expiration``: the n-th eligible expiration after the as-of time (SPEC-12).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible and counted (SPEC-14)."
+           },
+           "n": {
+             "description": "Which eligible expiration: 1 is the next one. Only expirations passing the filter are counted.",
+             "minimum": 1,
+             "title": "N",
+             "type": "integer"
+           },
+           "selector": {
+             "const": "nth_expiration",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "n"
+         ],
+         "title": "NthExpirationParams",
+         "type": "object"
+       },
+       "OnNoMatch": {
+         "description": "What happens when a strike selector finds no contract within its tolerance (SPEC-25).",
+         "enum": [
+           "skip_entry",
+           "nearest_any"
+         ],
+         "title": "OnNoMatch",
+         "type": "string"
+       },
+       "OnceParams": {
+         "additionalProperties": false,
+         "description": "``once``: open one structure at the first step of the run (SPEC-30).",
+         "properties": {
+           "schedule": {
+             "const": "once",
+             "description": "Selects this entry schedule.",
+             "title": "Schedule",
+             "type": "string"
+           }
+         },
+         "required": [
+           "schedule"
+         ],
+         "title": "OnceParams",
+         "type": "object"
+       },
+       "OptionType": {
+         "description": "Call or put.",
+         "enum": [
+           "call",
+           "put"
+         ],
+         "title": "OptionType",
+         "type": "string"
+       },
+       "QuoteFilters": {
+         "additionalProperties": false,
+         "description": "Quote filters applied to every leg's selection (SPEC-28).",
+         "properties": {
+           "exclude_vendor_flagged": {
+             "default": false,
+             "description": "Exclude rows with the vendor's * flag, whose meaning is unconfirmed. Default false.",
+             "title": "Exclude Vendor Flagged",
+             "type": "boolean"
+           },
+           "min_bid": {
+             "default": 0.05,
+             "description": "Lowest bid an eligible contract may have, in index points. Default 0.05.",
+             "minimum": 0,
+             "title": "Min Bid",
+             "type": "number"
+           },
+           "min_open_interest": {
+             "default": 0,
+             "description": "Lowest open interest an eligible contract may have; 0 (default) means no filter.",
+             "minimum": 0,
+             "title": "Min Open Interest",
+             "type": "integer"
+           },
+           "require_valid_quote": {
+             "default": true,
+             "description": "Only contracts with a valid quote (ask > 0, bid ≥ 0, ask ≥ bid; ENG-20) are eligible. Default true.",
+             "title": "Require Valid Quote",
+             "type": "boolean"
+           }
+         },
+         "title": "QuoteFilters",
+         "type": "object"
+       },
+       "SameAsLegParams": {
+         "additionalProperties": false,
+         "description": "``same_as_leg``: the same expiration as another leg (SPEC-13).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose expiration this leg uses; it is selected first (SPEC-3).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "selector": {
+             "const": "same_as_leg",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "SameAsLegParams",
+         "type": "object"
+       },
+       "SameStrikeAsParams": {
+         "additionalProperties": false,
+         "description": "``same_strike_as``: another leg's strike, listed in this leg's expiration (SPEC-23).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose strike this leg uses; it is selected first (SPEC-3).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "selector": {
+             "const": "same_strike_as",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "default": 0.0,
+             "description": "Largest distance in index points from that strike that still matches; 0 (default) means exactly the same strike.",
+             "minimum": 0,
+             "title": "Tolerance Points",
+             "type": "number"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "SameStrikeAsParams",
+         "type": "object"
+       },
+       "SettlementStyle": {
+         "description": "How a contract settles: on the special opening value (AM) or on the close (PM).",
+         "enum": [
+           "AM",
+           "PM"
+         ],
+         "title": "SettlementStyle",
+         "type": "string"
+       },
+       "Side": {
+         "description": "Long (bought) or short (sold); positive quantity is long (CONV-8).",
+         "enum": [
+           "long",
+           "short"
+         ],
+         "title": "Side",
+         "type": "string"
+       },
+       "StrikeOffsetParams": {
+         "additionalProperties": false,
+         "description": "``strike_offset``: another leg's strike plus an offset, to the nearest listed strike (SPEC-24).",
+         "properties": {
+           "leg": {
+             "description": "Id of the leg whose strike the offset starts from; it is selected first.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "on_no_match": {
+             "$ref": "#/$defs/OnNoMatch",
+             "default": "skip_entry",
+             "description": "What happens when no strike is within tolerance (SPEC-25)."
+           },
+           "percent": {
+             "anyOf": [
+               {
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Signed offset as a percentage of that strike, for example 2.5 for +2.5%. Give points or percent, not both.",
+             "title": "Percent"
+           },
+           "points": {
+             "anyOf": [
+               {
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Signed offset in index points, for example 50 or −50. Give points or percent, not both.",
+             "title": "Points"
+           },
+           "selector": {
+             "const": "strike_offset",
+             "description": "Selects this strike selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tolerance_points": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Largest distance in index points from the offset strike that still matches. Null means the usual strike spacing around it in that expiration.",
+             "title": "Tolerance Points"
+           }
+         },
+         "required": [
+           "selector",
+           "leg"
+         ],
+         "title": "StrikeOffsetParams",
+         "type": "object"
+       },
+       "StrikeTieBreak": {
+         "description": "Which strike wins when two are equally near the target delta (SPEC-20).",
+         "enum": [
+           "further_otm",
+           "nearer_otm"
+         ],
+         "title": "StrikeTieBreak",
+         "type": "string"
+       },
+       "StructureMinDaysToExpiryAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``structure_min_days_to_expiry_at_or_below``: fires when the shortest time to expiry among open legs is at or below ``days``.",
+         "properties": {
+           "condition": {
+             "const": "structure_min_days_to_expiry_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Fires when the shortest time to expiry among the structure's open legs, measured in unit, is ≤ days.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "unit": {
+             "$ref": "#/$defs/DayUnit",
+             "default": "calendar_days",
+             "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+           }
+         },
+         "required": [
+           "condition",
+           "days"
+         ],
+         "title": "StructureMinDaysToExpiryAtOrBelowParams",
+         "type": "object"
+       },
+       "StructurePnlPerUnitAtOrAboveParams": {
+         "additionalProperties": false,
+         "description": "``structure_pnl_per_unit_at_or_above``: a profit target in dollars per structure unit (SPEC-46).",
+         "properties": {
+           "amount": {
+             "description": "Dollars per unit: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≥ amount. 250 on a 10-unit structure fires at $2,500.",
+             "title": "Amount",
+             "type": "number"
+           },
+           "condition": {
+             "const": "structure_pnl_per_unit_at_or_above",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           }
+         },
+         "required": [
+           "condition",
+           "amount"
+         ],
+         "title": "StructurePnlPerUnitAtOrAboveParams",
+         "type": "object"
+       },
+       "StructurePnlPerUnitAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``structure_pnl_per_unit_at_or_below``: a stop in dollars per structure unit (SPEC-46).",
+         "properties": {
+           "amount": {
+             "description": "Dollars per unit, zero or negative: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≤ amount.",
+             "maximum": 0,
+             "title": "Amount",
+             "type": "number"
+           },
+           "condition": {
+             "const": "structure_pnl_per_unit_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           }
+         },
+         "required": [
+           "condition",
+           "amount"
+         ],
+         "title": "StructurePnlPerUnitAtOrBelowParams",
+         "type": "object"
+       },
+       "TargetDaysParams": {
+         "additionalProperties": false,
+         "description": "``target_days``: the expiration whose calendar days to expiry is nearest ``days`` (SPEC-10).",
+         "properties": {
+           "days": {
+             "description": "Target calendar days to expiry, fractional (CONV-1), for example 45, or 0.5 for a same-day expiration.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "max_days": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Most calendar days to expiry an eligible expiration may have. Null means days + 10.",
+             "title": "Max Days"
+           },
+           "min_days": {
+             "anyOf": [
+               {
+                 "minimum": 0,
+                 "type": "number"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "Fewest calendar days to expiry an eligible expiration may have. Null means days − 10, floored at 0.",
+             "title": "Min Days"
+           },
+           "selector": {
+             "const": "target_days",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/ExpirationTieBreak",
+             "default": "later",
+             "description": "Which of two expirations equally near the target wins: later (default) or earlier."
+           }
+         },
+         "required": [
+           "selector",
+           "days"
+         ],
+         "title": "TargetDaysParams",
+         "type": "object"
+       },
+       "TradingDaysHeldAtLeastParams": {
+         "additionalProperties": false,
+         "description": "``trading_days_held_at_least``: fires once the structure has been held a number of trading days.",
+         "properties": {
+           "condition": {
+             "const": "trading_days_held_at_least",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Trading days since the structure was opened, counted on the trading calendar (ENG-4); fires when ≥ days.",
+             "minimum": 1,
+             "title": "Days",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "condition",
+           "days"
+         ],
+         "title": "TradingDaysHeldAtLeastParams",
+         "type": "object"
+       },
+       "TradingDaysOutParams": {
+         "additionalProperties": false,
+         "description": "``trading_days_out``: the expiration ``n`` trading days out (SPEC-11).",
+         "properties": {
+           "filter": {
+             "$ref": "#/$defs/ExpirationFilter",
+             "description": "Which expirations are eligible (SPEC-14)."
+           },
+           "n": {
+             "description": "Trading days to expiry (CONV-2) wanted: 1 is the next trading day's expiration, 0 an expiration settling today.",
+             "minimum": 0,
+             "title": "N",
+             "type": "integer"
+           },
+           "selector": {
+             "const": "trading_days_out",
+             "description": "Selects this expiration selector.",
+             "title": "Selector",
+             "type": "string"
+           },
+           "tie_break": {
+             "$ref": "#/$defs/ExpirationTieBreak",
+             "default": "later",
+             "description": "Which of two expirations equally near n wins: later (default) or earlier."
+           },
+           "tolerance": {
+             "default": 0,
+             "description": "How many trading days away from n an expiration may be and still match.",
+             "minimum": 0,
+             "title": "Tolerance",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "selector",
+           "n"
+         ],
+         "title": "TradingDaysOutParams",
+         "type": "object"
+       },
+       "Trigger": {
+         "additionalProperties": false,
+         "description": "A trigger: conditions that, when any fires, close or roll a leg or the structure (SPEC-40).",
+         "properties": {
+           "action": {
+             "description": "close or roll (SPEC-43). When several triggers fire at one step, structure close wins, then structure roll, then leg close, then leg roll (SPEC-44).",
+             "enum": [
+               "close",
+               "roll"
+             ],
+             "title": "Action",
+             "type": "string"
+           },
+           "any_of": {
+             "description": "Conditions; any one of them fires the trigger (SPEC-41).",
+             "items": {
+               "discriminator": {
+                 "mapping": {
+                   "leg_abs_delta_above": "#/$defs/LegAbsDeltaAboveParams",
+                   "leg_abs_delta_below": "#/$defs/LegAbsDeltaBelowParams",
+                   "leg_days_to_expiry_at_or_below": "#/$defs/LegDaysToExpiryAtOrBelowParams",
+                   "structure_min_days_to_expiry_at_or_below": "#/$defs/StructureMinDaysToExpiryAtOrBelowParams",
+                   "structure_pnl_per_unit_at_or_above": "#/$defs/StructurePnlPerUnitAtOrAboveParams",
+                   "structure_pnl_per_unit_at_or_below": "#/$defs/StructurePnlPerUnitAtOrBelowParams",
+                   "trading_days_held_at_least": "#/$defs/TradingDaysHeldAtLeastParams"
+                 },
+                 "propertyName": "condition"
+               },
+               "oneOf": [
+                 {
+                   "$ref": "#/$defs/LegAbsDeltaAboveParams"
+                 },
+                 {
+                   "$ref": "#/$defs/LegAbsDeltaBelowParams"
+                 },
+                 {
+                   "$ref": "#/$defs/LegDaysToExpiryAtOrBelowParams"
+                 },
+                 {
+                   "$ref": "#/$defs/StructureMinDaysToExpiryAtOrBelowParams"
+                 },
+                 {
+                   "$ref": "#/$defs/StructurePnlPerUnitAtOrAboveParams"
+                 },
+                 {
+                   "$ref": "#/$defs/StructurePnlPerUnitAtOrBelowParams"
+                 },
+                 {
+                   "$ref": "#/$defs/TradingDaysHeldAtLeastParams"
+                 }
+               ]
+             },
+             "minItems": 1,
+             "title": "Any Of",
+             "type": "array"
+           },
+           "name": {
+             "description": "The trigger's name, unique within the spec; events record it.",
+             "maxLength": 100,
+             "minLength": 1,
+             "title": "Name",
+             "type": "string"
+           },
+           "scope": {
+             "$ref": "#/$defs/TriggerScope",
+             "description": "structure, or {leg: <id>} for one leg."
+           }
+         },
+         "required": [
+           "name",
+           "scope",
+           "action",
+           "any_of"
+         ],
+         "title": "Trigger",
+         "type": "object"
+       },
+       "TriggerScope": {
+         "additionalProperties": false,
+         "description": "What a trigger acts on: ``structure``, or ``{leg: <id>}`` for one leg (SPEC-40).\n\nIn a spec it is written as the word ``structure`` or as ``{leg: short_call}``, and exported the same way.",
+         "properties": {
+           "leg": {
+             "anyOf": [
+               {
+                 "type": "string"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "The leg the trigger acts on; null means the whole structure.",
+             "title": "Leg"
+           }
+         },
+         "title": "TriggerScope",
+         "type": "object"
+       },
+       "Weekday": {
+         "description": "A day of the week, as written in specs (``MON`` … ``SUN``).",
+         "enum": [
+           "MON",
+           "TUE",
+           "WED",
+           "THU",
+           "FRI",
+           "SAT",
+           "SUN"
+         ],
+         "title": "Weekday",
+         "type": "string"
+       },
+       "WeekdaysParams": {
+         "additionalProperties": false,
+         "description": "``weekdays``: open a structure on the listed weekdays (SPEC-33).",
+         "properties": {
+           "holiday_shift": {
+             "$ref": "#/$defs/HolidayShift",
+             "default": "skip",
+             "description": "When a listed weekday is not a trading day: skip (default) enters nothing that week for that day; next enters on the next trading day."
+           },
+           "max_open": {
+             "default": 1,
+             "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+             "minimum": 1,
+             "title": "Max Open",
+             "type": "integer"
+           },
+           "schedule": {
+             "const": "weekdays",
+             "description": "Selects this entry schedule.",
+             "title": "Schedule",
+             "type": "string"
+           },
+           "weekdays": {
+             "description": "Weekdays on which to enter, for example [MON, WED].",
+             "items": {
+               "$ref": "#/$defs/Weekday"
+             },
+             "minItems": 1,
+             "title": "Weekdays",
+             "type": "array"
+           }
+         },
+         "required": [
+           "schedule",
+           "weekdays"
+         ],
+         "title": "WeekdaysParams",
+         "type": "object"
+       },
+       "WhenFlatParams": {
+         "additionalProperties": false,
+         "description": "``when_flat``: open a structure whenever none of this spec is open (SPEC-31).",
+         "properties": {
+           "cooldown_trading_days": {
+             "default": 1,
+             "description": "Trading days to wait after a structure is closed by a close action or by expiry before re-entering. Default 1, so a close and a re-entry don't happen at the same step. It does not delay a roll, which re-establishes the structure immediately.",
+             "minimum": 0,
+             "title": "Cooldown Trading Days",
+             "type": "integer"
+           },
+           "max_open": {
+             "default": 1,
+             "description": "Most structures of this spec open at once; no entry occurs while this many are open (SPEC-34). Default 1.",
+             "minimum": 1,
+             "title": "Max Open",
+             "type": "integer"
+           },
+           "schedule": {
+             "const": "when_flat",
+             "description": "Selects this entry schedule.",
+             "title": "Schedule",
+             "type": "string"
+           }
+         },
+         "required": [
+           "schedule"
+         ],
+         "title": "WhenFlatParams",
+         "type": "object"
+       }
+     },
+     "additionalProperties": false,
+     "description": "A strategy: a structure of legs and its management rules (SPEC-1).\n\nPublished versions are immutable (VER-1); every change publishes a new version.",
+     "properties": {
+       "description": {
+         "default": "",
+         "description": "What the strategy does, for people.",
+         "title": "Description",
+         "type": "string"
+       },
+       "entry": {
+         "description": "When structures are opened (SPEC-30 to SPEC-35), for example {schedule: when_flat}.",
+         "discriminator": {
+           "mapping": {
+             "every_n_trading_days": "#/$defs/EveryNTradingDaysParams",
+             "once": "#/$defs/OnceParams",
+             "weekdays": "#/$defs/WeekdaysParams",
+             "when_flat": "#/$defs/WhenFlatParams"
+           },
+           "propertyName": "schedule"
+         },
+         "oneOf": [
+           {
+             "$ref": "#/$defs/OnceParams"
+           },
+           {
+             "$ref": "#/$defs/WhenFlatParams"
+           },
+           {
+             "$ref": "#/$defs/EveryNTradingDaysParams"
+           },
+           {
+             "$ref": "#/$defs/WeekdaysParams"
+           }
+         ],
+         "title": "Entry"
+       },
+       "expiry_handling": {
+         "$ref": "#/$defs/ExpiryHandling",
+         "default": "close_structure",
+         "description": "When a leg settles or is force-closed: close_structure (default) closes the remaining legs and the hedge; keep_remaining keeps them open; roll_leg re-selects the expired leg (SPEC-54)."
+       },
+       "hedge": {
+         "description": "How the structure is delta hedged (SPEC-60 to SPEC-64). Default {rule: none}.",
+         "discriminator": {
+           "mapping": {
+             "band": "#/$defs/BandParams",
+             "none": "#/$defs/NoHedgeParams"
+           },
+           "propertyName": "rule"
+         },
+         "oneOf": [
+           {
+             "$ref": "#/$defs/NoHedgeParams"
+           },
+           {
+             "$ref": "#/$defs/BandParams"
+           }
+         ],
+         "title": "Hedge"
+       },
+       "id": {
+         "description": "The spec's id; versions are published under it.",
+         "maxLength": 100,
+         "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+         "title": "Id",
+         "type": "string"
+       },
+       "legs": {
+         "description": "The structure's legs, in order. Legs that refer to other legs are selected after them (SPEC-3).",
+         "items": {
+           "$ref": "#/$defs/Leg"
+         },
+         "minItems": 1,
+         "title": "Legs",
+         "type": "array"
+       },
+       "selection": {
+         "$ref": "#/$defs/QuoteFilters"
+       },
+       "sizing": {
+         "description": "How many units an entry opens (SPEC-70 to SPEC-73), for example {method: contracts, quantity: 10}.",
+         "discriminator": {
+           "mapping": {
+             "contracts": "#/$defs/ContractsParams",
+             "notional": "#/$defs/NotionalParams"
+           },
+           "propertyName": "method"
+         },
+         "oneOf": [
+           {
+             "$ref": "#/$defs/ContractsParams"
+           },
+           {
+             "$ref": "#/$defs/NotionalParams"
+           }
+         ],
+         "title": "Sizing"
+       },
+       "triggers": {
+         "description": "Close and roll rules (SPEC-40 to SPEC-46). Default none.",
+         "items": {
+           "$ref": "#/$defs/Trigger"
+         },
+         "title": "Triggers",
+         "type": "array"
+       },
+       "underlying": {
+         "description": "Symbol of the underlying, for example SPX (§7.1).",
+         "minLength": 1,
+         "title": "Underlying",
+         "type": "string"
+       }
+     },
+     "required": [
+       "id",
+       "underlying",
+       "legs",
+       "entry",
+       "sizing"
+     ],
+     "title": "StrategySpec",
+     "type": "object"
+   }
+
+prophetovol.strategy.model.Trigger
+----------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "DayUnit": {
+         "description": "The unit a days-to-expiry condition measures in (SPEC-41, TIME-3).",
+         "enum": [
+           "calendar_days",
+           "trading_days"
+         ],
+         "title": "DayUnit",
+         "type": "string"
+       },
+       "LegAbsDeltaAboveParams": {
+         "additionalProperties": false,
+         "description": "``leg_abs_delta_above``: fires when the leg's absolute delta is above a threshold.",
+         "properties": {
+           "condition": {
+             "const": "leg_abs_delta_above",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "leg": {
+             "description": "Id of the leg whose contract's delta is read (CONV-10).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "threshold": {
+             "description": "Fires when |delta| > threshold, for example 0.50.",
+             "maximum": 1,
+             "minimum": 0,
+             "title": "Threshold",
+             "type": "number"
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "threshold"
+         ],
+         "title": "LegAbsDeltaAboveParams",
+         "type": "object"
+       },
+       "LegAbsDeltaBelowParams": {
+         "additionalProperties": false,
+         "description": "``leg_abs_delta_below``: fires when the leg's absolute delta is below a threshold.",
+         "properties": {
+           "condition": {
+             "const": "leg_abs_delta_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "leg": {
+             "description": "Id of the leg whose contract's delta is read (CONV-10).",
+             "title": "Leg",
+             "type": "string"
+           },
+           "threshold": {
+             "description": "Fires when |delta| < threshold, for example 0.15.",
+             "maximum": 1,
+             "minimum": 0,
+             "title": "Threshold",
+             "type": "number"
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "threshold"
+         ],
+         "title": "LegAbsDeltaBelowParams",
+         "type": "object"
+       },
+       "LegDaysToExpiryAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``leg_days_to_expiry_at_or_below``: fires when the leg's time to expiry is at or below ``days``.",
+         "properties": {
+           "condition": {
+             "const": "leg_days_to_expiry_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Fires when the leg's time to expiry, measured in unit, is ≤ days.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "leg": {
+             "description": "Id of the leg whose time to expiry is read.",
+             "title": "Leg",
+             "type": "string"
+           },
+           "unit": {
+             "$ref": "#/$defs/DayUnit",
+             "default": "calendar_days",
+             "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+           }
+         },
+         "required": [
+           "condition",
+           "leg",
+           "days"
+         ],
+         "title": "LegDaysToExpiryAtOrBelowParams",
+         "type": "object"
+       },
+       "StructureMinDaysToExpiryAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``structure_min_days_to_expiry_at_or_below``: fires when the shortest time to expiry among open legs is at or below ``days``.",
+         "properties": {
+           "condition": {
+             "const": "structure_min_days_to_expiry_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Fires when the shortest time to expiry among the structure's open legs, measured in unit, is ≤ days.",
+             "minimum": 0,
+             "title": "Days",
+             "type": "number"
+           },
+           "unit": {
+             "$ref": "#/$defs/DayUnit",
+             "default": "calendar_days",
+             "description": "Unit of days: calendar_days (default; fractional calendar days to expiry, CONV-1) or trading_days (CONV-2). State it explicitly: the dry run warns when it is left out."
+           }
+         },
+         "required": [
+           "condition",
+           "days"
+         ],
+         "title": "StructureMinDaysToExpiryAtOrBelowParams",
+         "type": "object"
+       },
+       "StructurePnlPerUnitAtOrAboveParams": {
+         "additionalProperties": false,
+         "description": "``structure_pnl_per_unit_at_or_above``: a profit target in dollars per structure unit (SPEC-46).",
+         "properties": {
+           "amount": {
+             "description": "Dollars per unit: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≥ amount. 250 on a 10-unit structure fires at $2,500.",
+             "title": "Amount",
+             "type": "number"
+           },
+           "condition": {
+             "const": "structure_pnl_per_unit_at_or_above",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           }
+         },
+         "required": [
+           "condition",
+           "amount"
+         ],
+         "title": "StructurePnlPerUnitAtOrAboveParams",
+         "type": "object"
+       },
+       "StructurePnlPerUnitAtOrBelowParams": {
+         "additionalProperties": false,
+         "description": "``structure_pnl_per_unit_at_or_below``: a stop in dollars per structure unit (SPEC-46).",
+         "properties": {
+           "amount": {
+             "description": "Dollars per unit, zero or negative: fires when the structure's cumulative P&L (legs, hedge and fees) divided by its units is ≤ amount.",
+             "maximum": 0,
+             "title": "Amount",
+             "type": "number"
+           },
+           "condition": {
+             "const": "structure_pnl_per_unit_at_or_below",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           }
+         },
+         "required": [
+           "condition",
+           "amount"
+         ],
+         "title": "StructurePnlPerUnitAtOrBelowParams",
+         "type": "object"
+       },
+       "TradingDaysHeldAtLeastParams": {
+         "additionalProperties": false,
+         "description": "``trading_days_held_at_least``: fires once the structure has been held a number of trading days.",
+         "properties": {
+           "condition": {
+             "const": "trading_days_held_at_least",
+             "description": "Selects this condition.",
+             "title": "Condition",
+             "type": "string"
+           },
+           "days": {
+             "description": "Trading days since the structure was opened, counted on the trading calendar (ENG-4); fires when ≥ days.",
+             "minimum": 1,
+             "title": "Days",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "condition",
+           "days"
+         ],
+         "title": "TradingDaysHeldAtLeastParams",
+         "type": "object"
+       },
+       "TriggerScope": {
+         "additionalProperties": false,
+         "description": "What a trigger acts on: ``structure``, or ``{leg: <id>}`` for one leg (SPEC-40).\n\nIn a spec it is written as the word ``structure`` or as ``{leg: short_call}``, and exported the same way.",
+         "properties": {
+           "leg": {
+             "anyOf": [
+               {
+                 "type": "string"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "The leg the trigger acts on; null means the whole structure.",
+             "title": "Leg"
+           }
+         },
+         "title": "TriggerScope",
+         "type": "object"
+       }
+     },
+     "additionalProperties": false,
+     "description": "A trigger: conditions that, when any fires, close or roll a leg or the structure (SPEC-40).",
+     "properties": {
+       "action": {
+         "description": "close or roll (SPEC-43). When several triggers fire at one step, structure close wins, then structure roll, then leg close, then leg roll (SPEC-44).",
+         "enum": [
+           "close",
+           "roll"
+         ],
+         "title": "Action",
+         "type": "string"
+       },
+       "any_of": {
+         "description": "Conditions; any one of them fires the trigger (SPEC-41).",
+         "items": {
+           "discriminator": {
+             "mapping": {
+               "leg_abs_delta_above": "#/$defs/LegAbsDeltaAboveParams",
+               "leg_abs_delta_below": "#/$defs/LegAbsDeltaBelowParams",
+               "leg_days_to_expiry_at_or_below": "#/$defs/LegDaysToExpiryAtOrBelowParams",
+               "structure_min_days_to_expiry_at_or_below": "#/$defs/StructureMinDaysToExpiryAtOrBelowParams",
+               "structure_pnl_per_unit_at_or_above": "#/$defs/StructurePnlPerUnitAtOrAboveParams",
+               "structure_pnl_per_unit_at_or_below": "#/$defs/StructurePnlPerUnitAtOrBelowParams",
+               "trading_days_held_at_least": "#/$defs/TradingDaysHeldAtLeastParams"
+             },
+             "propertyName": "condition"
+           },
+           "oneOf": [
+             {
+               "$ref": "#/$defs/LegAbsDeltaAboveParams"
+             },
+             {
+               "$ref": "#/$defs/LegAbsDeltaBelowParams"
+             },
+             {
+               "$ref": "#/$defs/LegDaysToExpiryAtOrBelowParams"
+             },
+             {
+               "$ref": "#/$defs/StructureMinDaysToExpiryAtOrBelowParams"
+             },
+             {
+               "$ref": "#/$defs/StructurePnlPerUnitAtOrAboveParams"
+             },
+             {
+               "$ref": "#/$defs/StructurePnlPerUnitAtOrBelowParams"
+             },
+             {
+               "$ref": "#/$defs/TradingDaysHeldAtLeastParams"
+             }
+           ]
+         },
+         "minItems": 1,
+         "title": "Any Of",
+         "type": "array"
+       },
+       "name": {
+         "description": "The trigger's name, unique within the spec; events record it.",
+         "maxLength": 100,
+         "minLength": 1,
+         "title": "Name",
+         "type": "string"
+       },
+       "scope": {
+         "$ref": "#/$defs/TriggerScope",
+         "description": "structure, or {leg: <id>} for one leg."
+       }
+     },
+     "required": [
+       "name",
+       "scope",
+       "action",
+       "any_of"
+     ],
+     "title": "Trigger",
+     "type": "object"
+   }
+
+prophetovol.strategy.model.TriggerScope
+---------------------------------------
+
+.. code-block:: json
+
+   {
+     "additionalProperties": false,
+     "description": "What a trigger acts on: ``structure``, or ``{leg: <id>}`` for one leg (SPEC-40).\n\nIn a spec it is written as the word ``structure`` or as ``{leg: short_call}``, and exported the same way.",
+     "properties": {
+       "leg": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The leg the trigger acts on; null means the whole structure.",
+         "title": "Leg"
+       }
+     },
+     "title": "TriggerScope",
+     "type": "object"
+   }
+
+prophetovol.strategy.validate.SpecIssue
+---------------------------------------
+
+.. code-block:: json
+
+   {
+     "description": "One finding of the dry run, located by a field path (SPEC-80).",
+     "properties": {
+       "message": {
+         "description": "What is wrong and, where possible, how to fix it.",
+         "title": "Message",
+         "type": "string"
+       },
+       "path": {
+         "description": "Where in the spec, for example legs[1].strike.leg; empty for the spec as a whole.",
+         "title": "Path",
+         "type": "string"
+       },
+       "severity": {
+         "description": "error blocks publishing; warning does not.",
+         "enum": [
+           "error",
+           "warning"
+         ],
+         "title": "Severity",
+         "type": "string"
+       }
+     },
+     "required": [
+       "severity",
+       "path",
+       "message"
+     ],
+     "title": "SpecIssue",
+     "type": "object"
+   }
+
+prophetovol.strategy.validate.SpecPublication
+---------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "Channel": {
+         "description": "The client through which an operation was requested.",
+         "enum": [
+           "cli",
+           "api",
+           "gui",
+           "library"
+         ],
+         "title": "Channel",
+         "type": "string"
+       },
+       "DefinitionVersion": {
+         "description": "One published version of a versioned definition: an underlying, a data source, later specs (VER-1).",
+         "properties": {
+           "actor": {
+             "description": "Who published this version (AUD-1).",
+             "title": "Actor",
+             "type": "string"
+           },
+           "body": {
+             "additionalProperties": true,
+             "description": "The definition's content as JSON-compatible data.",
+             "title": "Body",
+             "type": "object"
+           },
+           "channel": {
+             "$ref": "#/$defs/Channel",
+             "description": "The client it was published through (AUD-1)."
+           },
+           "content_hash": {
+             "description": "SHA-256 of the body's canonical JSON (VER-2).",
+             "title": "Content Hash",
+             "type": "string"
+           },
+           "created_at": {
+             "description": "When it was published (UTC).",
+             "format": "date-time",
+             "title": "Created At",
+             "type": "string"
+           },
+           "key": {
+             "description": "The definition's id within its kind, for example SPX.",
+             "title": "Key",
+             "type": "string"
+           },
+           "kind": {
+             "description": "What the definition is: underlying or data_source (more kinds in later phases).",
+             "title": "Kind",
+             "type": "string"
+           },
+           "version": {
+             "description": "The version number, from 1, increasing by one per published change.",
+             "minimum": 1,
+             "title": "Version",
+             "type": "integer"
+           }
+         },
+         "required": [
+           "kind",
+           "key",
+           "version",
+           "body",
+           "content_hash",
+           "actor",
+           "channel",
+           "created_at"
+         ],
+         "title": "DefinitionVersion",
+         "type": "object"
+       },
+       "SpecIssue": {
+         "description": "One finding of the dry run, located by a field path (SPEC-80).",
+         "properties": {
+           "message": {
+             "description": "What is wrong and, where possible, how to fix it.",
+             "title": "Message",
+             "type": "string"
+           },
+           "path": {
+             "description": "Where in the spec, for example legs[1].strike.leg; empty for the spec as a whole.",
+             "title": "Path",
+             "type": "string"
+           },
+           "severity": {
+             "description": "error blocks publishing; warning does not.",
+             "enum": [
+               "error",
+               "warning"
+             ],
+             "title": "Severity",
+             "type": "string"
+           }
+         },
+         "required": [
+           "severity",
+           "path",
+           "message"
+         ],
+         "title": "SpecIssue",
+         "type": "object"
+       },
+       "SpecValidationReport": {
+         "description": "The result of validating a spec: every error and warning at once (SPEC-80).",
+         "properties": {
+           "errors": {
+             "description": "Findings that block publishing.",
+             "items": {
+               "$ref": "#/$defs/SpecIssue"
+             },
+             "title": "Errors",
+             "type": "array"
+           },
+           "leg_order": {
+             "description": "The order in which legs are selected: referenced legs first (SPEC-3). Empty when the spec has errors.",
+             "items": {
+               "type": "string"
+             },
+             "title": "Leg Order",
+             "type": "array"
+           },
+           "spec_id": {
+             "anyOf": [
+               {
+                 "type": "string"
+               },
+               {
+                 "type": "null"
+               }
+             ],
+             "default": null,
+             "description": "The spec's id, when it could be read.",
+             "title": "Spec Id"
+           },
+           "warnings": {
+             "description": "Findings that do not block publishing.",
+             "items": {
+               "$ref": "#/$defs/SpecIssue"
+             },
+             "title": "Warnings",
+             "type": "array"
+           }
+         },
+         "title": "SpecValidationReport",
+         "type": "object"
+       }
+     },
+     "description": "The outcome of publishing a spec (VER-1, VER-2).",
+     "properties": {
+       "created": {
+         "description": "Whether this call published a new version; false when the content was unchanged.",
+         "title": "Created",
+         "type": "boolean"
+       },
+       "definition": {
+         "$ref": "#/$defs/DefinitionVersion",
+         "description": "The spec's latest version: the new one, or the existing one when the content was unchanged."
+       },
+       "report": {
+         "$ref": "#/$defs/SpecValidationReport",
+         "description": "The validation report, with any warnings."
+       }
+     },
+     "required": [
+       "definition",
+       "created",
+       "report"
+     ],
+     "title": "SpecPublication",
+     "type": "object"
+   }
+
+prophetovol.strategy.validate.SpecValidationReport
+--------------------------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "SpecIssue": {
+         "description": "One finding of the dry run, located by a field path (SPEC-80).",
+         "properties": {
+           "message": {
+             "description": "What is wrong and, where possible, how to fix it.",
+             "title": "Message",
+             "type": "string"
+           },
+           "path": {
+             "description": "Where in the spec, for example legs[1].strike.leg; empty for the spec as a whole.",
+             "title": "Path",
+             "type": "string"
+           },
+           "severity": {
+             "description": "error blocks publishing; warning does not.",
+             "enum": [
+               "error",
+               "warning"
+             ],
+             "title": "Severity",
+             "type": "string"
+           }
+         },
+         "required": [
+           "severity",
+           "path",
+           "message"
+         ],
+         "title": "SpecIssue",
+         "type": "object"
+       }
+     },
+     "description": "The result of validating a spec: every error and warning at once (SPEC-80).",
+     "properties": {
+       "errors": {
+         "description": "Findings that block publishing.",
+         "items": {
+           "$ref": "#/$defs/SpecIssue"
+         },
+         "title": "Errors",
+         "type": "array"
+       },
+       "leg_order": {
+         "description": "The order in which legs are selected: referenced legs first (SPEC-3). Empty when the spec has errors.",
+         "items": {
+           "type": "string"
+         },
+         "title": "Leg Order",
+         "type": "array"
+       },
+       "spec_id": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The spec's id, when it could be read.",
+         "title": "Spec Id"
+       },
+       "warnings": {
+         "description": "Findings that do not block publishing.",
+         "items": {
+           "$ref": "#/$defs/SpecIssue"
+         },
+         "title": "Warnings",
+         "type": "array"
+       }
+     },
+     "title": "SpecValidationReport",
      "type": "object"
    }
 
