@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–11 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 12 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–12 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 13 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1288,3 +1288,46 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
     - example 2 in dependency order; atomic failure; a single-leg selection against held contracts
   - **`tests/unit/test_entries.py`, 20 tests:** every schedule, with cooldown, `max_open` and `holiday_shift`, counted across Good Friday and Memorial Day.
 - **Next:** Phase 12 (book, marking, fills, sizing, hedging and accounting).
+
+
+**Phase 12 (book, marking, fills, sizing, hedging and accounting), Oct 27, 2026**
+
+- **`engine/book.py`:** `BookSettings`, `Position`, `Hedge`, `Structure` and `Book`. The step loop (Phase 13) will call, in ENG-1's order:
+  - `begin_step`
+  - `settle`, which pays `q · value · m` with no fill cost (SPEC-50)
+  - `mark`: the mid of a valid quote, or the last valid mark flagged `stale_mark` with an event, which becomes a warning beyond `stale_mark_warning_steps` (ENG-21)
+  - `retry_pending_closes`, `close_leg`, `open_structure` and `open_leg` (ENG-40, ENG-41)
+  - `rebalance_hedges` (SPEC-61 to SPEC-64)
+  - `end_step`, which values every position touched at the step (ENG-30 to ENG-32), records position snapshots (RES-1), hedge snapshots (RES-2) and the portfolio snapshot (RES-10), and updates each structure's cumulative P&L, legs, hedge and fees together, for SPEC-46
+- **`engine/orders.py`:** `OpenLeg` and the contract fields carried into snapshots.
+- **`engine/marking.py`:** `valid_quote` and `mid` (ENG-20).
+- **Fills, sizing and hedging:** the registered implementations gain their behavior.
+  - Fill models gain `price` (ENG-40); `fill_model(params)` returns the implementation.
+  - Sizing methods gain `units` (SPEC-70, SPEC-71), and `round_units` applies the rounding (SPEC-72).
+  - Hedge rules gain `target_holding`; the band also has `measure` (SPEC-61).
+- **`engine/invariants.py`:** `check_invariants` checks ENG-33's three invariants to 1e-6 dollars and raises `InvariantViolation` naming the step and the security.
+- **`results/records.py`:** `PositionSnapshot`, `PortfolioSnapshot`, `TradeRecord`, `StructureRecord` and `RunEvent`, with every field described; `MarkSource`, `EventType` (RES-20); and `arrow_schema`, deriving each table's Arrow schema from its model. **`results/recorder.py`:** `RunRecorder`, rows as dicts per table and `tables()` as Arrow for the single write (RUN-23).
+- **Interpretations made** (the requirements leave them open):
+  - **Opening:** a new structure opens all legs or none. If any leg's quote is invalid, nothing is traded and an `order_not_filled` event names the legs. ENG-41 says opening orders are dropped, and dropping only some legs would leave a structure that is not the spec's.
+  - **Period return:** the portfolio's `period_return` is `period_pnl / capital`, the "period return on capital" of RES-10, rather than a return on the previous step's equity. M3's statistics (RES-30) build on it; please confirm at checkpoint 2.
+  - **Closing steps:** a position closed or settled at a step is recorded at that step with quantity 0 and its fill or settlement price as the mark (ENG-22). A forced close without a quote is marked `stale` and flagged `forced_close_stale`.
+  - **Hedging with missing deltas:** when a leg's snapshot has no delta (absent or stale), it uses the leg's last known delta. SPEC-63's zero applies to settled legs, which are no longer held.
+  - **Null greeks:** a position's dollar greeks are null when its greek is; portfolio sums count them as 0.
+  - **Ids:** structures and trades are numbered S1, S2 … and T1, T2 … in run order (ENG-10).
+- **Changes from the plan:**
+  - The engine receives `BookSettings` rather than the service's `RunConfig`, so `engine/` does not import from `runs/`. Phase 13 builds the settings from the configuration and the underlying.
+  - The golden tests drive the book step by step with explicit orders on hand-built views. The orders come from the rules constructor only in Phase 13.
+  - The tests live in the plan's `tests/golden/` (§3).
+- **Test mistakes corrected during development:**
+  - In the retried-close test, I left the `stale_mark` event, which the invalid quote also causes, out of the expected events.
+  - The settlement test's step helper marked positions before settling; ENG-1 settles first. The helper now has a settle hook.
+- **Tests:** 446, all passing: 440 run by default (unit 379, contract 33, golden 23, meta 3, packaging 2), and the 6 real-data tests pass with `PROPHETOVOL_VENDOR_DATA` set. New in `tests/golden/test_book.py`, 23 tests, each with its arithmetic in comments:
+  - the first-step cost under each fill model, with commission, buying and selling
+  - contract and notional sizing with both roundings
+  - example 3's band: no trade inside, back to +0.03 outside, with the exact holdings and hedge costs
+  - example 1 hedged to flat over three steps: P&L 0, −1,000 and +2,000, with the cash and final value reconciled
+  - dollar greeks
+  - a stale mark carried three steps with the warning after two; a close retried until it fills; a forced close at the last valid mark
+  - a PM settlement; all-or-nothing opening; the hedge closing with the last leg; structure ids and parents
+  - record tables matching their models; invariant violations naming the step and the security
+- **Next:** Phase 13 (triggers, rolls, expiry, settlement and the step loop).
