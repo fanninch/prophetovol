@@ -69,6 +69,13 @@ def test_changes_rows_and_recounts_everything():
     assert tracker.summary(out) == {"total": 4, "Done": 2, "Partial": 1, "Not started": 1}
 
 
+def test_sets_any_milestone_by_name():
+    out = tracker.apply_changes(SAMPLE, {"milestones": {"M1 Data foundation": "**Done:** phases 1–8"}})
+    assert "| **M1 Data foundation** | 1–8 | **Done:** phases 1–8 |" in out
+    with pytest.raises(KeyError, match="milestone not found: M9"):
+        tracker.apply_changes(SAMPLE, {"milestones": {"M9": "x"}})
+
+
 def test_adds_rows_after_an_anchor():
     out = tracker.apply_changes(SAMPLE, {"add_rows": [{"after": "DATA-1", "id": "DATA-15", "summary": "Adapters",
                                                        "status": "Not started", "remaining": "Phase 6"}]})

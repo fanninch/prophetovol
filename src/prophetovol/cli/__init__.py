@@ -1,6 +1,6 @@
 """The ``prophetovol`` command line: a thin client of the service (ARC-1, INT-40).
 
-Data, registry, jobs and documentation commands are available. Spec, stress, run, serve and demo
+Data, spec, registry, jobs and documentation commands are available. Stress, run, serve and demo
 commands arrive in later phases.
 """
 
@@ -137,7 +137,21 @@ def main(ctx: click.Context, home: Path | None) -> None:
     :param ctx: The click context.
     :param home: The ``--home`` option, if given.
     """
+    _tolerant_output()
     ctx.obj = CliState(home=resolve_home(home))
+
+
+def _tolerant_output() -> None:
+    """Replace characters the output cannot encode instead of failing.
+
+    Windows pipes and redirects default to cp1252, which has no ``≤`` or ``→``; field descriptions and
+    schemas contain such characters.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 
 @main.group("testdata")
@@ -177,9 +191,10 @@ def testdata_generate(out_dir: Path, start_date, end_date, seed: int, convention
 
 
 # Imported after the root command exists; these commands use only service operations.
-from prophetovol.cli.commands import data, registry, jobs, docs
+from prophetovol.cli.commands import data, docs, jobs, registry, spec
 
 main.add_command(data)
+main.add_command(spec)
 main.add_command(registry)
 main.add_command(jobs)
 main.add_command(docs)

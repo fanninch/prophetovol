@@ -4,9 +4,10 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–8 of 24 are done and milestone M1 (data foundation)
+**Status:** Phase 1 is being built. Plan phases 0–9 of 24 are done. Milestone M1 (data foundation)
 is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
-and coverage through the `prophetovol` CLI. The requirements, the implementation plan and the
+and coverage through the `prophetovol` CLI. M2 (engine core) has begun with strategy specs:
+validation, publishing and YAML round trips. The requirements, the implementation plan and the
 [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
 milestones M2 to M4.
@@ -119,6 +120,29 @@ to `logs/server.log` in the home directory. Every command is also a `BacktestSer
 (`import_files`, `overlap`, `commit_import`, `coverage`, `preview_data_change`, `delete_data`,
 `purge_data`, …) for use from Python; commit, delete and purge return persisted jobs and accept
 `background=True` when the job runner is running.
+
+## Strategy specs
+
+A strategy spec defines a structure's legs (each with an expiration selector and a strike
+selector), when structures open, the triggers that close or roll them, what happens at expiry,
+hedging and sizing. Specs are YAML or JSON files; the three examples of the requirements'
+Appendix B ship with the package:
+
+```bash
+prophetovol spec examples --out my_specs                 # write the example specs to a folder
+prophetovol spec validate my_specs/short_call_hedged.yaml  # dry run: every error and warning, nothing published
+prophetovol spec publish my_specs/short_call_hedged.yaml   # publish version 1 (unchanged content publishes nothing)
+prophetovol spec list
+prophetovol spec show short_call_hedged@1 [--versions]
+prophetovol spec export short_call_hedged [--out FILE]     # YAML that publishes back to the same version
+```
+
+Validation reports each problem with its field path, for example `legs[1].strike.leg`. It
+rejects holding AM-settled legs to expiration (SPEC-52), and warns when an AM-settled leg has no
+trigger closing it at least one trading day before expiry, since the engine then force-closes it
+on its last trading day (SPEC-53). Published versions are immutable and hashed; every change
+publishes a new version. `prophetovol registry list` and `registry show` describe every selector,
+schedule, condition, hedge rule and sizing method with its parameters. Runs arrive in Phase 14.
 
 ## Jobs and the attempts log
 

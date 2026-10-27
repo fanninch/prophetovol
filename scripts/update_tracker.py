@@ -15,6 +15,7 @@ Changes file (every key optional)::
       "through": "plan Phase 6 (ingest)",                  # header: "Up to date through …"
       "phase_done": {"6": "Oct 26, 2026"},                 # fills the plan-phase table's date
       "m1": "**In progress:** phases 1–6 done; …",         # replaces the M1 milestone status
+      "milestones": {"M2 Engine core": "**In progress:** …"},  # replaces any milestone's status by name
       "rows": {"DATA-13": {"status": "Done", "done_in": "6", "remaining": "", "tests": "`unit/…`"}},
       "add_rows": [{"after": "DATA-14", "id": "DATA-16", "summary": "…", "status": "Not started",
                     "done_in": "", "remaining": "Phase 7", "tests": ""}]
@@ -106,7 +107,7 @@ def recount(text: str, changes: dict | None = None) -> str:
     """Recompute the summary line and per-area counts, and apply header and table changes.
 
     :param text: The tracker's Markdown.
-    :param changes: Optional ``through``, ``phase_done`` and ``m1`` changes.
+    :param changes: Optional ``through``, ``phase_done``, ``m1`` and ``milestones`` changes.
     :returns: The updated Markdown.
     """
     changes = changes or {}
@@ -129,6 +130,11 @@ def recount(text: str, changes: dict | None = None) -> str:
     if "m1" in changes:
         text = re.sub(r"^\| \*\*M1 Data foundation\*\* \| 1–8 \| .* \|$",
                       f"| **M1 Data foundation** | 1–8 | {changes['m1']} |", text, flags=re.M)
+    for name, status in changes.get("milestones", {}).items():
+        text, found = re.subn(rf"^(\| \*\*{re.escape(name)}\*\* \| [^|]+ \| ).* \|$",
+                              lambda m: f"{m.group(1)}{status} |", text, flags=re.M)
+        if not found:
+            raise KeyError(f"milestone not found: {name}")
     return text
 
 

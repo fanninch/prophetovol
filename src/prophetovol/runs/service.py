@@ -17,7 +17,8 @@ import pyarrow as pa
 import pydantic
 
 from prophetovol.core.context import CallContext, Channel
-from prophetovol.core.errors import ConfigurationError, ImmutableEntityError, ValidationFailed, ValidationIssue
+from prophetovol.core.errors import (ConfigurationError, ImmutableEntityError, NotFoundError, ValidationFailed,
+                                     ValidationIssue)
 from prophetovol.core.home import resolve_home
 from prophetovol.core.paging import Page
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, JobRecord,
@@ -35,12 +36,18 @@ from prophetovol.runs.audit import audited
 from prophetovol.runs.jobs import JobContext, JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
 from prophetovol.storage.adapter import StorageAdapter
 from prophetovol.storage.duckdb.adapter import DuckDBAdapter
+from prophetovol.strategy.io import canonical_body, spec_to_yaml
+from prophetovol.strategy.model import StrategySpec
+from prophetovol.strategy.validate import SpecInvalid, SpecPublication, SpecValidationReport, validate_spec
 
 UNDERLYING = "underlying"
 """Definition kind of underlying configurations (REF-1, REF-2)."""
 
 DATA_SOURCE = "data_source"
 """Definition kind of data-source configurations (REF-5)."""
+
+STRATEGY_SPEC = "strategy_spec"
+"""Definition kind of strategy specs (VER-1, decision 27)."""
 
 
 class BacktestService:
@@ -193,6 +200,97 @@ class BacktestService:
         except pydantic.ValidationError as exc:
             raise ValidationFailed.from_pydantic(exc) from None
         return self.storage.save_definition(DATA_SOURCE, model.source_id, model.model_dump(mode="json"), context)
+
+    # --- strategy specs (§8, VER-1, VER-2) -----------------------------------------------------
+
+    def _underlyings(self) -> dict[str, Underlying]:
+        """The configured underlyings by symbol, for spec validation.
+
+        :returns: The underlyings.
+        """
+        return {symbol: self.underlying(symbol) for symbol in self.list_underlyings()}
+
+    @audited("spec.validate")
+    def validate_spec(self, body: Any, context: CallContext) -> SpecValidationReport:
+        """Validate a spec without publishing it: the dry run (SPEC-80).
+
+        :param body: The spec, as parsed from YAML or JSON.
+        :param context: Who is validating, through which channel.
+        :returns: The report, with any warnings, when the spec has no errors.
+        :raises SpecInvalid: If it has errors; the exception carries the whole report, warnings included.
+        """
+        report, _ = validate_spec(body, self._underlyings())
+        if not report.ok:
+            raise SpecInvalid(report)
+        return report
+
+    @audited("spec.publish")
+    def publish_spec(self, body: Any, context: CallContext) -> SpecPublication:
+        """Validate a spec and publish it as a new immutable version (VER-1, VER-2).
+
+        The canonical form (every field, defaults stated) is stored and hashed. Unchanged content publishes
+        nothing and says so.
+
+        :param body: The spec, as parsed from YAML or JSON.
+        :param context: Who is publishing, through which channel.
+        :returns: The latest version, whether this call created it, and the validation report.
+        :raises SpecInvalid: If the spec has errors; nothing is published.
+        """
+        report, spec = validate_spec(body, self._underlyings())
+        if spec is None:
+            raise SpecInvalid(report)
+        definition, created = self.storage.save_definition(STRATEGY_SPEC, spec.id, canonical_body(spec), context)
+        return SpecPublication(definition=definition, created=created, report=report)
+
+    def get_spec_version(self, spec_id: str, version: int | None = None) -> DefinitionVersion:
+        """A published spec version with its hash, author and time.
+
+        :param spec_id: The spec's id.
+        :param version: The version; the latest when omitted.
+        :returns: The stored version.
+        :raises NotFoundError: If the spec or the version does not exist.
+        """
+        return self.storage.get_definition(STRATEGY_SPEC, spec_id, version)
+
+    def get_spec(self, spec_id: str, version: int | None = None) -> StrategySpec:
+        """A published spec.
+
+        :param spec_id: The spec's id.
+        :param version: The version; the latest when omitted.
+        :returns: The spec.
+        :raises NotFoundError: If the spec or the version does not exist.
+        """
+        return StrategySpec.model_validate(self.get_spec_version(spec_id, version).body)
+
+    def list_specs(self) -> list[DefinitionVersion]:
+        """The latest version of every published spec, by id.
+
+        :returns: The versions.
+        """
+        return self.storage.list_definitions(STRATEGY_SPEC)
+
+    def spec_versions(self, spec_id: str) -> list[DefinitionVersion]:
+        """Every version of a spec, oldest first.
+
+        :param spec_id: The spec's id.
+        :returns: The versions.
+        :raises NotFoundError: If the spec has never been published.
+        """
+        versions = self.storage.list_definition_versions(STRATEGY_SPEC, spec_id)
+        if not versions:
+            raise NotFoundError(f"no spec named {spec_id!r}")
+        return versions
+
+    def export_spec(self, spec_id: str, version: int | None = None) -> str:
+        """A published spec as YAML in the form import accepts; re-importing it gives the same hash (SPEC-81).
+
+        :param spec_id: The spec's id.
+        :param version: The version; the latest when omitted.
+        :returns: The YAML text.
+        :raises NotFoundError: If the spec or the version does not exist.
+        """
+        # The catalog stores canonical JSON with sorted keys; rebuilding through the model restores field order.
+        return spec_to_yaml(canonical_body(self.get_spec(spec_id, version)))
 
     # --- jobs (§13.3) ------------------------------------------------------------------------
 

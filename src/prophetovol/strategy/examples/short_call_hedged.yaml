@@ -1,0 +1,25 @@
+# Appendix B, example 1: delta-hedged short call (SPEC-82).
+# Short a 30-delta, 45-day call; hedge delta to flat at every step; roll if the call's delta goes
+# above 50 or below 15, or it has 15 days or fewer left.
+id: short_call_hedged
+description: Short 30-delta 45-day SPX call, delta hedged at every step, rolled on delta or time.
+underlying: SPX
+legs:
+  - id: short_call
+    option_type: call
+    side: short
+    ratio: 1
+    expiration: {selector: target_days, days: 45}
+    strike: {selector: delta, target: 0.30}
+entry: {schedule: when_flat}
+triggers:
+  - name: roll_on_delta_or_time
+    scope: {leg: short_call}
+    action: roll
+    any_of:
+      - {condition: leg_abs_delta_above, leg: short_call, threshold: 0.50}
+      - {condition: leg_abs_delta_below, leg: short_call, threshold: 0.15}
+      - {condition: leg_days_to_expiry_at_or_below, leg: short_call, days: 15, unit: calendar_days}
+expiry_handling: close_structure
+hedge: {rule: band, scope: structure, lower: 0.0, upper: 0.0, target: 0.0}
+sizing: {method: contracts, quantity: 10}
