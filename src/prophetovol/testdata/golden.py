@@ -126,3 +126,67 @@ def pm_call_to_expiry() -> GoldenChain:
             rows.append(VendorRow(day, level, "SPXW", exp, float(strike), False, put_bid, put_bid + 1.0,
                                   iv=-1.0 if settles else 0.15, delta=put_delta))
     return GoldenChain("pm_call_to_expiry", "A PM-settled call over three days, settling in the money.", rows)
+
+
+SELECTION_DAYS = (date(2024, 3, 27), date(2024, 3, 28), date(2024, 4, 1), date(2024, 4, 18), date(2024, 4, 19))
+"""The snapshot dates of :func:`selection_chain`: around Good Friday (Mar 29, 2024) and the April monthly."""
+
+SELECTION_EXPIRATIONS = (
+    ("SPXW", date(2024, 3, 28)), ("SPXW", date(2024, 4, 1)), ("SPXW", date(2024, 4, 3)), ("SPXW", date(2024, 4, 5)),
+    ("SPXW", date(2024, 4, 12)), ("SPX", date(2024, 4, 19)), ("SPXW", date(2024, 4, 19)), ("SPXW", date(2024, 4, 22)),
+    ("SPXW", date(2024, 4, 26)), ("SPX", date(2024, 5, 17)), ("SPX", date(2024, 6, 21)),
+)
+"""The listed expirations of :func:`selection_chain`: PM dailies and weeklies (SPXW) and AM monthlies (SPX)."""
+
+_CALL_DELTAS = {5100.0: 0.70, 5150.0: 0.60, 5200.0: 0.50, 5250.0: 0.40, 5300.0: 0.30}
+
+
+def selection_chain() -> GoldenChain:
+    """A chain for the selection tests (TEST-1, selection part), with round numbers throughout.
+
+    Snapshots on :data:`SELECTION_DAYS`, index 5200, and each of :data:`SELECTION_EXPIRATIONS` listed
+    until its expiration date with strikes 5100 to 5300, 50 apart. Call deltas are 0.70, 0.60, 0.50,
+    0.40 and 0.30 by strike, put deltas the call's minus 1; quotes 10.00/11.00, IV 0.15, forward 5200,
+    open interest 0. On an expiration's own date its rows have IV −1 and zero greeks, as the vendor
+    writes them. On Mar 27 only, these rows differ:
+
+    * **SPX Jun 21** calls, for the quote filters: 5250 bid 0, ask 0.05 (below ``min_bid``); 5300
+      crossed, 12.00/11.00; 5150 flagged ``*``; 5100 open interest 500.
+    * **SPXW Apr 26**: forward 5226, and the 5200 and 5250 calls and puts bid 0 (a hole near the forward).
+    * **SPXW Apr 12**: forward 5226; the 5200 call's IV −1, so its delta is null after ingest.
+    * **SPX May 17**: forward 5212.
+
+    :returns: The chain.
+    """
+    rows: list[VendorRow] = []
+    first = SELECTION_DAYS[0]
+    for day in SELECTION_DAYS:
+        for root, expiration in SELECTION_EXPIRATIONS:
+            if expiration < day:
+                continue
+            settles = expiration == day
+            forward = None
+            if day == first and (root, expiration) in (("SPXW", date(2024, 4, 26)), ("SPXW", date(2024, 4, 12))):
+                forward = 5226.0
+            if day == first and (root, expiration) == ("SPX", date(2024, 5, 17)):
+                forward = 5212.0
+            for strike, call_delta in _CALL_DELTAS.items():
+                for call in (True, False):
+                    delta = 0.0 if settles else (call_delta if call else round(call_delta - 1, 2))
+                    bid, ask, iv, flagged, oi = 10.0, 11.0, -1.0 if settles else 0.15, False, 0
+                    if day == first and (root, expiration) == ("SPX", date(2024, 6, 21)) and call:
+                        if strike == 5250:
+                            bid, ask = 0.0, 0.05
+                        elif strike == 5300:
+                            bid, ask = 12.0, 11.0
+                        elif strike == 5150:
+                            flagged = True
+                        elif strike == 5100:
+                            oi = 500
+                    if day == first and (root, expiration) == ("SPXW", date(2024, 4, 26)) and strike in (5200, 5250):
+                        bid = 0.0
+                    if day == first and (root, expiration) == ("SPXW", date(2024, 4, 12)) and strike == 5200 and call:
+                        iv = -1.0
+                    rows.append(VendorRow(day, 5200.0, root, expiration, strike, call, bid, ask, iv, delta,
+                                          forward=forward, flagged=flagged, open_interest=oi))
+    return GoldenChain("selection", "Expirations and strikes around Good Friday 2024 for every selector.", rows)

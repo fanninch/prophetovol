@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 10 (run configuration, pre-flight and market data access).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 11 (selection and entries).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,12 +13,12 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 49 done, 59 partial, 114 not started.
+**222 requirements:** 69 done, 63 partial, 90 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
 | **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
-| **M2 Engine core** | 9–15 | **In progress:** phases 9–10 done (Oct 27, 2026); 11–15 to go |
+| **M2 Engine core** | 9–15 | **In progress:** phases 9–11 done (Oct 27, 2026); 12–15 to go |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
 
@@ -35,7 +35,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 8 | Data CLI, documentation and checkpoint 1 | Oct 26, 2026 |
 | 9 | Spec model, validation and publishing | Oct 27, 2026 |
 | 10 | Run configuration, pre-flight and market data access | Oct 27, 2026 |
-| 11 | Selection and entries | — |
+| 11 | Selection and entries | Oct 27, 2026 |
 | 12 | Book, marking, fills, sizing, hedging and accounting | — |
 | 13 | Triggers, rolls, expiry, settlement and the step loop | — |
 | 14 | Run lifecycle, results storage and the run CLI | — |
@@ -51,8 +51,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Registries (§5.5) | 1 | 2 | 1 |
 | Data module (§6) | 22 | 8 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
-| Strategy specification (§8) | 6 | 3 | 41 |
-| Engine (§9) | 0 | 0 | 19 |
+| Strategy specification (§8) | 26 | 5 | 19 |
+| Engine (§9) | 0 | 1 | 18 |
 | Stress module (§10) | 0 | 1 | 17 |
 | Runs (§11) | 1 | 7 | 3 |
 | Results and analytics (§12) | 0 | 0 | 8 |
@@ -60,7 +60,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Schemas and documentation (§14) | 1 | 3 | 0 |
 | Audit (§15) | 1 | 3 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
-| Testing (§17) | 3 | 2 | 6 |
+| Testing (§17) | 3 | 3 | 5 |
 | Non-functional (§18) | 0 | 3 | 2 |
 
 ## Architecture (§4)
@@ -111,7 +111,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source), 9 (selectors, schedules, conditions, actions, hedge, sizing, fills and constructor registered with their parameter models) | their behavior (11-13); stress types and modes (16-17) | `unit/test_registry.py`, `unit/test_strategy.py` |
+| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source), 9 (selectors, schedules, conditions, actions, hedge, sizing, fills and constructor registered with their parameter models), 11 (selectors and schedules behave) | conditions, actions, hedge, sizing, fills, constructor behavior (12-13); stress types and modes (16-17) | `unit/test_registry.py`, `unit/test_strategy.py`, `unit/test_selection.py`, `unit/test_entries.py` |
 | REG-2 | Every implementation declares name, description, documented parameter model, version | **Done** | Phase 2 | enforced at registration for every future implementation | `unit/test_registry.py` |
 | REG-3 | Registries are discoverable with descriptions and JSON Schemas | **Partial** | Phase 2 (service level), 8 (CLI `registry list/show`) | API (20) | `unit/test_registry.py`, `unit/test_data_cli.py` |
 | REG-4 | Condition types are pluggable | Not started |  | Phase 13 |  |
@@ -170,29 +170,29 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | SPEC-1 | StrategySpec contents | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-2 | Leg fields | **Done** | Phase 9 |  | `unit/test_strategy.py` |
-| SPEC-3 | Leg references without cycles, resolved in dependency order | **Partial** | Phase 9 (references checked, cycles named, selection order computed) | legs resolved in that order at selection (11) | `unit/test_strategy.py` |
-| SPEC-4 | Selection is atomic across legs | Not started |  | Phase 11 |  |
-| SPEC-10 | `target_days` expiration selector | Not started |  | Phase 11 |  |
-| SPEC-11 | `trading_days_out` expiration selector | Not started |  | Phase 11 |  |
-| SPEC-12 | `nth_expiration` expiration selector | Not started |  | Phase 11 |  |
-| SPEC-13 | `same_as_leg` and `next_after_leg` selectors | Not started |  | Phase 11 |  |
-| SPEC-14 | Expiration filters | Not started |  | Phase 11 |  |
-| SPEC-15 | Expirations never eligible at/after expiry; AM never on/after last trading day | Not started |  | Phase 11 |  |
-| SPEC-20 | `delta` strike selector | Not started |  | Phase 11 |  |
-| SPEC-21 | `atm` strike selector | Not started |  | Phase 11 |  |
-| SPEC-22 | `forward` strike selector | Not started |  | Phase 11 (forward column from 6) |  |
-| SPEC-23 | `same_strike_as` strike selector | Not started |  | Phase 11 |  |
-| SPEC-24 | `strike_offset` strike selector | Not started |  | Phase 11 |  |
-| SPEC-25 | No-match handling | Not started |  | Phase 11 |  |
-| SPEC-26 | Selection uses only eligible contracts | Not started |  | Phase 11 |  |
-| SPEC-27 | Delta selection uses vendor delta; null delta not eligible | Not started |  | Phase 11 (uses the snapshot's internal delta, CONV-10) |  |
-| SPEC-28 | Quote filters | Not started |  | Phase 11 |  |
-| SPEC-30 | `once` entry schedule | Not started |  | Phase 11 |  |
-| SPEC-31 | `when_flat` entry schedule with cooldown | Not started |  | Phase 11 |  |
-| SPEC-32 | `every_n_trading_days` entry schedule | Not started |  | Phase 11 |  |
-| SPEC-33 | `weekdays` entry schedule | Not started |  | Phase 11 |  |
-| SPEC-34 | `max_open` for schedules | Not started |  | Phase 11 |  |
-| SPEC-35 | Failed entries retried at the next scheduled step | Not started |  | Phase 11 |  |
+| SPEC-3 | Leg references without cycles, resolved in dependency order | **Done** | Phase 9 (references checked, cycles named, selection order computed), 11 (legs selected in that order) |  | `unit/test_strategy.py`, `unit/test_selection.py` |
+| SPEC-4 | Selection is atomic across legs | **Partial** | Phase 11 (all legs or none; the failure names the leg, its selector and why) | recorded as a selection_failed event (13) | `unit/test_selection.py` |
+| SPEC-10 | `target_days` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-11 | `trading_days_out` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-12 | `nth_expiration` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-13 | `same_as_leg` and `next_after_leg` selectors | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-14 | Expiration filters | **Done** | Phase 11 (standard_monthly_only by date, plan §7.5 answer 5) |  | `unit/test_selection.py` |
+| SPEC-15 | Expirations never eligible at/after expiry; AM never on/after last trading day | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-20 | `delta` strike selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-21 | `atm` strike selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-22 | `forward` strike selector | **Done** | Phase 11 (default tolerance: the usual spacing around the target, plan §7.5 answer 6) |  | `unit/test_selection.py` |
+| SPEC-23 | `same_strike_as` strike selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-24 | `strike_offset` strike selector | **Done** | Phase 11 (default tolerance: the usual spacing around the target, plan §7.5 answer 6) |  | `unit/test_selection.py` |
+| SPEC-25 | No-match handling | **Partial** | Phase 11 (skip_entry; nearest_any with a warning) | the warning recorded as an event (13) | `unit/test_selection.py` |
+| SPEC-26 | Selection uses only eligible contracts | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-27 | Delta selection uses vendor delta; null delta not eligible | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-28 | Quote filters | **Done** | Phase 11 |  | `unit/test_selection.py` |
+| SPEC-30 | `once` entry schedule | **Done** | Phase 11 |  | `unit/test_entries.py` |
+| SPEC-31 | `when_flat` entry schedule with cooldown | **Done** | Phase 11 |  | `unit/test_entries.py` |
+| SPEC-32 | `every_n_trading_days` entry schedule | **Done** | Phase 11 |  | `unit/test_entries.py` |
+| SPEC-33 | `weekdays` entry schedule | **Done** | Phase 11 |  | `unit/test_entries.py` |
+| SPEC-34 | `max_open` for schedules | **Done** | Phase 11 |  | `unit/test_entries.py` |
+| SPEC-35 | Failed entries retried at the next scheduled step | **Partial** | Phase 11 (schedules are simply due again; nothing is queued) | applied by the step loop (13) | `unit/test_entries.py` |
 | SPEC-40 | Trigger structure | **Done** | Phase 9 (trigger model: name, scope, action, any_of) |  | `unit/test_strategy.py` |
 | SPEC-41 | Phase 1 trigger conditions | Not started |  | Phase 13 |  |
 | SPEC-42 | Condition evaluation; null greeks evaluate false | Not started |  | Phase 13 |  |
@@ -226,7 +226,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ENG-1 | The step loop and its nine steps in order | Not started |  | Phase 13 |  |
 | ENG-2 | The constructor interface; `rules` constructor | Not started |  | Phase 13 |  |
 | ENG-3 | Several structures of one spec tracked separately | Not started |  | Phase 13 |  |
-| ENG-4 | Time-dependent calculations from timestamps and calendar, never step counts | Not started |  | Phase 10-13 (time functions ready from 2) |  |
+| ENG-4 | Time-dependent calculations from timestamps and calendar, never step counts | **Partial** | Phase 11 (entry schedules and trading days counted on the calendar; selection from stored times to expiry) | trading days held and the step loop (13) | `unit/test_entries.py` |
 | ENG-10 | Determinism | Not started |  | Phase 12-15 |  |
 | ENG-20 | Valid quotes and the mid | Not started |  | Phase 12 |  |
 | ENG-21 | Marking, stale marks and warnings | Not started |  | Phase 12 |  |
@@ -353,7 +353,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| TEST-1 | Golden engine tests | Not started |  | Phase 11-13, 17 (golden chain helpers built in 5) |  |
+| TEST-1 | Golden engine tests | **Partial** | Phase 11 (selection: every expiration selector, nth_expiration across a weekend and a holiday) | book and fills (12), rules (13), stress modes (17) | `unit/test_selection.py` |
 | TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | **Done** | Phase 10 |  | `unit/test_market_data.py` |
