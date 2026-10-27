@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–35 from Phase 9; updated for requirements v7. Plan phases 0–9 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 10 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–10 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 11 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -741,6 +741,12 @@ Added with Phase 9 (details in §16, Phase 9):
 34. **Spec unions are assembled from the parameter-model tuples in `registry/params/`**, not from the live registries, so `strategy/` imports no engine code (decisions 2 and 28). The engine modules register implementations with the same models, and a test keeps the tuples and the registries identical. This refines §4.5's "built from the registry's parameter models".
 35. **`prophetovol spec examples [--out DIR]`** lists the shipped Appendix B specs and writes them to a folder. Like `testdata generate` (decision 8), it is a command beyond INT-40, so the examples can be read, edited and published without opening the package.
 
+Added with Phase 10 (details in §16, Phase 10):
+
+36. **Runs read market data through two adapter operations**: `read_market_chunk` (the rows of exactly the given data versions, in the requested columns, within a days-to-expiry horizon) and `read_index_levels` (each snapshot's index level).
+    - The provider keeps the chunking, the per-step slicing and the views; files and Ibis stay inside the adapter (DATA-83). §4.6 had the provider read the chunk's files with its own Ibis expression.
+    - Index levels are read separately because the horizon can leave a step with no rows, for example a same-day strategy on a Friday, and every step needs its index level.
+
 ## 14. Risks
 
 | Risk | Mitigation |
@@ -1190,3 +1196,58 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
   - `tests/unit/test_spec_cli.py`, 5 tests: every `spec` command, invalid specs listing their findings, readable errors, and output on a cp1252 stream
   - one tracker-script test for milestones
 - **Next:** Phase 10 (run configuration, pre-flight and market data access).
+
+
+**Phase 10 (run configuration, pre-flight and market data access), Oct 27, 2026**
+
+- **`runs/config.py`:** `RunConfig` with every RUN-1 field and default (RUN-1), and `RunConfigTemplate` (RUN-2).
+  - `stress_mode`'s description states STR-30 to STR-35 in full (STR-40), but a mode other than `monitor` is refused until M3 (decision 32).
+  - `resolved()` takes the underlying from the spec; `config_hash()` hashes the canonical JSON (VER-3).
+  - `fill_model_params()` gives the registry's parameter model. The fill model stays the flat `fill_model` and `fraction` fields of RUN-1 rather than a nested object.
+- **`engine/schedule.py`:** `Step` (sequence, day, as-of instant, skipped days just before it) and `StepSchedule`, with `step_on`, `has_step`, `last_step_before` (SPEC-55) and `is_missing`.
+- **`runs/preflight.py`:** `PreflightReport` and `PreflightIssue`, and `check_data`, which checks:
+  - the range against the calendar, and every trading day's active snapshot (catalog only, no Parquet)
+  - empty snapshots, imports from another data source, and non-trading dates with data (warned, ignored)
+  - the engine's columns against the market schema
+  - missing days: an error, or with `allow_missing_days` a warning plus a SPEC-55 warning per skipped day
+
+  It builds the schedule and the data versions each step reads (decision 30). `PreflightFailed` carries the whole report.
+- **`engine/view.py`:** `ENGINE_COLUMNS`, `ExpirationInfo` and `MarketDataView` (ARC-3).
+  - The view has `table`, `column`, `contract` (by OSI symbol) and `expirations`, each taking an optional as-of time and refusing a later one with `PointInTimeError`.
+  - It uses `__slots__`, so nothing can be attached to it, and it holds no reference to the provider or storage.
+- **`runs/provider.py`:** `spec_horizon_days` (decision 31) and `MarketDataProvider`.
+  - `target_days` gives its `max_days`, `trading_days_out` a calendar bound of `ceil((n + tolerance) / 5) · 7 + 5` days, and `same_as_leg` its leg's horizon; `nth_expiration` and `next_after_leg` read every expiration.
+  - The provider groups steps into three-month chunks from the first step and reads each with the adapter's two operations (decision 36). It slices each step zero-copy by as-of time and yields views. `ProviderStats` records chunks, rows and read time.
+- **Storage:** `read_market_chunk` and `read_index_levels` on the adapter interface and the DuckDB adapter.
+  - Each import's files are read filtered by the versions' as-of times, which reaches superseded versions too.
+  - Both run under the lifecycle lock that purge uses. A purged version raises `NotFoundError`.
+- **Service:**
+  - audited `save_run_template` (`run.save_template`), plus `get_run_template` and `list_run_templates`
+  - audited `preflight_run` (`run.preflight`), whose findings carry `spec.` or `config.` paths and include the spec's warnings
+  - `market_data(report, spec)`, which opens the provider for a run that passed pre-flight
+- **Changes from the plan:**
+  - Decision 36, as above.
+  - "Each snapshot has the columns the selectors need" is checked against the market schema, which every snapshot shares. Nulls inside a snapshot, such as a null delta, are handled by selection (SPEC-27), not by pre-flight.
+  - A template holds a complete configuration; a run started from it may override the dates (Phase 14).
+- **Found while building:**
+  - A chunk read for a subset of columns had nothing to sort by when the subset left out `as_of`. The sort keys are now always read and dropped afterwards.
+  - Views list the expirations settling that day, because the data keeps the expiring contracts' rows on their settlement date (expiry 16:00, snapshot 16:15). SPEC-15 excludes them from selection in Phase 11.
+- **Measured:** per-step market data access on generated data was 2.67 ms over 59 steps, about 730 rows per step, of which 0.13 s was reading in total. The ten-year run on real data is measured in Phase 15.
+- **Test mistakes corrected during development:**
+  - A message match did not escape the `+` in a timestamp.
+  - A test assumed every listed expiration lies after the as-of time (see above).
+  - One assertion was garbled and checked nothing; it now compares the index level with the snapshot's.
+- **Tests:** 376, all passing: 370 run by default (unit 332, contract 33, meta 3, packaging 2), and the 6 real-data tests pass with `PROPHETOVOL_VENDOR_DATA` set. New:
+  - **`tests/unit/test_run_preflight.py`, 20 tests:**
+    - configuration defaults equal to RUN-1; every refusal; the hash independent of key order; resolution
+    - templates versioned and audited; schedule lookups
+    - `check_data` reporting every problem at once
+    - pre-flight passing a complete range; a missing day blocking, then skipped with the next step flagged and the SPEC-55 warning
+    - configuration problems reported together; the spec's warnings included
+  - **`tests/unit/test_market_data.py`, 11 tests:**
+    - horizons
+    - views equal to direct snapshot reads across a year end and two chunks; the horizon filter; an empty step keeping its index level
+    - versions captured at pre-flight read even after a newer commit; a mismatched schedule refused; per-step timing
+    - TEST-4: every view method refusing a later as-of time; the view holding nothing but its slice
+  - **`tests/contract/test_market_read_contract.py`, 5 tests:** exact versions in order across months; superseded versions readable; the horizon and index levels; purged versions refused; empty reads
+- **Next:** Phase 11 (selection and entries).

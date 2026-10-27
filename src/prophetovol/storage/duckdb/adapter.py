@@ -31,6 +31,7 @@ from prophetovol.core.ids import content_hash, utc_now
 from prophetovol.core.paging import Page, check_page
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, ImportFile,
                                       ImportStatus, JobRecord, JobStatus, VersionState)
+from prophetovol.data.schema import SORT_KEYS
 from prophetovol.storage.adapter import StorageAdapter
 from prophetovol.storage.duckdb.lifecycle import _LifecycleStorage, _locked
 from prophetovol.storage.duckdb.schema import CATALOG_MIGRATIONS, RESULTS_MIGRATIONS, apply_migrations, schema_version
@@ -491,6 +492,75 @@ class DuckDBAdapter(_LifecycleStorage, StorageAdapter):
         if columns is not None:
             expr = expr.select(columns)
         return expr.to_pyarrow()
+
+    def _version_reads(self, underlying: str, versions: list[DataVersionRecord]) -> list[ibis.Table]:
+        """One filtered read per import: its files holding these versions, restricted to their as-of times.
+
+        Each file belongs to one import, so filtering an import's files by as-of time selects exactly
+        that import's versions, whatever their state.
+
+        :param underlying: The underlying.
+        :param versions: The versions.
+        :returns: The reads, in import order.
+        :raises NotFoundError: If a version's file no longer exists.
+        """
+        by_import: dict[str, list[DataVersionRecord]] = {}
+        for v in versions:
+            by_import.setdefault(v.import_id, []).append(v)
+        reads = []
+        for import_id in sorted(by_import):
+            group = by_import[import_id]
+            files = sorted({self._partition_dir(underlying, v.as_of_date.year, v.as_of_date.month) / f"{import_id}.parquet"
+                            for v in group})
+            gone = [f for f in files if not f.exists()]
+            if gone:
+                raise NotFoundError(f"market data of import {import_id} is no longer stored ({gone[0].parent.name}, "
+                                    f"{gone[0].parent.parent.name}): it was purged")
+            # Read by path only: the folder names are layout, not columns (plan §15.3).
+            t = self._ibis.read_parquet([str(f) for f in files], hive_partitioning=False)
+            reads.append(t.filter(t.as_of.isin([v.as_of for v in group])))
+        return reads
+
+    @_locked
+    def read_market_chunk(self, underlying: str, versions: list[DataVersionRecord], columns: list[str] | None = None,
+                          max_days_to_expiry: float | None = None) -> pa.Table:
+        """Read the rows of exactly these data versions, whatever their state now (plan §4.6, decision 30).
+
+        :param underlying: The underlying.
+        :param versions: The versions to read, one per as-of time.
+        :param columns: The columns to return; all when omitted.
+        :param max_days_to_expiry: Only rows whose ``days_to_expiry`` is at most this; every row when omitted.
+        :returns: The rows, ordered by as-of time, then root, expiration, option type and strike where present.
+        :raises NotFoundError: If a version's file no longer exists (it was purged).
+        """
+        if not versions:
+            return pa.table({})
+        reads = self._version_reads(underlying, versions)
+        if max_days_to_expiry is not None:
+            reads = [r.filter(r.days_to_expiry <= max_days_to_expiry) for r in reads]
+        order = [k for k in SORT_KEYS if k in reads[0].columns]
+        if columns is not None:
+            # Sort keys are read even when not asked for, then dropped, so the order is always defined.
+            reads = [r.select(list(dict.fromkeys([*columns, *order]))) for r in reads]
+        expr = reads[0].union(*reads[1:]) if len(reads) > 1 else reads[0]
+        table = expr.order_by(order).to_pyarrow()
+        return table.select(columns) if columns is not None else table
+
+    @_locked
+    def read_index_levels(self, underlying: str, versions: list[DataVersionRecord]) -> dict[datetime, float]:
+        """The index level of each of these data versions' snapshots.
+
+        :param underlying: The underlying.
+        :param versions: The versions, one per as-of time.
+        :returns: The index level by as-of instant (aware, UTC).
+        :raises NotFoundError: If a version's file no longer exists.
+        """
+        if not versions:
+            return {}
+        reads = [r.group_by("as_of").aggregate(index_level=r.index_level.max())
+                 for r in self._version_reads(underlying, versions)]
+        expr = reads[0].union(*reads[1:]) if len(reads) > 1 else reads[0]
+        return {row["as_of"].astimezone(timezone.utc): row["index_level"] for row in expr.to_pyarrow().to_pylist()}
 
     @_locked
     def discard_import(self, import_id: str) -> None:
