@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 12 (book, marking, fills, sizing, hedging and accounting).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 13 (triggers, rolls, expiry, settlement and the step loop).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,12 +13,12 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 90 done, 71 partial, 61 not started.
+**222 requirements:** 115 done, 62 partial, 45 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
 | **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
-| **M2 Engine core** | 9–15 | **In progress:** phases 9–12 done (Oct 27, 2026); 13–15 to go |
+| **M2 Engine core** | 9–15 | **In progress:** phases 9–13 done (Oct 27, 2026); 14–15 to go |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
 
@@ -37,24 +37,24 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 10 | Run configuration, pre-flight and market data access | Oct 27, 2026 |
 | 11 | Selection and entries | Oct 27, 2026 |
 | 12 | Book, marking, fills, sizing, hedging and accounting | Oct 27, 2026 |
-| 13 | Triggers, rolls, expiry, settlement and the step loop | — |
+| 13 | Triggers, rolls, expiry, settlement and the step loop | Oct 27, 2026 |
 | 14 | Run lifecycle, results storage and the run CLI | — |
 | 15 | Acceptance, determinism, run time and checkpoint 2 | — |
 | 16–24 | M3–M4 (see the implementation plan, §8–§9) | — |
 
 | Area | Done | Partial | Not started |
 | --- | --- | --- | --- |
-| Architecture (§4) | 2 | 4 | 1 |
-| Time, steps and snapshots (§5.1) | 0 | 3 | 0 |
+| Architecture (§4) | 4 | 2 | 1 |
+| Time, steps and snapshots (§5.1) | 1 | 2 | 0 |
 | Versioning (§5.3) | 1 | 3 | 0 |
 | Conventions (§5.4) | 0 | 10 | 0 |
-| Registries (§5.5) | 1 | 2 | 1 |
+| Registries (§5.5) | 2 | 2 | 0 |
 | Data module (§6) | 22 | 8 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
-| Strategy specification (§8) | 33 | 7 | 10 |
-| Engine (§9) | 12 | 4 | 3 |
+| Strategy specification (§8) | 48 | 2 | 0 |
+| Engine (§9) | 17 | 2 | 0 |
 | Stress module (§10) | 0 | 1 | 17 |
-| Runs (§11) | 1 | 7 | 3 |
+| Runs (§11) | 2 | 8 | 1 |
 | Results and analytics (§12) | 2 | 2 | 4 |
 | Interfaces (§13) | 4 | 6 | 15 |
 | Schemas and documentation (§14) | 1 | 3 | 0 |
@@ -68,8 +68,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
 | ARC-1 | BacktestService is the only component that opens storage; clients are thin | **Partial** | Phase 3, 8 (CLI commands as thin service clients) | API (19-20) built as a thin client | `unit/test_service.py`, `unit/test_data_cli.py` |
-| ARC-2 | The engine is a pure library with no I/O | **Partial** | Phase 9-12 (selection, schedules and the book read only views and their inputs) | the step loop (13) | `golden/test_book.py` |
-| ARC-3 | Point-in-time access through MarketDataView, enforced in code | **Partial** | Phase 10 (MarketDataView refuses any later as-of time; the provider stays service-side) | the engine reads only views (13) | `unit/test_market_data.py` |
+| ARC-2 | The engine is a pure library with no I/O | **Done** | Phase 9-13 (run_engine reads only its inputs and one view per step) |  | `golden/test_rules.py` |
+| ARC-3 | Point-in-time access through MarketDataView, enforced in code | **Done** | Phase 10 (the view refuses later as-of times), 13 (the engine reads only views) |  | `unit/test_market_data.py`, `golden/test_rules.py` |
 | ARC-4 | One writer: service owns read-write connections; write jobs one at a time; readers on cursors | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py` (readers), `unit/test_jobs.py` |
 | ARC-5 | Extensible component types are registries of named implementations | **Partial** | Phase 2, 9 (the M2 registries) | stress registries (16) | `unit/test_registry.py`, `unit/test_strategy.py` |
 | ARC-6 | Single-user, local server bound to 127.0.0.1 | Not started |  | Phase 19 |  |
@@ -79,7 +79,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| TIME-1 | A run advances in steps with as-of timestamps; frequency is configuration | **Partial** | Phase 10 (steps with sequence numbers and as-of instants; frequency in the run configuration) | the step loop (13) | `unit/test_run_preflight.py` |
+| TIME-1 | A run advances in steps with as-of timestamps; frequency is configuration | **Done** | Phase 10 (steps), 13 (the step loop) |  | `unit/test_run_preflight.py`, `golden/test_rules.py` |
 | TIME-2 | Four snapshot kinds: market, position, portfolio, stress | **Partial** | Phase 6 (market snapshots) | position and portfolio (12), stress (16) snapshots | `unit/test_ingest.py` |
 | TIME-3 | Time quantities are named by their units | **Partial** | Phase 2, 3 | applies to every later field; checked in each phase | `unit/test_time.py` |
 
@@ -111,10 +111,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source), 9 (selectors, schedules, conditions, actions, hedge, sizing, fills and constructor registered with their parameter models), 11 (selectors and schedules behave) | conditions, actions, hedge, sizing, fills, constructor behavior (12-13); stress types and modes (16-17) | `unit/test_registry.py`, `unit/test_strategy.py`, `unit/test_selection.py`, `unit/test_entries.py` |
+| REG-1 | The Phase 1 registries and their implementations | **Partial** | Phase 2 (settlement_source), 9 (registered with parameter models), 11-13 (every M2 implementation behaves) | stress types and modes (16-17) | `unit/test_registry.py`, `unit/test_strategy.py`, `unit/test_selection.py`, `unit/test_entries.py` |
 | REG-2 | Every implementation declares name, description, documented parameter model, version | **Done** | Phase 2 | enforced at registration for every future implementation | `unit/test_registry.py` |
 | REG-3 | Registries are discoverable with descriptions and JSON Schemas | **Partial** | Phase 2 (service level), 8 (CLI `registry list/show`) | API (20) | `unit/test_registry.py`, `unit/test_data_cli.py` |
-| REG-4 | Condition types are pluggable | Not started |  | Phase 13 |  |
+| REG-4 | Condition types are pluggable | **Done** | Phase 13 |  | `golden/test_rules.py` |
 
 ## Data module (§6)
 
@@ -171,7 +171,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-1 | StrategySpec contents | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-2 | Leg fields | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-3 | Leg references without cycles, resolved in dependency order | **Done** | Phase 9 (references checked, cycles named, selection order computed), 11 (legs selected in that order) |  | `unit/test_strategy.py`, `unit/test_selection.py` |
-| SPEC-4 | Selection is atomic across legs | **Partial** | Phase 11 (all legs or none; the failure names the leg, its selector and why) | recorded as a selection_failed event (13) | `unit/test_selection.py` |
+| SPEC-4 | Selection is atomic across legs | **Done** | Phase 11 (all legs or none), 13 (selection_failed event) |  | `unit/test_selection.py`, `golden/test_rules.py` |
 | SPEC-10 | `target_days` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-11 | `trading_days_out` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-12 | `nth_expiration` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
@@ -183,7 +183,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-22 | `forward` strike selector | **Done** | Phase 11 (default tolerance: the usual spacing around the target, plan §7.5 answer 6) |  | `unit/test_selection.py` |
 | SPEC-23 | `same_strike_as` strike selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-24 | `strike_offset` strike selector | **Done** | Phase 11 (default tolerance: the usual spacing around the target, plan §7.5 answer 6) |  | `unit/test_selection.py` |
-| SPEC-25 | No-match handling | **Partial** | Phase 11 (skip_entry; nearest_any with a warning) | the warning recorded as an event (13) | `unit/test_selection.py` |
+| SPEC-25 | No-match handling | **Done** | Phase 11 (skip_entry; nearest_any), 13 (the warning recorded with the entry or roll) |  | `unit/test_selection.py`, `golden/test_rules.py` |
 | SPEC-26 | Selection uses only eligible contracts | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-27 | Delta selection uses vendor delta; null delta not eligible | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-28 | Quote filters | **Done** | Phase 11 |  | `unit/test_selection.py` |
@@ -192,20 +192,20 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-32 | `every_n_trading_days` entry schedule | **Done** | Phase 11 |  | `unit/test_entries.py` |
 | SPEC-33 | `weekdays` entry schedule | **Done** | Phase 11 |  | `unit/test_entries.py` |
 | SPEC-34 | `max_open` for schedules | **Done** | Phase 11 |  | `unit/test_entries.py` |
-| SPEC-35 | Failed entries retried at the next scheduled step | **Partial** | Phase 11 (schedules are simply due again; nothing is queued) | applied by the step loop (13) | `unit/test_entries.py` |
+| SPEC-35 | Failed entries retried at the next scheduled step | **Done** | Phase 11 (schedules due again), 13 (a failed entry retried at the next due step) |  | `unit/test_entries.py`, `golden/test_rules.py` |
 | SPEC-40 | Trigger structure | **Done** | Phase 9 (trigger model: name, scope, action, any_of) |  | `unit/test_strategy.py` |
-| SPEC-41 | Phase 1 trigger conditions | Not started |  | Phase 13 |  |
-| SPEC-42 | Condition evaluation; null greeks evaluate false | Not started |  | Phase 13 |  |
-| SPEC-43 | Close and roll actions | Not started |  | Phase 13 |  |
-| SPEC-44 | One action per structure per step, with precedence | Not started |  | Phase 13 |  |
-| SPEC-45 | Roll whose opening side fails selection | Not started |  | Phase 13 |  |
-| SPEC-46 | Structure P&L per unit | Not started |  | Phase 13 |  |
-| SPEC-50 | PM-settled legs settle at intrinsic value | Not started |  | Phase 13 (pm_index_close ready from 2) |  |
-| SPEC-51 | AM-settled legs force-closed on their last trading day | Not started |  | Phase 13 |  |
+| SPEC-41 | Phase 1 trigger conditions | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-42 | Condition evaluation; null greeks evaluate false | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-43 | Close and roll actions | **Done** | Phase 13 (the opening side waits until the closing side fills, plan §7.5 answer 1) |  | `golden/test_rules.py` |
+| SPEC-44 | One action per structure per step, with precedence | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-45 | Roll whose opening side fails selection | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-46 | Structure P&L per unit | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-50 | PM-settled legs settle at intrinsic value | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-51 | AM-settled legs force-closed on their last trading day | **Done** | Phase 13 (on the last trading day, or at the last step before it when that day is skipped) |  | `golden/test_rules.py` |
 | SPEC-52 | Validation rejects holding AM-settled legs to expiration | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-53 | Validation warns when the engine will force-close an AM leg | **Done** | Phase 9 (covering trigger: a days-to-expiry condition with days >= 1, plan §7.5) |  | `unit/test_strategy.py` |
-| SPEC-54 | `expiry_handling` options | Not started |  | Phase 13 |  |
-| SPEC-55 | PM legs closed early when the settlement date is a missing day | Not started |  | Phase 13 |  |
+| SPEC-54 | `expiry_handling` options | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| SPEC-55 | PM legs closed early when the settlement date is a missing day | **Done** | Phase 13 (forced close at the last step before the skipped settlement date) |  | `golden/test_rules.py` |
 | SPEC-60 | `none` hedge rule | **Done** | Phase 12 |  | `golden/test_book.py` |
 | SPEC-61 | `band` hedge rule | **Done** | Phase 12 |  | `golden/test_book.py` |
 | SPEC-62 | Hedge instrument: fractional synthetic index position | **Done** | Phase 12 |  | `golden/test_book.py` |
@@ -213,8 +213,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-64 | Hedge closed with its structure | **Done** | Phase 12 (closed at the step the structure's last leg closes, plan §7.5 answer 2) |  | `golden/test_book.py` |
 | SPEC-70 | `contracts` sizing | **Done** | Phase 12 |  | `golden/test_book.py` |
 | SPEC-71 | `notional` sizing | **Done** | Phase 12 |  | `golden/test_book.py` |
-| SPEC-72 | Rounding of structure units | **Partial** | Phase 12 (whole rounds down and gives no units below one; fractional unchanged) | the entry_skipped event (13) | `golden/test_book.py` |
-| SPEC-73 | Re-sizing on rolls | **Partial** | Phase 12 (units per entry at the step's index level) | structure rolls re-size, leg rolls keep quantity (13) | `golden/test_book.py` |
+| SPEC-72 | Rounding of structure units | **Done** | Phase 12 (rounding), 13 (entry_skipped event) |  | `golden/test_book.py`, `golden/test_rules.py` |
+| SPEC-73 | Re-sizing on rolls | **Done** | Phase 12 (units at the step's index level), 13 (structure rolls re-size; leg rolls keep quantity) |  | `golden/test_book.py`, `golden/test_rules.py` |
 | SPEC-80 | Dry-run validation with field paths | **Done** | Phase 9 |  | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
 | SPEC-81 | Authoring and exact YAML round trip | **Partial** | Phase 9 (YAML and JSON import through the CLI and the service; exact round-trip export) | API (20), GUI editor (22) | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
 | SPEC-82 | Appendix B examples ship as sample specs | **Partial** | Phase 9 (shipped as package data, validated; `spec examples`) | acceptance tests (15) | `unit/test_strategy.py` |
@@ -223,10 +223,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| ENG-1 | The step loop and its nine steps in order | Not started |  | Phase 13 |  |
-| ENG-2 | The constructor interface; `rules` constructor | Not started |  | Phase 13 |  |
-| ENG-3 | Several structures of one spec tracked separately | Not started |  | Phase 13 |  |
-| ENG-4 | Time-dependent calculations from timestamps and calendar, never step counts | **Partial** | Phase 11 (entry schedules and trading days counted on the calendar; selection from stored times to expiry) | trading days held and the step loop (13) | `unit/test_entries.py` |
+| ENG-1 | The step loop and its nine steps in order | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| ENG-2 | The constructor interface; `rules` constructor | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| ENG-3 | Several structures of one spec tracked separately | **Done** | Phase 13 |  | `golden/test_rules.py` |
+| ENG-4 | Time-dependent calculations from timestamps and calendar, never step counts | **Done** | Phase 11 (entry schedules), 13 (trading days held; time to expiry from the snapshot or, when absent, the exchange clock) |  | `unit/test_entries.py`, `golden/test_rules.py` |
 | ENG-10 | Determinism | **Partial** | Phase 12 (sequence-numbered structure and trade ids; ordered iteration) | determinism test (15) | `golden/test_book.py` |
 | ENG-20 | Valid quotes and the mid | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-21 | Marking, stale marks and warnings | **Done** | Phase 12 |  | `golden/test_book.py` |
@@ -237,7 +237,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ENG-30 | Accounting: market value, cash flows, period P&L | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-31 | Fees reported separately | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-32 | Equity = capital + cumulative P&L | **Done** | Phase 12 |  | `golden/test_book.py` |
-| ENG-33 | Accounting invariants checked every run | **Partial** | Phase 12 (the three invariants to 1e-6 dollars, diagnostics naming step and security) | checked at the end of every run (13) | `golden/test_book.py` |
+| ENG-33 | Accounting invariants checked every run | **Done** | Phase 12 (the invariants), 13 (checked at the end of every run) |  | `golden/test_book.py`, `golden/test_rules.py` |
 | ENG-40 | Fill models | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-41 | Orders with invalid quotes; retries; forced-close exception | **Done** | Phase 12 (opening orders dropped all legs or none; closes retried each step; forced closes at the last valid mark) |  | `golden/test_book.py` |
 | ENG-42 | Commission and hedge cost | **Done** | Phase 12 |  | `golden/test_book.py` |
@@ -273,11 +273,11 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | RUN-1 | Run definition and configuration fields | **Done** | Phase 10 |  | `unit/test_run_preflight.py` |
 | RUN-2 | Configuration templates; full resolved configuration and hash stored | **Partial** | Phase 10 (named, versioned templates saved and listed through the service; resolved configuration and its hash) | the run stores them (14); CLI (14), GUI (23) | `unit/test_run_preflight.py` |
 | RUN-10 | Pre-flight checks | **Partial** | Phase 10 (spec, configuration, every trading day's active snapshot, non-empty chains, engine columns) | stress definitions validate (16) | `unit/test_run_preflight.py` |
-| RUN-11 | Pre-flight reports all problems; missing days; fixes the step schedule | **Partial** | Phase 10 (every problem at once; missing days block or are skipped with SPEC-55 warnings; the step schedule) | missing_day_before flag on the next step's position snapshots (12) | `unit/test_run_preflight.py` |
+| RUN-11 | Pre-flight reports all problems; missing days; fixes the step schedule | **Done** | Phase 10 (pre-flight), 13 (missing_day_before on the next step's snapshots) |  | `unit/test_run_preflight.py`, `golden/test_rules.py` |
 | RUN-12 | Pre-flight available on its own | **Partial** | Phase 10 (readiness check in the service, audited as run.preflight) | CLI `run preflight` (14), API (20) | `unit/test_run_preflight.py` |
 | RUN-20 | Run statuses; runs left queued or running marked failed (interrupted) | **Partial** | Phase 4 (recovery pattern for jobs) | run statuses and recovery of interrupted runs (14) | `unit/test_jobs.py` |
-| RUN-21 | Run progress: steps done of total, with current as-of | Not started |  | Phase 14 (job progress ready from 4) |  |
-| RUN-22 | Cancellation at the next step boundary keeps results | Not started |  | Phase 14 (cooperative cancellation ready from 4) |  |
+| RUN-21 | Run progress: steps done of total, with current as-of | **Partial** | Phase 13 (the engine reports steps done of total with the as-of time) | the run job's progress (14) | `golden/test_rules.py` |
+| RUN-22 | Cancellation at the next step boundary keeps results | **Partial** | Phase 13 (the engine stops at a step boundary and keeps its output) | the run's cancelled status and stored results (14) | `golden/test_rules.py` |
 | RUN-23 | Results written in one transaction when the run ends | Not started |  | Phase 14 |  |
 | RUN-30 | Recorded provenance of a run | **Partial** | Phase 1 (software versions collector) | provenance recorded on runs (14) | `unit/test_core.py` |
 | RUN-40 | Runs flagged data superseded | **Partial** | Phase 7 (invalidation against seeded run provenance) | Record each real run's read versions (14) | `unit/test_data_lifecycle.py` |
@@ -290,7 +290,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | RES-2 | Hedge position snapshot greeks | **Done** | Phase 12 |  | `golden/test_book.py` |
 | RES-10 | Portfolio snapshot fields | **Partial** | Phase 12 (sums, cumulative P&L, equity, period return on capital, open structures, contracts held) | worst stress loss (16) | `golden/test_book.py` |
 | RES-11 | Structure snapshots as a view | Not started |  | Phase 14 |  |
-| RES-20 | Events and their types | **Partial** | Phase 12 (event model; stale_mark, order_not_filled, close, settlement, hedge_trade recorded) | entry, trigger, roll and selection events (13); stress events (17) | `golden/test_book.py` |
+| RES-20 | Events and their types | **Partial** | Phase 12 (event model and book events), 13 (entry, entry_skipped, trigger_fired, roll, close, settlement, forced closes, selection_failed, condition_null_greek) | stress events (17) | `golden/test_book.py`, `golden/test_rules.py` |
 | RES-30 | Aggregate statistics with periods_per_year | Not started |  | Phase 18 |  |
 | RES-31 | Documented formula for every statistic | Not started |  | Phase 18 |  |
 | RES-40 | Export of snapshots, events, summary and provenance | Not started |  | Phase 18 |  |
@@ -353,7 +353,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| TEST-1 | Golden engine tests | **Partial** | Phase 11 (selection: every expiration selector, nth_expiration across a weekend and a holiday), 12 (first-step cost per fill model, notional sizing, example 3's band, example 1's full hedge, stale marks, dollar greeks) | rules (13), stress modes (17) | `unit/test_selection.py`, `golden/test_book.py` |
+| TEST-1 | Golden engine tests | **Partial** | Phase 11 (selection), 12 (fills, sizing, both hedge examples, stale marks), 13 (settlement, forced closes, SPEC-55, targets and stops across a leg roll, precedence, rolls by calendar and trading days, expiry handling, null greeks) | stress modes (17) | `unit/test_selection.py`, `golden/test_book.py`, `golden/test_rules.py` |
 | TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
 | TEST-3 | Determinism test | Not started |  | Phase 15 |  |
 | TEST-4 | Point-in-time test | **Done** | Phase 10 |  | `unit/test_market_data.py` |

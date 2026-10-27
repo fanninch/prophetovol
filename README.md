@@ -4,11 +4,11 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–12 of 24 are done. Milestone M1 (data foundation)
+**Status:** Phase 1 is being built. Plan phases 0–13 of 24 are done. Milestone M1 (data foundation)
 is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
 and coverage through the `prophetovol` CLI. M2 (engine core) has begun: strategy specs (validation,
 publishing, YAML round trips), run configurations, pre-flight checks, and the engine's contract
-selection, entry schedules, fills, hedging and accounting. The requirements, the implementation plan and the
+selection, entry schedules, fills, hedging, accounting, triggers, rolls, expiry and the step loop. The requirements, the implementation plan and the
 [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
 milestones M2 to M4.

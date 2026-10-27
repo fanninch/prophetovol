@@ -471,6 +471,21 @@ class Book:
         self.pending_closes.pop(p.key, None)
         s.finished.append(p)
 
+    def pnl_now(self, s: Structure) -> float:
+        """A structure's cumulative P&L at the step's marks, before the step's trades (SPEC-46).
+
+        Legs, hedge and fees together: the P&L up to the previous step plus each position's change to the
+        current mark, with this step's settlement cash.
+
+        :param s: The structure.
+        :returns: Dollars.
+        """
+        total = s.cumulative_pnl
+        for p in [*s.finished, *s.legs.values()]:
+            total += p.quantity * (p.mark_price or 0.0) * self.settings.multiplier - p.previous_value + p.cash_flow
+        h = s.hedge
+        return total + h.quantity * self.view.index_level - h.previous_value + h.cash_flow
+
     # --- hedging (SPEC-60 to SPEC-64) --------------------------------------------------------------
 
     def option_delta(self, s: Structure) -> float:
