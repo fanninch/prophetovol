@@ -99,6 +99,7 @@ tests/
 
 ### 4.2 Storage
 
+
 **Home directory** (`~/.prophetovol`, or `--home` / `PROPHETOVOL_HOME`):
 
 ```
