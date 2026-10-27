@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–12 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 13 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–13 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 14 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1331,3 +1331,46 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
   - a PM settlement; all-or-nothing opening; the hedge closing with the last leg; structure ids and parents
   - record tables matching their models; invariant violations naming the step and the security
 - **Next:** Phase 13 (triggers, rolls, expiry, settlement and the step loop).
+
+
+**Phase 13 (triggers, rolls, expiry, settlement and the step loop), Oct 27, 2026**
+
+- **`engine/triggers.py`:** each condition's `evaluate(ctx)` over a `ConditionContext`: held legs with their rows, the structure's P&L per unit at the step's marks (`Book.pnl_now`, SPEC-46), the day it opened, the calendar and the exchange time zone (REG-4).
+  - Time to expiry comes from the snapshot row. When the contract is absent, it is computed on the exchange clock (CONV-1) or the calendar (CONV-2) (ENG-4).
+  - A null greek makes a condition false and is reported (SPEC-42).
+  - `evaluate_triggers` chooses one action per structure: structure close, structure roll, leg close, leg roll, in listed order within each (SPEC-44). It returns every trigger that fired, with its conditions and values.
+- **`engine/expiry.py`:**
+  - `settle_expired` settles PM legs at the step on their settlement date through the settlement source (SPEC-50).
+  - `forced_closes` closes AM legs on their last trading day (SPEC-51) and PM legs at the last step before a skipped settlement date (SPEC-55).
+- **`engine/gate.py`:** `OpeningOrder`, the `OrderGate` protocol and `PassThroughGate` (decision 32).
+- **`engine/constructor.py`:** the `rules` constructor (ENG-2).
+  - `plan` covers triggers, forced closes and `expiry_handling` (SPEC-54).
+  - `execute_closes` runs the closes.
+  - `openings` builds the opening sides of rolls once their closes have filled (§7.5, answer 1), and the entry. Each is selected and sized: a structure roll re-sizes and a leg roll keeps its quantity (SPEC-73). A failed selection or an entry below one unit is recorded and skipped (SPEC-4, SPEC-45, SPEC-72).
+  - `execute_openings` opens what the gate passes; `after_step` updates `when_flat`'s cooldown (SPEC-31).
+- **`engine/loop.py`:** `EngineSettings`, `RunOutcome` and `run_engine`, ENG-1's nine steps in one visible sequence.
+  - It runs several structures at once (ENG-3) and reports progress after each step (RUN-21).
+  - It stops at a step boundary when cancelled, keeping its output (RUN-22).
+  - It checks the invariants at the end (ENG-33).
+- **Interpretations made** (the requirements leave them open):
+  - **Order within a step:** closes (pending, then the step's) execute before the opening orders are built and gated. A roll's opening side therefore knows whether its close filled (§7.5, answer 1), and M3's gate sees the book after the closes. ENG-1 lists building (6) and gating (7) before executing (8); the results are the same, because all three use the step's one view.
+  - **Skipped last trading day:** an AM leg whose last trading day is skipped is force-closed at the last step before it, as SPEC-55 does for PM settlement dates.
+  - **PM legs** held to expiry settle whatever their `hold_to_expiration`. The flag matters to validation (SPEC-52, SPEC-53).
+  - **Structures with a pending close or roll** are not evaluated for triggers until it completes. A leg-scoped trigger whose leg is not held does not fire.
+  - **A structure roll and expiry handling at the same step:** the roll takes precedence.
+  - **Cooldown:** `when_flat` counts closes by a close action or by expiry. A structure left closed by a failed roll does not start a cooldown (SPEC-31).
+  - **Selection warnings** (`nearest_any`) are recorded on the entry or roll event, at warning level.
+- **Found while building:** `run_engine` used registries that only some imports populate; the hedge rules were missing. It now loads the built-in implementations first. An empty registry's error used to read "known: none", confusing when the name looked up is `none`; it now says "none registered".
+- **Checked beyond the tests:** the three Appendix B examples ran to completion on three months of generated data, with the invariants passing, at 2–3 ms per step. The acceptance tests are Phase 15.
+- **Tests:** 464, all passing: 458 run by default (unit 379, contract 33, golden 41, meta 3, packaging 2), and the 6 real-data tests pass with `PROPHETOVOL_VENDOR_DATA` set. New in `tests/golden/test_rules.py`, 18 tests, each with its arithmetic in comments:
+  - a long PM call through ingest, pre-flight, the provider and the engine, settled at intrinsic value (+1,950)
+  - an AM call force-closed on its last trading day, with and without a valid quote
+  - a PM leg closed before its skipped settlement date
+  - a leg roll on delta, then a profit target reached across the roll (−800 then +1,100, 150 per unit)
+  - a stop outranking a leg roll, with both recorded; a null delta
+  - a roll waiting for its close
+  - structure rolls on calendar and trading days
+  - the three `expiry_handling` modes
+  - a failed entry retried, with two structures open under `max_open`; an entry below one unit skipped
+  - progress and cancellation
+- **Next:** Phase 14 (run lifecycle, results storage and the run CLI).

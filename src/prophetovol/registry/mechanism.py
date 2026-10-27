@@ -121,7 +121,7 @@ class Registry(Generic[T]):
         try:
             return self._items[name]
         except KeyError:
-            known = ", ".join(self.names()) or "none"
+            known = ", ".join(self.names()) or "none registered"
             raise NotFoundError(f"no {self.kind} named {name!r} (known: {known})") from None
 
     def names(self) -> list[str]:
