@@ -140,7 +140,8 @@ class Rules:
                 continue
             chosen = decision.chosen
             book.recorder.event(view.step, view.as_of, EventType.TRIGGER_FIRED,
-                                f"{chosen.name}: {chosen.action} {chosen.leg_id or 'structure'}",
+                                f"{chosen.name} ({_conditions(chosen.conditions)}): {chosen.action} "
+                                f"{chosen.leg_id or 'structure'}",
                                 structure_id=s.structure_id, chosen=chosen.name, action=chosen.action,
                                 leg=chosen.leg_id,
                                 fired=[{"trigger": f.name, "action": f.action, "leg": f.leg_id,
@@ -397,6 +398,21 @@ class Rules:
             if s.closed_step == view.step and s.structure_id in self._closing_by_action:
                 self.last_close_day = view.as_of_date
         self._closing_by_action = {i for i in self._closing_by_action if book.structure(i).is_open}
+
+
+def _conditions(conditions: tuple[dict, ...]) -> str:
+    """The conditions that fired a trigger, with their measured values, for its event's message.
+
+    :param conditions: Each fired condition's name and value (``FiredTrigger.conditions``).
+    :returns: For example ``leg_abs_delta_below 0.1357`` or ``structure_pnl_per_unit_at_or_above 1,250.00``:
+        dollar amounts of 1,000 or more with cents, other values to four significant digits.
+    """
+    def value(v: float | None) -> str:
+        if v is None:
+            return ""
+        return f" {v:,.2f}" if abs(v) >= 1000 else f" {v:.4g}"
+
+    return ", ".join(f"{c['condition']}{value(c.get('value'))}" for c in conditions)
 
 
 def _held(p: Position) -> SelectedContract:

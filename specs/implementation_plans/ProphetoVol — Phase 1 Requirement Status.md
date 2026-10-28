@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 15 (acceptance, determinism, run time and checkpoint 2) and checkpoint 2.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 15, checkpoint 2 and the trigger-message change.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -290,7 +290,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | RES-2 | Hedge position snapshot greeks | **Done** | Phase 12 |  | `golden/test_book.py` |
 | RES-10 | Portfolio snapshot fields | **Partial** | Phase 12 (sums, cumulative P&L, equity, period return on capital, open structures, contracts held) | worst stress loss (16) | `golden/test_book.py` |
 | RES-11 | Structure snapshots as a view | **Done** | Phase 14 (the structure_snapshots view) |  | `contract/test_run_contract.py`, `unit/test_runs.py` |
-| RES-20 | Events and their types | **Partial** | Phase 12 (event model and book events), 13 (entry, entry_skipped, trigger_fired, roll, close, settlement, forced closes, selection_failed, condition_null_greek) | stress events (17) | `golden/test_book.py`, `golden/test_rules.py` |
+| RES-20 | Events and their types | **Partial** | Phase Phase 12 (event model and book events), 13 (entry, entry_skipped, trigger_fired, roll, close, settlement, forced closes, selection_failed, condition_null_greek), trigger-message change (the message names the conditions that fired and their values) | stress events (17) | `golden/test_book.py`, `golden/test_rules.py` |
 | RES-30 | Aggregate statistics with periods_per_year | Not started |  | Phase 18 |  |
 | RES-31 | Documented formula for every statistic | Not started |  | Phase 18 |  |
 | RES-40 | Export of snapshots, events, summary and provenance | Not started |  | Phase 18 |  |

@@ -16,6 +16,7 @@ import pytest
 from prophetovol.core.context import CallContext
 from prophetovol.data.ivolatility import osi_symbol
 from prophetovol.engine.book import BookSettings
+from prophetovol.engine.constructor import _conditions
 from prophetovol.engine.fills import fill_model
 from prophetovol.engine.loop import EngineSettings, run_engine
 from prophetovol.engine.schedule import Step, StepSchedule
@@ -194,6 +195,22 @@ class TestTriggers:
         assert events(rec, "trigger_fired", "roll", "close") == [
             (2, "trigger_fired"), (2, "close"), (2, "roll"), (3, "trigger_fired"), (3, "close")]
         assert rec.rows("structures")[0]["cumulative_pnl"] == pytest.approx(300)
+        # each trigger event names the condition that fired and its measured value
+        assert [e["message"] for e in rec.rows("events") if e["type"] == "trigger_fired"] == [
+            "roll_on_delta (leg_abs_delta_above 0.55): roll short_call",
+            "take_profit (structure_pnl_per_unit_at_or_above 150): close structure"]
+
+    def test_trigger_message_values(self):
+        # dollars of 1,000 or more with cents, other values to four significant digits, no value without one
+        conditions = ({"condition": "structure_pnl_per_unit_at_or_above", "value": 1250.0},
+                      {"condition": "leg_abs_delta_below", "value": 0.135714},
+                      {"condition": "structure_pnl_per_unit_at_or_below", "value": -2500.456},
+                      {"condition": "leg_days_to_expiry_at_or_below", "value": 14.989583},
+                      {"condition": "trading_days_held_at_least", "value": None})
+        assert _conditions(conditions) == (
+            "structure_pnl_per_unit_at_or_above 1,250.00, leg_abs_delta_below 0.1357, "
+            "structure_pnl_per_unit_at_or_below -2,500.46, leg_days_to_expiry_at_or_below 14.99, "
+            "trading_days_held_at_least")
 
     def test_stop_wins_over_a_leg_roll_and_both_are_recorded(self):
         stop = {"name": "stop", "scope": "structure", "action": "close",
@@ -237,12 +254,12 @@ class TestStructureRolls:
         return [[contract(d, JUN7, 5000, 20 - i, 0.5), contract(d, JUN14, 5000, 30 - i, 0.5)]
                 for i, d in enumerate([JUN3, JUN4, JUN5, JUN6])]
 
-    @pytest.mark.parametrize("condition, roll_step", [
-        ({"condition": "structure_min_days_to_expiry_at_or_below", "days": 2, "unit": "calendar_days"}, 3),  # 1.99
-        ({"condition": "structure_min_days_to_expiry_at_or_below", "days": 3, "unit": "trading_days"}, 2),
-        ({"condition": "leg_days_to_expiry_at_or_below", "leg": "call", "days": 3, "unit": "trading_days"}, 2),
+    @pytest.mark.parametrize("condition, roll_step, value", [
+        ({"condition": "structure_min_days_to_expiry_at_or_below", "days": 2, "unit": "calendar_days"}, 3, "1.99"),
+        ({"condition": "structure_min_days_to_expiry_at_or_below", "days": 3, "unit": "trading_days"}, 2, "3"),
+        ({"condition": "leg_days_to_expiry_at_or_below", "leg": "call", "days": 3, "unit": "trading_days"}, 2, "3"),
     ])
-    def test_roll_on_time_to_expiry(self, condition, roll_step):
+    def test_roll_on_time_to_expiry(self, condition, roll_step, value):
         spec = body([leg("call", expiration={"selector": "target_days", "days": 7})],
                     triggers=[{"name": "roll_near_expiry", "scope": "structure", "action": "roll",
                                "any_of": [condition]}])
@@ -255,6 +272,9 @@ class TestStructureRolls:
         opened = rows(rec, "position_snapshots", structure_id="S2")[0]
         assert opened["expiration"] == JUN14
         assert (roll_step, "roll") in events(rec, "roll")
+        # Wed Jun 5 16:15 to Fri Jun 7 16:00 is 1.99 calendar days; from Tue Jun 4, Jun 5, 6 and 7 are 3 trading days
+        fired = [e["message"] for e in rec.rows("events") if e["type"] == "trigger_fired"]
+        assert fired == [f"roll_near_expiry ({condition['condition']} {value}): roll structure"]
 
 
 class TestExpiryHandling:

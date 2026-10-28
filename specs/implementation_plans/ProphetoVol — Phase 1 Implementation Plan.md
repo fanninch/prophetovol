@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–15 done; M1 and M2 complete (checkpoints 1 and 2 held Oct 26 and 27, 2026); next the trigger-message correction, then M3 detailed with you.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–15 done; M1 and M2 complete (checkpoints 1 and 2 held Oct 26 and 27, 2026); the trigger-message change made; next M3 detailed with you.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1459,3 +1459,11 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
 - **Finding, agreed:** a `trigger_fired` event names the trigger but not the condition that fired or its measured value, which are only in the event's details. The message will name them, for example "roll_on_delta_or_time (leg_abs_delta_below 0.136): roll short_call", as a correction on its own branch before M3.
 - **Still open from checkpoint 1:** finding 9, how flagged days count in coverage.
 - **Next:** the trigger-message correction; then M3 (stress and analytics) detailed with you before Phase 16.
+
+**Trigger message change (between Phases 15 and 16, branch `trigger_message`), Oct 27, 2026**
+
+- **From checkpoint 2:** a `trigger_fired` event named the trigger and its action but not why it fired; the conditions and their measured values were only in the event's details (RES-20).
+- **Changed** (`engine/constructor.py`): the message now names the chosen trigger's conditions that fired, each with its measured value, for example "roll_on_delta_or_time (leg_abs_delta_below 0.1357): roll short_call". Dollar amounts of 1,000 or more are written with cents and thousands separators, other values to four significant digits. The details are unchanged and still list every trigger that fired.
+- **Checked on real data:** example 1 with Appendix B's configuration names each of its seven rolls' conditions (four above 0.50, three below 0.15).
+- **Tests:** 532, all passing: 524 run by default (unit 395, contract 39, golden 43, acceptance 12, property 30, meta 3, packaging 2), and the 8 real-data tests. In `golden/test_rules.py`, the leg-roll and profit-target messages and the three time-to-expiry roll messages are asserted, and a new test covers the value formats.
+- **Next:** M3 (stress and analytics) detailed with you before Phase 16.
