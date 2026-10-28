@@ -4,15 +4,16 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–14 of 24 are done. Milestone M1 (data foundation)
+**Status:** Phase 1 is being built. Plan phases 0–15 of 24 are done. Milestone M1 (data foundation)
 is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
-and coverage through the `prophetovol` CLI. M2 (engine core) has begun: strategy specs (validation,
-publishing, YAML round trips), run configurations, pre-flight checks, and the engine's contract
-selection, entry schedules, fills, hedging, accounting, triggers, rolls and expiry, and backtests run
-from the `prophetovol run` commands with their results stored. The requirements, the implementation plan and the
-[requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
-are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
-milestones M2 to M4.
+and coverage through the `prophetovol` CLI. M2 (engine core) is complete, including its checkpoint
+demo on real data. It covers strategy specs (validation, publishing, YAML round trips), run
+configurations, pre-flight checks, contract selection, entry schedules, fills, hedging, accounting,
+triggers, rolls and expiry, and backtests run from the `prophetovol run` commands with their results
+stored. Acceptance tests of the Appendix B examples, invariants on seeded runs and a determinism
+test check the engine. The requirements, the implementation plan and the [requirement status
+tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md) are in
+[`specs/`](specs/README.md). Stress, statistics and the GUI follow in milestones M3 and M4.
 
 ## Install
 
@@ -218,8 +219,9 @@ pytest
 Optional tests against real vendor files (`tests/realdata/`, marked `realdata`) run only when
 `PROPHETOVOL_VENDOR_DATA` names a folder with one subfolder per underlying, holding `spx/spx_2008`
 and `spx/spx_2023`. They import both years through the CLI and walk through checkpoint 1 (quality,
-overlap, commit, coverage, delete and purge) in a temporary home. Vendor data is licensed and never
-goes in the repository.
+overlap, commit, coverage, delete and purge) in a temporary home, then run Appendix B's example 1
+over March and April of each year through the run CLI. Vendor data is licensed and never goes in
+the repository.
 
 ## Building a wheel
 
@@ -234,7 +236,7 @@ The wheel is pure Python (`py3-none-any`).
 | Path | Contents |
 | --- | --- |
 | `src/prophetovol/` | the package: `core`, `registry`, `reference`, `storage`, `data`, `pricing`, `engine`, `stress`, `results`, `runs`, `server`, `cli`, `testdata` |
-| `tests/` | `unit/`, `contract/` (the storage adapter contract suite), `meta/` (documentation rules), `packaging/` (the wheel) |
+| `tests/` | `unit/`, `contract/` (the storage adapter contract suite), `golden/` (hand-worked engine cases), `acceptance/` (the Appendix B examples end to end), `property/` (invariants on seeded runs, determinism), `meta/` (documentation rules), `packaging/` (the wheel) |
 | `scripts/` | developer tools: `update_tracker.py` updates and checks the requirement status tracker |
 | `CLAUDE.md`, `.claude/` | guidance and settings for Claude Code (see below) |
 | `specs/` | roadmap, requirements and implementation plans |

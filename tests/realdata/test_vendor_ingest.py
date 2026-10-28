@@ -1,4 +1,4 @@
-"""Optional licensed-data checks and checkpoint 1 through the CLI (TEST-5, TEST-10).
+"""Optional licensed-data checks, checkpoint 1 and a sample run through the CLI (TEST-5, TEST-10).
 
 Set PROPHETOVOL_VENDOR_DATA to an external folder containing spx/spx_2008 and spx/spx_2023.
 Raw input is read in place; derived data and the demo home stay in pytest's external temp area.
@@ -123,6 +123,34 @@ def test_vendor_derived_columns_and_delta_conventions(imported):
         relative = np.abs(values["parity_forward"][parity] / values["vendor_forward"][parity] - 1)
         assert np.median(relative) < 0.01  # sanity bound, not a calibration assumption
         print(f"Vendor {year}: median call delta error {median:.9g}; median parity difference {np.median(relative)*10000:.4g} bp")
+
+
+def test_sample_run_of_example_1(imported, tmp_path):
+    """A sample run on real data through the run CLI (TEST-10): example 1 over March and April."""
+    home, _, year, expected, _ = imported
+    cli(home, "spec", "examples", "--out", tmp_path)
+    cli(home, "spec", "publish", tmp_path / "short_call_hedged.yaml")
+    start, end = datetime(year, 3, 1).date(), datetime(year, 4, 30).date()
+    (tmp_path / "run.yaml").write_text(f"start_date: {start}\nend_date: {end}\ncapital: 1000000\n"
+                                       "fill_model: cross_spread\ncommission_per_contract: 0.65\n", encoding="utf-8")
+    output = cli(home, "run", "start", "--spec", "short_call_hedged", "--config", tmp_path / "run.yaml")
+    run_id = re.search(r"Run (run_\w+) completed", output).group(1)
+    steps = len([d for d in expected if start <= d <= end])
+    with BacktestService.open(home) as svc:
+        run = svc.get_run(run_id)
+        assert run.steps_completed == run.steps_total == steps
+        structures = {s["structure_id"]: s for s in svc.run_results(run_id, "structures").to_pylist()}
+        by_step = {}
+        for p in svc.run_results(run_id, "position_snapshots").to_pylist():
+            by_step.setdefault((p["step"], p["structure_id"]), []).append(p)
+        held = [(k, rows) for k, rows in by_step.items() if any(r["leg_id"] != "hedge" and r["quantity"] for r in rows)]
+        assert held
+        for (step, sid), rows in held:  # hedged to flat after every step (SPEC-61)
+            net = sum(r["dollar_delta"] for r in rows) / (rows[0]["index_level"] * 100 * structures[sid]["units"])
+            assert abs(net) < 1e-9, step
+        trades = svc.storage.count_run_results(run_id, "trades")
+    print(f"Sample run {year}: {steps} steps, {len(structures)} structure(s), {trades} trades, "
+          f"cumulative P&L ${run.final_pnl:,.2f}")
 
 
 def test_checkpoint_overlap_delete_and_purge(imported):

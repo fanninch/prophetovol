@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 14 (run lifecycle, results storage and the run CLI) and the selection-message change.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 15 (acceptance, determinism, run time and checkpoint 2) and checkpoint 2.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,12 +13,12 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 131 done, 48 partial, 43 not started.
+**222 requirements:** 136 done, 46 partial, 40 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
 | **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
-| **M2 Engine core** | 9–15 | **In progress:** phases 9–14 done (Oct 27, 2026); 15 and checkpoint 2 to go |
+| **M2 Engine core** | 9–15 | **Done:** phases 9–15; checkpoint 2 held Oct 27, 2026 |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
 
@@ -39,7 +39,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 12 | Book, marking, fills, sizing, hedging and accounting | Oct 27, 2026 |
 | 13 | Triggers, rolls, expiry, settlement and the step loop | Oct 27, 2026 |
 | 14 | Run lifecycle, results storage and the run CLI | Oct 27, 2026 |
-| 15 | Acceptance, determinism, run time and checkpoint 2 | — |
+| 15 | Acceptance, determinism, run time and checkpoint 2 | Oct 27, 2026 |
 | 16–24 | M3–M4 (see the implementation plan, §8–§9) | — |
 
 | Area | Done | Partial | Not started |
@@ -51,7 +51,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Registries (§5.5) | 2 | 2 | 0 |
 | Data module (§6) | 26 | 4 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
-| Strategy specification (§8) | 48 | 2 | 0 |
+| Strategy specification (§8) | 49 | 1 | 0 |
 | Engine (§9) | 17 | 2 | 0 |
 | Stress module (§10) | 0 | 1 | 17 |
 | Runs (§11) | 9 | 2 | 0 |
@@ -60,8 +60,8 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | Schemas and documentation (§14) | 1 | 3 | 0 |
 | Audit (§15) | 3 | 1 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
-| Testing (§17) | 4 | 2 | 5 |
-| Non-functional (§18) | 0 | 3 | 2 |
+| Testing (§17) | 7 | 2 | 2 |
+| Non-functional (§18) | 1 | 2 | 2 |
 
 ## Architecture (§4)
 
@@ -217,7 +217,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-73 | Re-sizing on rolls | **Done** | Phase 12 (units at the step's index level), 13 (structure rolls re-size; leg rolls keep quantity) |  | `golden/test_book.py`, `golden/test_rules.py` |
 | SPEC-80 | Dry-run validation with field paths | **Done** | Phase 9 |  | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
 | SPEC-81 | Authoring and exact YAML round trip | **Partial** | Phase 9 (YAML and JSON import through the CLI and the service; exact round-trip export) | API (20), GUI editor (22) | `unit/test_strategy.py`, `unit/test_spec_cli.py` |
-| SPEC-82 | Appendix B examples ship as sample specs | **Partial** | Phase 9 (shipped as package data, validated; `spec examples`) | acceptance tests (15) | `unit/test_strategy.py` |
+| SPEC-82 | Appendix B examples ship as sample specs | **Done** | Phase Phase 9 (shipped as package data, validated; `spec examples`), 15 (acceptance tests) |  | `unit/test_strategy.py`, `acceptance/test_appendix_b.py` |
 
 ## Engine (§9)
 
@@ -227,7 +227,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ENG-2 | The constructor interface; `rules` constructor | **Done** | Phase 13 |  | `golden/test_rules.py` |
 | ENG-3 | Several structures of one spec tracked separately | **Done** | Phase 13 |  | `golden/test_rules.py` |
 | ENG-4 | Time-dependent calculations from timestamps and calendar, never step counts | **Done** | Phase 11 (entry schedules), 13 (trading days held; time to expiry from the snapshot or, when absent, the exchange clock) |  | `unit/test_entries.py`, `golden/test_rules.py` |
-| ENG-10 | Determinism | **Partial** | Phase 12 (sequence-numbered structure and trade ids; ordered iteration) | determinism test (15) | `golden/test_book.py` |
+| ENG-10 | Determinism | **Partial** | Phase Phase 12 (sequence-numbered structure and trade ids; ordered iteration), 15 (identical stored results from two processes with different hash seeds) | stress snapshots in the determinism test (16) | `golden/test_book.py`, `unit/test_runs.py`, `property/test_determinism.py` |
 | ENG-20 | Valid quotes and the mid | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-21 | Marking, stale marks and warnings | **Done** | Phase 12 |  | `golden/test_book.py` |
 | ENG-22 | Final marks of settled and force-closed legs | **Done** | Phase 12 |  | `golden/test_book.py` |
@@ -354,22 +354,22 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
 | TEST-1 | Golden engine tests | **Partial** | Phase 11 (selection), 12 (fills, sizing, both hedge examples, stale marks), 13 (settlement, forced closes, SPEC-55, targets and stops across a leg roll, precedence, rolls by calendar and trading days, expiry handling, null greeks) | stress modes (17) | `unit/test_selection.py`, `golden/test_book.py`, `golden/test_rules.py` |
-| TEST-2 | Invariant tests on many seeded runs | Not started |  | Phase 15 |  |
-| TEST-3 | Determinism test | Not started |  | Phase 15 |  |
+| TEST-2 | Invariant tests on many seeded runs | **Done** | Phase Phase 15 (3 seeds × 3 examples × 3 variations of fill model, rounding and size; ENG-33 and accounting checks on the stored results) |  | `property/test_seeded_runs.py` |
+| TEST-3 | Determinism test | **Partial** | Phase Phase 14 (same process), 15 (two processes with different hash seeds, every stored table) | stress snapshots added to the comparison (16) | `unit/test_runs.py`, `property/test_determinism.py` |
 | TEST-4 | Point-in-time test | **Done** | Phase 10 |  | `unit/test_market_data.py` |
 | TEST-5 | Time-convention tests | **Done** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row), 8 (vendor call deltas reproduced on real 2023 data, median error 3e-7) |  | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py`, `realdata/test_vendor_ingest.py` |
 | TEST-6 | Ingest tests reproducing real-data quirks | **Done** | Phase 6 |  | `unit/test_ingest.py` |
 | TEST-7 | Adapter contract suite | **Done** | Phase 3, 7, 10, 14 (atomic run writes) |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py`, `contract/test_run_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |
-| TEST-10 | Optional real-data tests | **Partial** | Phase 8 (ingest part: real 2008 and 2023 through the CLI; counts, quality, coverage, derived columns, parity forwards, checkpoint 1 flow) | run part (15); Phase 0 findings recorded in plan §15 | `realdata/test_vendor_ingest.py` |
-| TEST-11 | Appendix B acceptance tests | Not started |  | Phase 15 |  |
+| TEST-10 | Optional real-data tests | **Done** | Phase Phase 8 (ingest part: real 2008 and 2023 through the CLI; counts, quality, coverage, derived columns, parity forwards, checkpoint 1 flow), 15 (example 1 run through the run CLI on each year, hedged flat at every step) | Phase 0 findings recorded in plan §15 | `realdata/test_vendor_ingest.py` |
+| TEST-11 | Appendix B acceptance tests | **Done** | Phase Phase 15 (each example end to end through the service, with its own checks) |  | `acceptance/test_appendix_b.py` |
 
 ## Non-functional (§18)
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| NFR-1 | Performance targets | **Partial** | Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s), 8 (2008 and 2023 imported and checked through the CLI in about 60 s together), 10 (the engine's slice: only its columns and the spec's expiry horizon, in three-month chunks) | whole run (15) | `unit/test_market_data.py` |
+| NFR-1 | Performance targets | **Done** | Phase Phase 0 (targets agreed; ingest and data access measured), 6 (real 2023: 4.04M rows ingested in 28 s), 8 (2008 and 2023 imported and checked through the CLI in about 60 s together), 10 (the engine's slice: only its columns and the spec's expiry horizon, in three-month chunks), 15 (example 1 over ten years of real data, 2,516 steps: 11.2 s in the engine, 14.4 s for the whole command) |  | `unit/test_market_data.py` |
 | NFR-2 | GUI responsiveness | Not started |  | Phase 21-24 |  |
 | NFR-3 | Readable expected errors; generic unexpected errors with details logged | **Partial** | Phase 1, 3, 4 (error hierarchy and messages), 8 (CLI: short expected errors; unexpected ones logged to `logs/server.log`), 9 (CLI output never fails on characters a Windows pipe cannot encode) | API presentation (19) | `unit/test_core.py`, `unit/test_service.py`, `unit/test_data_cli.py` |
 | NFR-4 | No silent data loss; definitions and runs never edited in place | **Partial** | Phase 3, 4, 7 (confirmed scope; recoverable purge/discard) | Immutable run results (14) | `contract/test_lifecycle_contract.py`, `unit/test_data_lifecycle.py` |
