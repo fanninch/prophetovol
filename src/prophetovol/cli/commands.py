@@ -680,7 +680,7 @@ def run_start(state, ref, config_file):
 
     def progress(done, total, as_of):
         """Rewrite the progress line on standard error."""
-        click.echo(f"\rstep {done} of {total}, as of {as_of:%Y-%m-%d}", nl=False, err=True)
+        click.echo(f"\rstep {done:,} of {total:,}, as of {as_of:%Y-%m-%d}", nl=False, err=True)
 
     with _service(state) as (svc, context):
         try:
@@ -689,7 +689,7 @@ def run_start(state, ref, config_file):
             _preflight_issues(exc.report)
             raise click.ClickException(f"the run cannot start: {_n(len(exc.report.errors), 'error')}.") from None
         click.echo("", err=True)
-        summary = (f"Run {result.run_id} {result.status}: {result.steps_completed} of {_n(result.steps_total, 'step')}, "
+        summary = (f"Run {result.run_id} {result.status}: {result.steps_completed:,} of {_n(result.steps_total, 'step')}, "
                    f"cumulative P&L {_money(result.final_pnl)}, equity {_money(result.final_equity)}.")
         if result.status == "failed":
             click.echo(summary)
@@ -697,7 +697,7 @@ def run_start(state, ref, config_file):
                                                             if result.partial else ""))
         click.echo(summary)
         if result.status == "cancelled":
-            click.echo(f"Results up to step {result.steps_completed} are kept.")
+            click.echo(f"Results up to step {result.steps_completed:,} are kept.")
         click.echo(f"Details: prophetovol run show {result.run_id}")
 
 
@@ -718,7 +718,7 @@ def run_list(state, status, offset, limit):
         page = svc.page_runs(offset, limit, [RunStatus(s) for s in status] if status else None)
         _table(["Run", "Spec", "Status", "From", "To", "Steps", "Final P&L", "Created", "Flags"],
                [(r.run_id, f"{r.spec_id}@{r.spec_version}", r.status, r.config["start_date"], r.config["end_date"],
-                 f"{r.steps_completed}/{r.steps_total}", _money(r.final_pnl), _local_time(r.created_at),
+                 f"{r.steps_completed:,}/{r.steps_total:,}", _money(r.final_pnl), _local_time(r.created_at),
                  ", ".join(f for f, on in (("data superseded", r.data_superseded), ("partial", r.partial)) if on)
                  or None) for r in page.items])
         click.echo(f"Showing {len(page.items)} of {_n(page.total, 'run')} (offset {page.offset}).")
@@ -750,7 +750,7 @@ def run_show(state, run_id, show_structures, show_events, as_json):
             ("Run", r.run_id + (f" ({r.config['label']})" if r.config.get("label") else "")),
             ("Spec", f"{r.spec_id}@{r.spec_version} (hash {r.spec_hash[:12]})"),
             ("Status", f"{r.status}" + (f": {r.error}" if r.error else "") + (" (partial results)" if r.partial else "")),
-            ("Dates", f"{r.config['start_date']} to {r.config['end_date']}, {r.steps_completed} of "
+            ("Dates", f"{r.config['start_date']} to {r.config['end_date']}, {r.steps_completed:,} of "
                       f"{_n(r.steps_total, 'step')}"),
             ("Result", f"cumulative P&L {_money(r.final_pnl)}, equity {_money(r.final_equity)} on capital "
                        f"{_money(r.config['capital'])}"),

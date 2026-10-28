@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–14 done and M1 complete (checkpoint 1 held Oct 26, 2026); the check-in after Phase 14 held, with the selection-message change; Phase 15 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–15 done; M1 and M2 complete (checkpoints 1 and 2 held Oct 26 and 27, 2026); next the trigger-message correction, then M3 detailed with you.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -680,7 +680,7 @@ The requirements leave the targets to this plan. Agreed Oct 25, 2026; Phase 0's 
 | Target | Value | Phase 0 measurement |
 | --- | --- | --- |
 | Ingest one year of SPX (up to ~650 MB CSV) | under 5 minutes | 13–21 s (before the derived columns of v6, which add a few seconds); confirmed again in Phase 8 |
-| Single-structure spec over 10 years, data local | under 60 seconds (≈ 24 ms per step) | data access 1.2 ms per step; whole run measured in Phase 15 |
+| Single-structure spec over 10 years, data local | under 60 seconds (≈ 24 ms per step) | data access 1.2 ms per step; Phase 15: example 1 over 2014–2023 of real data, 2,516 steps, 11.2 s in the engine (4.4 ms per step), 14.4 s for the whole command |
 | Market data read per step | ≤ 8 ms average | 1.2 ms (3-month chunks) |
 | GUI first content | within 1 second (NFR-2) | measured in Phase 24 |
 
@@ -1427,3 +1427,35 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
 - **Test mistake corrected during development:** the new test first expected 35 trading days from Mar 27 to May 17, 2024; there are 36.
 - **Tests:** 487, all passing: 481 run by default (unit 395, contract 39, golden 42, meta 3, packaging 2), and the 6 real-data tests. In `unit/test_selection.py`, the one-sided message is asserted in full, a new test covers a gap with expirations on both sides and one past the last expiration, and the `trading_days_out` failure message is asserted.
 - **Next:** Phase 15 (acceptance, determinism, run time and checkpoint 2).
+
+**Phase 15 (acceptance, determinism, run time and checkpoint 2), Oct 27, 2026**
+
+- **Acceptance** (TEST-11, SPEC-82), `tests/acceptance/test_appendix_b.py`: one generated half year (seed 2, eight weeklies listed, so a 45-day target always has an expiration in reach) and the three shipped examples run from Feb 1 to Jun 28, 2024 through the service, checked from the stored results:
+  - **all three:** completed, 103 steps, no failed selection, unfilled order or forced close; the structures' P&L adds up to the portfolio's; equity is capital plus P&L
+  - **example 1:** net delta per unit zero after every step, with a hedge trade every day; rolls on all three conditions (delta above 0.50, below 0.15, 15 days or fewer), each with its measured value past the limit; the held call always within 0.15 to 0.50 delta and over 15 days; each new call 35 to 55 days out near delta 0.30; one structure throughout (a leg roll keeps it)
+  - **example 2:** the four legs on one expiration, the shorts on one strike between the wings, 10 contracts each; structure rolls at 25 days or fewer, each child opened at the step its parent closed; nothing held at 25 days or fewer at a step's end; no hedge
+  - **example 3:** net delta per unit in [0, +0.08] after every step, exactly +0.03 at each hedge trade, and no trade on most steps; the spread re-established at 15 days; the long put always later than the short
+- **Invariants on seeded runs** (TEST-2), `tests/property/test_seeded_runs.py`: three generator seeds (one with 30% index volatility, one with the default four weeklies, so some selections fail and retry) × the three examples × three variations (the stock specs at the mid; cross-spread fills with commission, hedge cost and fractional units from a notional; a fraction of the spread with whole units from a notional), 27 runs. On the stored results: ENG-33 again (`check_invariants` on the stored tables), equity, P&L by structure, each step's cash flow and fees equal to its trades and settlements, commissions as configured, and entry units as the sizing and rounding say.
+- **Determinism** (TEST-3, ENG-10), `tests/property/test_determinism.py`: two separate processes with different `PYTHONHASHSEED` values import the same files into two homes and run the three examples with cross-spread fills. Every stored table is equal row for row apart from run ids, and so are the run records apart from ids and wall-clock times (decision 14), and the dates and contract counts of the data read.
+- **Run time** (NFR-1): 2014 to Aug 2024 of real SPX data imported into a scratch home outside the repository (15 folders, 32.1M rows, a 2.9 GB home). Example 1 over 2014–2023, 2,516 steps, with cross-spread commission: **11.2 s in the engine (4.4 ms per step) and 14.4 s for the whole `run start` command**, against the 60-second target. No profiling was needed. The run held one structure for eight years: on Mar 29, 2022 a delta roll found no strike in the May 13 expiration within the tolerance of delta 0.30 (the nearest was 0.08 away), so the structure closed; the entry failed the next day for the same reason, and a new structure opened on Mar 31. Worth a look at checkpoint 2.
+- **Optional real-data run** (TEST-10): example 1 over March and April of 2008 and of 2023 through `spec publish` and `run start`, hedged flat at every step; added to `realdata/test_vendor_ingest.py`.
+- **CLI:** step counts are written with thousands separators ("2,516 of 2,516 steps"); the ten-year run showed "2516 of 2,516".
+- **Changes from the plan:** none. The acceptance data needed eight weeklies rather than the generator's default four: with four, the listings jump from about 31 to 59 days, so a 45-day target sometimes has no expiration in its window (seen at the check-in).
+- **Found while building:** nothing in the engine; the acceptance, invariant and determinism checks passed on their first run. A comment in my invariant test wrongly said settlements were trades; they are events with a cash flow, and the check now counts them.
+- **Tests:** 531, all passing: 523 run by default (unit 395, contract 39, golden 42, acceptance 12, property 30, meta 3, packaging 2), and the 8 real-data tests with `PROPHETOVOL_VENDOR_DATA` set.
+- **Next:** checkpoint 2 with you. The scratch home already holds Apr–Jun 2024 for Appendix B's run configuration; we publish the three examples, run each from the CLI, inspect the snapshots, structures and events, review a sample of the golden tests' hand calculations (§7.5, answer 7), and confirm period return as period P&L over capital. Then M3 is detailed with you.
+
+**Checkpoint 2 (demo with you), Oct 27, 2026**
+
+- **Setting:** the real-data scratch home from Phase 15 (2014 to Aug 2024). The three Appendix B examples were published and each was pre-flighted and run from the CLI with Appendix B's run configuration (Apr 11 to Jun 24, 2024, 51 steps, cross-spread fills, no costs, whole units), then inspected with `run list` and `run show --structures --events`.
+- **Example 1** (P&L +$28,664): one structure; seven leg rolls, four on delta above 0.50 (0.52 to 0.56) and three below 0.15 (0.11 to 0.14), none on time, since every call was rolled on delta long before 15 days; the hedge traded every step, around 300 index units for 10 short 30-delta calls; Juneteenth skipped.
+- **Example 2** (P&L −$7,650, in $50 steps: cross-spread fills on 0.05 ticks × 100 × 10): structure rolls on May 13 and Jun 17 at 24.99 days, each child opened at its parent's close (S1 → S2 → S3); the four legs on one expiration, the shorts at the 50-delta strike (5240 with the index at 5199: the undiscounted forward delta of 0.50 sits a little above the forward), the wings at 25 delta; no hedge.
+- **Example 3** (P&L +$4,273): no hedge at entry (net delta +0.05 per spread, inside the band); hedge trades only when the measure left [0, +0.08], including short index holdings; the spread re-established on May 9 and Jun 10 (13.99 days, a Monday after a 16.99-day Friday), each roll closing the old structure's hedge; long-put expirations checked against the listings (Jul 19 at 70.7 days and Aug 30 at 81.0 days were the nearest to 75; the weeklies between were not yet listed).
+- **The ten-year run's March 2022 skip** explained: on Mar 29, 2022 the vendor's May 13 calls jump from strike 4700 (delta 0.38) to 4800 (delta 0.22), so no strike is within 0.05 of delta 0.30; the roll's close executed, the reopening and the next day's entry were skipped with `selection_failed` events, and a new structure opened on Mar 31 (§7.5, answer 6).
+- **Golden hand calculations reviewed** (§7.5, answer 7; R5): the first-step cost under each fill model, the full hedge over three steps (P&L by leg, cash and final market value), the hedge band of example 3 with its 2 bps cost, and the dollar greeks (`golden/test_book.py`); each re-derived and correct.
+- **Confirmed by you:**
+  - **period return** is `period_pnl / capital` (Phase 12's interpretation stands; M3's statistics build on it)
+  - **opening a structure is all legs or none** (Phase 12's interpretation stands)
+- **Finding, agreed:** a `trigger_fired` event names the trigger but not the condition that fired or its measured value, which are only in the event's details. The message will name them, for example "roll_on_delta_or_time (leg_abs_delta_below 0.136): roll short_call", as a correction on its own branch before M3.
+- **Still open from checkpoint 1:** finding 9, how flagged days count in coverage.
+- **Next:** the trigger-message correction; then M3 (stress and analytics) detailed with you before Phase 16.
