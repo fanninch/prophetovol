@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–13 done and M1 complete (checkpoint 1 held Oct 26, 2026); Phase 14 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–14 done and M1 complete (checkpoint 1 held Oct 26, 2026); the check-in after Phase 14, then Phase 15.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1374,3 +1374,47 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
   - a failed entry retried, with two structures open under `max_open`; an entry below one unit skipped
   - progress and cancellation
 - **Next:** Phase 14 (run lifecycle, results storage and the run CLI).
+
+
+**Phase 14 (run lifecycle, results storage and the run CLI), Oct 27, 2026**
+
+- **`core/records.py`:** `RunStatus` (RUN-20) and `RunRecord`: everything a run used, read and produced (RUN-30, VER-3).
+- **Storage:**
+  - **Catalog migration 3** extends Phase 7's `runs` table with the run's provenance, status and outcome, and adds `run_registry_versions`.
+  - **Results migration 2** creates `position_snapshots`, `portfolio_snapshots`, `trades`, `structures` and `events`, plus the `structure_snapshots` view (RES-11). The DDL is literal text, because a migration never changes; a contract test keeps the tables' columns equal to the record models.
+  - **`storage/duckdb/runs.py`** (a mixin of the DuckDB adapter, on the adapter interface): `create_run` stores the run, its data versions and its registry versions in one transaction. Also `update_run`, `get_run`, `page_runs` (newest first, status filter) and `run_data_versions`.
+  - **Results:** `write_run_results` writes all tables in one results transaction and refuses a second write. `read_run_results` and `count_run_results` read in step order, ordering structure and trade ids numerically. Instants are stored as naive UTC and read back as UTC.
+- **`runs/coordinator.py`:** `registry_versions_used`, `engine_settings` (from the configuration and the underlying) and `execute_run`, the run job:
+  - marks the run running and rebuilds its schedule from the versions it recorded (`preflight.build_schedule`, now shared)
+  - runs the engine with job progress and cancellation
+  - trims an unfinished step (`RunRecorder.keep_steps`) and writes the results whatever the outcome
+  - records the outcome; Ctrl+C counts as cancellation
+- **Service:**
+  - audited `start_run` (`run.start`): pre-flight, the run recorded with its provenance and data versions (decision 30), then the job in the foreground or the background
+  - `get_run`, `page_runs`, `run_results`; audited `cancel_run` (`run.cancel`)
+  - runs left queued or running are failed as interrupted on open (RUN-20); the `run` job handler is registered for the job runner
+- **CLI** (INT-40):
+  - `run preflight --spec <id>[@<v>] --config <file>`
+  - `run start …`, with a progress line on standard error and Ctrl+C keeping the finished steps
+  - `run list`
+  - `run show <run_id> [--structures] [--events] [--json]`
+  - `run cancel <run_id>`
+- **README:** running a backtest: the configuration file, the commands, provenance, data superseded, and what is kept on cancellation and failure.
+- **Changes from the plan:**
+  - A run rebuilds its step schedule from the data versions it recorded instead of storing the schedule; the calendar makes the rebuild exact.
+  - A stopped run's unfinished step is dropped from the output, so results always end at a finished step (RUN-22, RUN-23).
+  - Catalog rows without provenance (Phase 7's test runs) are not listed as runs.
+- **Found while building:**
+  - **A bug in Phase 13's constructor,** found by the CLI check run of example 1: a leg roll briefly left its structure without the leg, and the entry check counted it as closed, so `when_flat` opened a second structure. The entry count now includes structures reopening a leg (this step's rolls and those waiting for their close). A golden test covers it.
+  - The engine's event messages use plain ASCII (`to`, `x`), so they read the same in a Windows pipe.
+- **Test mistakes corrected during development:** the lifecycle tests assumed 21 trading days in April 2024; there are 22. Two older tests asserted catalog schema version 2; they now expect version 3 (one now asserts the latest version), and a new test migrates a version 2 home with a run row.
+- **Tests:** 486, all passing: 480 run by default (unit 394, contract 39, golden 42, meta 3, packaging 2), and the 6 real-data tests pass with `PROPHETOVOL_VENDOR_DATA` set. New:
+  - **`tests/unit/test_runs.py`, 11 tests:**
+    - a completed run's provenance, job and results; the same inputs giving identical stored results
+    - the structure view agreeing with the structures; a background run with a reader listing runs
+    - a pre-flight failure recording nothing; Ctrl+C keeping five steps; cancellation at a step boundary
+    - an injected invariant violation storing partial results; a failed write storing nothing
+    - interrupted runs failed on open; data superseded after a replace
+  - **`tests/contract/test_run_contract.py`, 6 tests:** runs and their inputs round trip; paging; results round trip in order; the structure view; atomic, write-once results; tables equal to the record models
+  - **`tests/unit/test_run_cli.py`, 3 tests;** the leg-roll entry test in `golden/test_rules.py`; the version 2 migration test
+- **Next:** the check-in with you (§7.5, answer 8), one Appendix B run on generated data through the run CLI; then Phase 15 (acceptance, determinism, run time and checkpoint 2).

@@ -47,7 +47,7 @@ def version(import_id: str, day: date, contracts: int = 3) -> DataVersionRecord:
 
 class TestLifecycle:
     def test_new_home_is_created_and_migrated(self, adapter):
-        assert adapter.schema_versions == {"catalog": 2, "results": 1}
+        assert adapter.schema_versions == {"catalog": 3, "results": 2}
         assert (adapter.home / "market").is_dir()
 
     def test_reopening_keeps_data(self, open_adapter, tmp_path):
@@ -56,7 +56,7 @@ class TestLifecycle:
         a.close()
         b = open_adapter(tmp_path / "home")
         assert b.get_definition("underlying", "SPX").body == {"x": 1}
-        assert b.schema_versions == {"catalog": 2, "results": 1}
+        assert b.schema_versions == {"catalog": 3, "results": 2}
         b.close()
 
 

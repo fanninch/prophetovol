@@ -157,6 +157,20 @@ def check_data(config: RunConfig, calendar: TradingCalendar, active: list[DataVe
     if errors:
         return None, [], errors, warnings
 
+    schedule, versions = build_schedule(sessions, by_day)
+    return schedule, versions, errors, warnings
+
+
+def build_schedule(sessions: list[date], by_day: Mapping[date, DataVersionRecord]
+                   ) -> tuple[StepSchedule, list[DataVersionRecord]]:
+    """The step schedule of a run: one step per trading day with a data version, the others skipped (RUN-11).
+
+    Pre-flight builds it, and a run job rebuilds the same schedule from the versions it recorded.
+
+    :param sessions: The trading days in the run's range, in order.
+    :param by_day: The data version of each covered day.
+    :returns: The schedule, and the version each step reads, in step order.
+    """
     steps: list[Step] = []
     skipped: list[date] = []
     versions: list[DataVersionRecord] = []
@@ -167,4 +181,4 @@ def check_data(config: RunConfig, calendar: TradingCalendar, active: list[DataVe
         steps.append(Step(seq=len(steps) + 1, day=day, as_of=by_day[day].as_of, after_missing_days=skipped))
         versions.append(by_day[day])
         skipped = []
-    return StepSchedule(steps=steps, missing_days=missing), versions, errors, warnings
+    return StepSchedule(steps=steps, missing_days=[d for d in sessions if d not in by_day]), versions

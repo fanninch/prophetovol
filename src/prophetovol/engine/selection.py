@@ -313,7 +313,7 @@ class TargetDays:
         low, high = self.params.window()
         inside = [o for o in options if low - _EPS <= o.days_to_expiry <= high + _EPS]
         if not inside:
-            return None, (f"no eligible expiration within {low:g}–{high:g} calendar days to expiry "
+            return None, (f"no eligible expiration within {low:g} to {high:g} calendar days to expiry "
                           f"(eligible: {_describe(options)})")
         return _nearest_expiration(inside, [abs(o.days_to_expiry - self.params.days) for o in inside],
                                    self.params.tie_break), ""

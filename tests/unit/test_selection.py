@@ -81,7 +81,7 @@ class TestExpirationSelectors:
         assert chosen(views[MAR27], zero_dte)[:2] == ("SPXW", date(2024, 3, 28))
         failed = pick(views[MAR28], leg(expiration=zero_dte))  # next is Apr 1, 3.99 days out
         assert failed.failure.selector == "expiration_selector target_days"
-        assert failed.failure.message.startswith("no eligible expiration within 0–1 calendar days to expiry "
+        assert failed.failure.message.startswith("no eligible expiration within 0 to 1 calendar days to expiry "
                                                  "(eligible: SPXW 2024-04-01 (3.99 days, 1 trading day)")
 
     def test_default_window_is_floored_at_zero(self, views):

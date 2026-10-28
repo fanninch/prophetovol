@@ -1,4 +1,4 @@
-"""Data, spec, registry, job and documentation commands: presentation over BacktestService (INT-40)."""
+"""Data, spec, run, registry, job and documentation commands: presentation over BacktestService (INT-40)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,9 @@ from pathlib import Path
 import click
 
 from prophetovol.core.context import CallContext
-from prophetovol.core.records import JobStatus, VersionState
+from prophetovol.core.records import JobStatus, RunStatus, VersionState
 from prophetovol.data.lifecycle import CoverageMonth, DataSelection
+from prophetovol.runs.preflight import PreflightFailed
 from prophetovol.runs.service import BacktestService
 from prophetovol.strategy.io import example_spec_texts, parse_spec_text, read_spec_file
 from prophetovol.strategy.validate import SpecInvalid
@@ -615,3 +616,182 @@ def spec_examples(output, force):
     for name, text in texts.items():
         (output / name).write_text(text, encoding="utf-8")
     click.echo(f"Wrote {_n(len(texts), 'example')} to {output}.")
+
+
+def _preflight_issues(report):
+    """Show a pre-flight report's errors and warnings as one table, errors first."""
+    rows = [(i.severity, i.path or "-", i.message) for i in [*report.errors, *report.warnings]]
+    if rows:
+        _table(["Severity", "Where", "Message"], rows)
+
+
+def _money(value):
+    """Dollars for people, or ``-`` when unknown."""
+    return "-" if value is None else f"${value:,.2f}"
+
+
+@click.group()
+def run():
+    """Check, start, list, show and cancel backtest runs."""
+
+
+@run.command("preflight")
+@click.option("--spec", "ref", required=True, help="The spec to run: <id> or <id>@<version>.")
+@click.option("--config", "config_file", type=click.Path(path_type=Path), required=True,
+              help="The run configuration, YAML or JSON (dates, capital, fill model, costs, …).")
+@click.pass_obj
+def run_preflight(state, ref, config_file):
+    """Check that a run can start, without starting it; every problem is reported at once.
+    \f
+    :param state: Shared CLI options.
+    :param ref: The spec reference.
+    :param config_file: The run configuration file.
+    """
+    spec_id, version = _spec_ref(ref)
+    config = read_spec_file(config_file)
+    with _service(state) as (svc, context):
+        try:
+            report = svc.preflight_run(spec_id, config, context, version)
+        except PreflightFailed as exc:
+            _preflight_issues(exc.report)
+            raise click.ClickException(f"the run cannot start: {_n(len(exc.report.errors), 'error')}, "
+                                       f"{_n(len(exc.report.warnings), 'warning')}.") from None
+        steps = report.schedule.steps
+        skipped = f", {_n(len(report.schedule.missing_days), 'trading day')} skipped" if report.schedule.missing_days else ""
+        click.echo(f"Ready: {report.spec_id}@{report.spec_version}, {_n(len(steps), 'step')} from {steps[0].day} to "
+                   f"{steps[-1].day}{skipped}.")
+        _preflight_issues(report)
+
+
+@run.command("start")
+@click.option("--spec", "ref", required=True, help="The spec to run: <id> or <id>@<version>.")
+@click.option("--config", "config_file", type=click.Path(path_type=Path), required=True,
+              help="The run configuration, YAML or JSON.")
+@click.pass_obj
+def run_start(state, ref, config_file):
+    """Run a backtest in the foreground, with a progress line; Ctrl+C cancels it and keeps its results.
+    \f
+    :param state: Shared CLI options.
+    :param ref: The spec reference.
+    :param config_file: The run configuration file.
+    """
+    spec_id, version = _spec_ref(ref)
+    config = read_spec_file(config_file)
+
+    def progress(done, total, as_of):
+        """Rewrite the progress line on standard error."""
+        click.echo(f"\rstep {done} of {total}, as of {as_of:%Y-%m-%d}", nl=False, err=True)
+
+    with _service(state) as (svc, context):
+        try:
+            result = svc.start_run(spec_id, config, context, version, on_progress=progress)
+        except PreflightFailed as exc:
+            _preflight_issues(exc.report)
+            raise click.ClickException(f"the run cannot start: {_n(len(exc.report.errors), 'error')}.") from None
+        click.echo("", err=True)
+        summary = (f"Run {result.run_id} {result.status}: {result.steps_completed} of {_n(result.steps_total, 'step')}, "
+                   f"cumulative P&L {_money(result.final_pnl)}, equity {_money(result.final_equity)}.")
+        if result.status == "failed":
+            click.echo(summary)
+            raise click.ClickException(f"{result.error}" + (" Results up to the failure are stored, marked partial."
+                                                            if result.partial else ""))
+        click.echo(summary)
+        if result.status == "cancelled":
+            click.echo(f"Results up to step {result.steps_completed} are kept.")
+        click.echo(f"Details: prophetovol run show {result.run_id}")
+
+
+@run.command("list")
+@click.option("--status", multiple=True, type=click.Choice([s.value for s in RunStatus]))
+@click.option("--offset", type=click.IntRange(min=0), default=0)
+@click.option("--limit", type=click.IntRange(1, 500), default=50)
+@click.pass_obj
+def run_list(state, status, offset, limit):
+    """List runs, newest first.
+    \f
+    :param state: Shared CLI options.
+    :param status: Optional status filters.
+    :param offset: First result offset.
+    :param limit: Page size.
+    """
+    with _service(state) as (svc, _):
+        page = svc.page_runs(offset, limit, [RunStatus(s) for s in status] if status else None)
+        _table(["Run", "Spec", "Status", "From", "To", "Steps", "Final P&L", "Created", "Flags"],
+               [(r.run_id, f"{r.spec_id}@{r.spec_version}", r.status, r.config["start_date"], r.config["end_date"],
+                 f"{r.steps_completed}/{r.steps_total}", _money(r.final_pnl), _local_time(r.created_at),
+                 ", ".join(f for f, on in (("data superseded", r.data_superseded), ("partial", r.partial)) if on)
+                 or None) for r in page.items])
+        click.echo(f"Showing {len(page.items)} of {_n(page.total, 'run')} (offset {page.offset}).")
+
+
+@run.command("show")
+@click.argument("run_id")
+@click.option("--structures", "show_structures", is_flag=True, help="Also list the run's structures.")
+@click.option("--events", "show_events", is_flag=True, help="Also list the run's events.")
+@click.option("--json", "as_json", is_flag=True, help="Print the run's record as JSON instead.")
+@click.pass_obj
+def run_show(state, run_id, show_structures, show_events, as_json):
+    """Show a run: what it ran, how it ended, and optionally its structures and events.
+    \f
+    :param state: Shared CLI options.
+    :param run_id: The run.
+    :param show_structures: Also list structures.
+    :param show_events: Also list events.
+    :param as_json: Print the record as JSON.
+    """
+    with _service(state) as (svc, _):
+        r = svc.get_run(run_id)
+        if as_json:
+            _json(r)
+            return
+        events = svc.run_results(run_id, "events")
+        levels = events.column("level").to_pylist() if events.num_rows else []
+        lines = [
+            ("Run", r.run_id + (f" ({r.config['label']})" if r.config.get("label") else "")),
+            ("Spec", f"{r.spec_id}@{r.spec_version} (hash {r.spec_hash[:12]})"),
+            ("Status", f"{r.status}" + (f": {r.error}" if r.error else "") + (" (partial results)" if r.partial else "")),
+            ("Dates", f"{r.config['start_date']} to {r.config['end_date']}, {r.steps_completed} of "
+                      f"{_n(r.steps_total, 'step')}"),
+            ("Result", f"cumulative P&L {_money(r.final_pnl)}, equity {_money(r.final_equity)} on capital "
+                       f"{_money(r.config['capital'])}"),
+            ("Output", f"{_n(svc.storage.count_run_results(run_id, 'structures'), 'structure')}, "
+                       f"{_n(svc.storage.count_run_results(run_id, 'trades'), 'trade')}, "
+                       f"{_n(len(levels), 'event')} ({_n(levels.count('warning'), 'warning')})"),
+            ("Config", f"fill {r.config['fill_model']}, commission {_money(r.config['commission_per_contract'])} per "
+                       f"contract, hedge cost {r.config['hedge_cost_bps']:g} bps, {r.config['rounding']} units; "
+                       f"hash {r.config_hash[:12]}"),
+            ("Data", f"{r.underlying} from {r.data_source}; {_n(r.steps_total, 'data version')} read" +
+                     ("; superseded since on " + ", ".join(d.isoformat() for i in svc.run_data_impacts(run_id)
+                                                           for d in i.dates[:5]) if r.data_superseded else "")),
+            ("Started", f"{_local_time(r.started_at) or '-'} by {r.actor} ({r.channel}); finished "
+                        f"{_local_time(r.finished_at) or '-'}"),
+            ("Versions", f"ProphetoVol {r.software_versions.get('prophetovol', '?')}, calendar {r.calendar_version}, "
+                         f"underlying v{r.underlying_version}, data source v{r.data_source_version}"),
+        ]
+        _table(["", ""], lines)
+        if show_structures:
+            click.echo("")
+            rows = svc.run_results(run_id, "structures").to_pylist()
+            _table(["Structure", "Parent", "Units", "Opened", "Closed", "Status", "P&L"],
+                   [(s["structure_id"], s["parent_id"], f"{s['units']:g}", s["opened_as_of"].date(),
+                     s["closed_as_of"].date() if s["closed_as_of"] else None, s["status"], _money(s["cumulative_pnl"]))
+                    for s in rows])
+        if show_events:
+            click.echo("")
+            _table(["Step", "Date", "Type", "Level", "Structure", "Message"],
+                   [(e["step"], e["as_of"].date(), e["type"], e["level"], e["structure_id"], e["message"])
+                    for e in events.to_pylist()])
+
+
+@run.command("cancel")
+@click.argument("run_id")
+@click.pass_obj
+def run_cancel(state, run_id):
+    """Cancel a queued or running background run; a foreground run is cancelled with Ctrl+C.
+    \f
+    :param state: Shared CLI options.
+    :param run_id: The run.
+    """
+    with _service(state) as (svc, context):
+        r = svc.cancel_run(run_id, context)
+        click.echo(f"Cancellation requested for {r.run_id}; it stops at the next step boundary and keeps its results.")

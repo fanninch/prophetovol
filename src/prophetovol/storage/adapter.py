@@ -6,8 +6,8 @@ implementation, DuckDB plus Parquet (``storage.duckdb``), and every implementati
 contract suite in ``tests/contract`` (DATA-84).
 
 The interface grows with the plan's phases: this version has the catalog, staged market data,
-jobs, attempts, the Phase 7 data lifecycle and Phase 10's chunked market reads for runs. Run results
-arrive with Phase 14.
+jobs, attempts, the Phase 7 data lifecycle, Phase 10's chunked market reads for runs, and Phase 14's
+runs and their results.
 
 An adapter object is used from one thread at a time. Request threads use :meth:`reader`, which
 returns an adapter on independent cursors of the same databases (ARC-4).
@@ -28,7 +28,7 @@ from prophetovol.data.lifecycle import ChangePreview, CommitChoice, DataSelectio
 from prophetovol.core.context import CallContext
 from prophetovol.core.paging import Page
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, JobRecord,
-                                      JobStatus, VersionState)
+                                      JobStatus, RunRecord, RunStatus, VersionState)
 
 
 class StorageAdapter(ABC):
@@ -311,6 +311,81 @@ class StorageAdapter(ABC):
         :param columns: Columns to return; all when omitted.
         :param cutoff: Latest allowed aware instant; asking for later data raises PointInTimeError.
         :returns: Active rows or an empty table when no snapshot is active.
+        """
+
+    # --- runs and their results (RUN-20 to RUN-40) ------------------------------------------------
+
+    @abstractmethod
+    def create_run(self, record: RunRecord, data_versions: list[DataVersionRecord]) -> None:
+        """Record a new run with the data versions it will read and the registry versions it uses, atomically.
+
+        :param record: The run, in status ``queued``.
+        :param data_versions: The data version each step reads (decision 30); invalidation follows them (RUN-40).
+        """
+
+    @abstractmethod
+    def update_run(self, record: RunRecord) -> None:
+        """Store a run's status, progress, outcome and times.
+
+        :param record: The run.
+        :raises NotFoundError: If it does not exist.
+        """
+
+    @abstractmethod
+    def get_run(self, run_id: str) -> RunRecord:
+        """A run, with its registry versions and its data-superseded flag.
+
+        :param run_id: The run.
+        :returns: The record.
+        :raises NotFoundError: If it does not exist.
+        """
+
+    @abstractmethod
+    def page_runs(self, offset: int = 0, limit: int = 50, statuses: list[RunStatus] | None = None) -> Page[RunRecord]:
+        """Runs, newest first.
+
+        :param offset: Index of the first run.
+        :param limit: Page size.
+        :param statuses: Only these statuses, when given.
+        :returns: The page.
+        """
+
+    @abstractmethod
+    def run_data_versions(self, run_id: str) -> list[DataVersionRecord]:
+        """The data versions a run reads, in as-of order, in their current state.
+
+        :param run_id: The run.
+        :returns: The versions.
+        """
+
+    @abstractmethod
+    def write_run_results(self, run_id: str, tables: dict[str, pa.Table]) -> None:
+        """Store a run's output in one transaction (RUN-23): all of it or nothing.
+
+        :param run_id: The run.
+        :param tables: Tables by name (``position_snapshots``, ``portfolio_snapshots``, ``trades``, ``structures``,
+            ``events``), in their record models' schemas.
+        :raises ImmutableEntityError: If the run already has results.
+        """
+
+    @abstractmethod
+    def read_run_results(self, run_id: str, table: str, offset: int = 0, limit: int | None = None) -> pa.Table:
+        """Read a run's output table, or the ``structure_snapshots`` view (RES-11), in step order.
+
+        :param run_id: The run.
+        :param table: The table or view.
+        :param offset: Index of the first row.
+        :param limit: Most rows; all when omitted.
+        :returns: The rows, instants as aware UTC.
+        """
+
+    @abstractmethod
+    def count_run_results(self, run_id: str, table: str) -> int:
+        """How many rows a run has in an output table or view.
+
+        :param run_id: The run.
+        :param table: The table or view.
+        :returns: The count.
         """
 
     @abstractmethod

@@ -59,6 +59,21 @@ class RunRecorder:
                                      "as_of": as_of, "type": EventType(type).value, "level": level,
                                      "structure_id": structure_id, "message": message, "details": details})
 
+    def keep_steps(self, steps: int) -> None:
+        """Drop everything recorded after a step, so a stopped run keeps only its finished steps (RUN-22, RUN-23).
+
+        Structures opened later are dropped; ones that closed later are shown open, as they were then.
+
+        :param steps: The last finished step.
+        """
+        for table, rows in self._rows.items():
+            self._rows[table] = [r for r in rows if r["step"] <= steps]
+        for key, s in list(self._structures.items()):
+            if s["opened_step"] > steps:
+                del self._structures[key]
+            elif s["closed_step"] is not None and s["closed_step"] > steps:
+                self._structures[key] = s | {"closed_step": None, "closed_as_of": None, "status": "open"}
+
     def rows(self, table: str) -> list[dict[str, Any]]:
         """A table's rows so far.
 

@@ -235,7 +235,7 @@ class Rules:
             if order is not None:
                 orders.append(order)
         self.pending_rolls = waiting
-        entry = self._entry_order(book, view, sum(o.kind == "roll_structure" for o in orders))
+        entry = self._entry_order(book, view, orders)
         if entry is not None:
             orders.append(entry)
         return orders
@@ -324,18 +324,25 @@ class Rules:
         return OpeningOrder("roll_structure", self._quantities(units, result), units, roll.reason,
                             parent_id=s.structure_id, warnings=[w.message for w in result.warnings])
 
-    def _entry_order(self, book: Book, view: MarketDataView, opening_rolls: int) -> OpeningOrder | None:
+    def _entry_order(self, book: Book, view: MarketDataView, rolls: list[OpeningOrder]) -> OpeningOrder | None:
         """The entry, when the schedule says one is due (SPEC-30 to SPEC-35).
+
+        A structure counts as open while it holds a leg, owes a close, or is reopening a leg in a leg roll (this
+        step's or one waiting for its close); a structure roll's new structure counts too.
 
         :param book: The book after the step's closes.
         :param view: The step's market data.
-        :param opening_rolls: Structures the step's rolls are about to open.
+        :param rolls: The step's roll openings, about to execute.
         :returns: The order, or None.
         """
+        reopening = {o.structure_id for o in rolls if o.kind == "roll_leg"}
+        reopening |= {r.structure_id for r in self.pending_rolls if r.leg_id is not None}
+        owing = {v[0] for v in book.pending_closes.values()}
         open_now = sum(1 for s in book.open_structures()
-                       if s.legs or any(v[0] == s.structure_id for v in book.pending_closes.values()))
+                       if s.legs or s.structure_id in owing or s.structure_id in reopening)
         state = EntryState(day=view.as_of_date, first_day=self.schedule.steps[0].day,
-                           open_structures=open_now + opening_rolls, opened_any=self.opened_any,
+                           open_structures=open_now + sum(o.kind == "roll_structure" for o in rolls),
+                           opened_any=self.opened_any,
                            last_close_day=self.last_close_day)
         if not self._entry.due(state, self.calendar):
             return None
@@ -359,7 +366,7 @@ class Rules:
         """
         view = book.view
         for o in orders:
-            legs = ", ".join(f"{leg.leg_id} {leg.osi_symbol} × {leg.quantity:g}" for leg in o.legs)
+            legs = ", ".join(f"{leg.leg_id} {leg.osi_symbol} x {leg.quantity:g}" for leg in o.legs)
             level = "warning" if o.warnings else "info"
             if o.kind == "roll_leg":
                 if book.open_leg(o.structure_id, o.legs[0], o.reason):

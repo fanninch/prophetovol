@@ -1,6 +1,6 @@
 """The ``prophetovol`` command line: a thin client of the service (ARC-1, INT-40).
 
-Data, spec, registry, jobs and documentation commands are available. Stress, run, serve and demo
+Data, spec, run, registry, jobs and documentation commands are available. Stress, serve and demo
 commands arrive in later phases.
 """
 
@@ -191,10 +191,11 @@ def testdata_generate(out_dir: Path, start_date, end_date, seed: int, convention
 
 
 # Imported after the root command exists; these commands use only service operations.
-from prophetovol.cli.commands import data, docs, jobs, registry, spec
+from prophetovol.cli.commands import data, docs, jobs, registry, run, spec
 
 main.add_command(data)
 main.add_command(spec)
+main.add_command(run)
 main.add_command(registry)
 main.add_command(jobs)
 main.add_command(docs)

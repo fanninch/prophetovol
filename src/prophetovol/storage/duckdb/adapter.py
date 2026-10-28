@@ -34,6 +34,7 @@ from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionReco
 from prophetovol.data.schema import SORT_KEYS
 from prophetovol.storage.adapter import StorageAdapter
 from prophetovol.storage.duckdb.lifecycle import _LifecycleStorage, _locked
+from prophetovol.storage.duckdb.runs import _RunStorage
 from prophetovol.storage.duckdb.schema import CATALOG_MIGRATIONS, RESULTS_MIGRATIONS, apply_migrations, schema_version
 
 CATALOG_FILE = "catalog.duckdb"
@@ -109,7 +110,7 @@ def _connect(path: Path, home: Path) -> duckdb.DuckDBPyConnection:
         raise
 
 
-class DuckDBAdapter(_LifecycleStorage, StorageAdapter):
+class DuckDBAdapter(_LifecycleStorage, _RunStorage, StorageAdapter):
     """Storage in DuckDB databases and Parquet files under a home directory.
 
     Use :meth:`open` to create the owner; :meth:`reader` gives adapters for other threads.
@@ -127,6 +128,7 @@ class DuckDBAdapter(_LifecycleStorage, StorageAdapter):
         self._res = results
         self._owner = owner
         self._ibis = ibis.duckdb.from_connection(catalog)
+        self._ibis_res = ibis.duckdb.from_connection(results)
         self._closed = False
         self._lifecycle_lock = threading.RLock()
 
