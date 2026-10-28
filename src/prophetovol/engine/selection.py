@@ -274,15 +274,36 @@ def _nearest_expiration(options: list[ExpirationInfo], distance: list[float], ti
     return tied[-1] if tie_break is ExpirationTieBreak.LATER else tied[0]
 
 
-def _describe(options: list[ExpirationInfo]) -> str:
-    """A short list of expirations for a message.
+def _describe(option: ExpirationInfo) -> str:
+    """One expiration for a message.
 
-    :param options: The expirations.
-    :returns: For example ``SPXW 2024-04-01 (4.99 days, 2 trading days), …``.
+    :param option: The expiration.
+    :returns: For example ``SPXW 2024-04-01 (4.99 days, 2 trading days)``.
     """
-    shown = ", ".join(f"{o.root} {o.expiration} ({o.days_to_expiry:.2f} days, {o.trading_days_to_expiry} trading "
-                      f"day{'' if o.trading_days_to_expiry == 1 else 's'})" for o in options[:4])
-    return (shown + (f" and {len(options) - 4} more" if len(options) > 4 else "")) or "none"
+    days = option.trading_days_to_expiry
+    return (f"{option.root} {option.expiration} ({option.days_to_expiry:.2f} days, {days} trading "
+            f"day{'' if days == 1 else 's'})")
+
+
+def _nearest_outside(options: list[ExpirationInfo], below: list[bool]) -> str:
+    """The eligible expirations nearest either side of a window none of them is in, for a message.
+
+    :param options: The expirations, ordered by expiry, then root; none is inside the window.
+    :param below: For each option, whether it is short of the window (otherwise it is beyond it).
+    :returns: For example ``nearest eligible: SPX 2024-06-21 (30.99 days, 22 trading days) and SPX 2024-07-19
+        (58.99 days, 40 trading days)``, with ``none earlier`` or ``none later among the expirations the run
+        reads`` for a side without one. A run reads expirations only up to its spec's horizon (decision 31), so
+        a later one may exist in the data without being seen.
+    """
+    if not options:
+        return "no eligible expirations"
+    shorter = [o for o, b in zip(options, below) if b]
+    longer = [o for o, b in zip(options, below) if not b]
+    if shorter and longer:
+        return f"nearest eligible: {_describe(shorter[-1])} and {_describe(longer[0])}"
+    if shorter:
+        return f"nearest eligible: {_describe(shorter[-1])}; none later among the expirations the run reads"
+    return f"nearest eligible: {_describe(longer[0])}; none earlier"
 
 
 # --- expiration selectors (SPEC-10 to SPEC-13) ---------------------------------------------------
@@ -313,8 +334,8 @@ class TargetDays:
         low, high = self.params.window()
         inside = [o for o in options if low - _EPS <= o.days_to_expiry <= high + _EPS]
         if not inside:
-            return None, (f"no eligible expiration within {low:g}–{high:g} calendar days to expiry "
-                          f"(eligible: {_describe(options)})")
+            return None, (f"no eligible expiration within {low:g} to {high:g} calendar days to expiry "
+                          f"({_nearest_outside(options, [o.days_to_expiry < low for o in options])})")
         return _nearest_expiration(inside, [abs(o.days_to_expiry - self.params.days) for o in inside],
                                    self.params.tie_break), ""
 
@@ -343,8 +364,9 @@ class TradingDaysOut:
         n, tol = self.params.n, self.params.tolerance
         inside = [o for o in options if abs(o.trading_days_to_expiry - n) <= tol]
         if not inside:
-            return None, (f"no eligible expiration {n} trading day(s) out (tolerance {tol}; eligible: "
-                          f"{_describe(options)})")
+            below = [o.trading_days_to_expiry < n for o in options]
+            return None, (f"no eligible expiration {n} trading day(s) out (tolerance {tol}; "
+                          f"{_nearest_outside(options, below)})")
         return _nearest_expiration(inside, [abs(o.trading_days_to_expiry - n) for o in inside],
                                    self.params.tie_break), ""
 

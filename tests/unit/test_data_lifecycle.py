@@ -206,8 +206,24 @@ def test_v1_home_migrates_without_losing_existing_catalog(tmp_path):
     con.close()
     a = DuckDBAdapter.open(home)
     try:
-        assert a.schema_versions["catalog"] == 2
+        assert a.schema_versions["catalog"] == len(CATALOG_MIGRATIONS)
         assert a.get_definition("underlying", "TEST").content_hash == "hash"
+    finally:
+        a.close()
+
+
+def test_v2_home_keeps_its_run_rows_when_runs_gain_provenance(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    con = duckdb.connect(str(home / "catalog.duckdb"))
+    apply_migrations(con, CATALOG_MIGRATIONS[:2])
+    con.execute("INSERT INTO runs (run_id, status) VALUES ('run_old', 'completed')")
+    con.close()
+    a = DuckDBAdapter.open(home)
+    try:
+        assert a.schema_versions["catalog"] == 3
+        assert a._cat.execute("SELECT status, spec_id FROM runs").fetchall() == [("completed", None)]
+        assert a.page_runs().total == 0  # rows without provenance (Phase 7 test rows) are not listed as runs
     finally:
         a.close()
 

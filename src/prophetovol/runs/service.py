@@ -21,8 +21,10 @@ from prophetovol.core.errors import (ConfigurationError, ImmutableEntityError, N
                                      ValidationIssue)
 from prophetovol.core.home import resolve_home
 from prophetovol.core.paging import Page
+from prophetovol.core.ids import new_id, utc_now
 from prophetovol.core.records import (AttemptRecord, DataImport, DataVersionRecord, DefinitionVersion, JobRecord,
-                                      JobStatus, VersionState)
+                                      JobStatus, RunRecord, RunStatus, VersionState)
+from prophetovol.core.versions import software_versions
 from prophetovol.data import ingest as ingest_module
 from prophetovol.data.lifecycle import (ChangePreview, CommitChoice, CoverageDay, CoverageMonth, CoverageReport,
                                         DataSelection, OverlapItem, RunImpact)
@@ -34,7 +36,9 @@ from prophetovol.reference.models import DataSource, Underlying
 from prophetovol.registry.mechanism import ImplementationInfo, RegistryInfo
 from prophetovol.runs.audit import audited
 from prophetovol.runs.config import RunConfig, RunConfigTemplate
-from prophetovol.runs.jobs import JobContext, JobHandler, JobRunner, execute_job, new_job, recover_interrupted_jobs
+from prophetovol.runs.coordinator import Progress, execute_run, registry_versions_used
+from prophetovol.runs.jobs import (INTERRUPTED_MESSAGE, JobContext, JobHandler, JobRunner, execute_job, new_job,
+                                   recover_interrupted_jobs)
 from prophetovol.runs.preflight import PreflightFailed, PreflightIssue, PreflightReport, check_data
 from prophetovol.runs.provider import MarketDataProvider, spec_horizon_days
 from prophetovol.storage.adapter import StorageAdapter
@@ -84,6 +88,7 @@ class BacktestService:
         self._owner = owner
         self._runner: JobRunner | None = None
         self.recovered_jobs: list[str] = []
+        self.recovered_runs: list[str] = []
         self.max_import_bytes = DEFAULT_MAX_IMPORT_BYTES
         self.ingest_memory_limit = ingest_module.DEFAULT_MEMORY_LIMIT
 
@@ -103,6 +108,7 @@ class BacktestService:
         try:
             service._seed_reference_data(context or CallContext.for_channel(Channel.LIBRARY))
             service.recovered_jobs = recover_interrupted_jobs(storage)
+            service.recovered_runs = service._recover_interrupted_runs()
         except Exception:
             storage.close()
             raise
@@ -398,6 +404,123 @@ class BacktestService:
             raise PreflightFailed(report)
         return report
 
+    # --- runs (§11.3, §11.4) ----------------------------------------------------------------------
+
+    @audited("run.start")
+    def start_run(self, spec_id: str, config: Any, context: CallContext, spec_version: int | None = None,
+                  background: bool = False, on_progress: Progress | None = None) -> RunRecord:
+        """Pre-flight a run, record it with its provenance, and execute it as a job (RUN-10, RUN-20, RUN-30).
+
+        The data versions pre-flight finds active are recorded on the run and are exactly what it reads
+        (decision 30). In the foreground the run executes in the calling thread and this returns when it ends;
+        in the background it is queued for the job runner (INT-23).
+
+        :param spec_id: The strategy spec's id.
+        :param config: The run configuration (RUN-1), as a mapping or a :class:`RunConfig`.
+        :param context: Who is starting it, through which channel.
+        :param spec_version: The spec version; the latest when omitted.
+        :param background: Queue it for the job runner instead of running it now.
+        :param on_progress: In the foreground, called after each step (steps done, total, as-of time).
+        :returns: The run as it ended (foreground) or as queued (background).
+        :raises PreflightFailed: If anything blocks the run; nothing is recorded.
+        """
+        report = self.preflight_run(spec_id, config, context, spec_version)
+        spec = self.get_spec(report.spec_id, report.spec_version)
+        cfg = report.config
+        run = RunRecord(
+            run_id=new_id("run"), status=RunStatus.QUEUED, spec_id=report.spec_id, spec_version=report.spec_version,
+            spec_hash=report.spec_hash, config=cfg.model_dump(mode="json"), config_hash=report.config_hash,
+            underlying=cfg.underlying, underlying_version=self.storage.get_definition(UNDERLYING, cfg.underlying).version,
+            data_source=cfg.data_source,
+            data_source_version=self.storage.get_definition(DATA_SOURCE, cfg.data_source).version,
+            calendar_version=self.calendar.version, software_versions=software_versions().model_dump(),
+            registry_versions=registry_versions_used(spec, cfg), steps_total=len(report.schedule.steps),
+            label=cfg.label, actor=context.actor, channel=context.channel, created_at=utc_now())
+        self.storage.create_run(run, report.data_versions)
+        params = {"run_id": run.run_id}
+        if background:
+            job = self.submit_job("run", params, context)
+            self.storage.update_run(run.model_copy(update={"job_id": job.job_id}))
+        else:
+            self.run_job("run", params, lambda ctx: self._run_job(ctx, on_progress), context)
+        return self.get_run(run.run_id)
+
+    def _run_job(self, ctx: JobContext, on_progress: Progress | None = None) -> dict[str, Any]:
+        """Execute a run on the job's storage (RUN-20 to RUN-23).
+
+        :param ctx: The job's context; ``params`` holds ``run_id``.
+        :param on_progress: Also told of progress, in the foreground.
+        :returns: The run's id and status.
+        """
+        service = BacktestService(ctx.storage, self.calendar, owner=False)
+        run = ctx.storage.get_run(ctx.params["run_id"])
+        ctx.record.result = {"run_id": run.run_id}
+        spec = StrategySpec.model_validate(ctx.storage.get_definition(STRATEGY_SPEC, run.spec_id, run.spec_version).body)
+        underlying = service.underlying(run.underlying, run.underlying_version)
+        return execute_run(run, spec, underlying, self.calendar, ctx, on_progress)
+
+    def get_run(self, run_id: str) -> RunRecord:
+        """A run with its provenance, status and flags (RUN-30, RUN-40).
+
+        :param run_id: The run.
+        :returns: The run.
+        :raises NotFoundError: If it does not exist.
+        """
+        return self.storage.get_run(run_id)
+
+    def page_runs(self, offset: int = 0, limit: int = 50, statuses: list[RunStatus] | None = None) -> Page[RunRecord]:
+        """Runs, newest first.
+
+        :param offset: Index of the first run.
+        :param limit: Page size.
+        :param statuses: Only these statuses, when given.
+        :returns: The page.
+        """
+        return self.storage.page_runs(offset, limit, statuses)
+
+    def run_results(self, run_id: str, table: str, offset: int = 0, limit: int | None = None) -> pa.Table:
+        """A run's stored output: ``position_snapshots``, ``portfolio_snapshots``, ``trades``, ``structures``,
+        ``events``, or the ``structure_snapshots`` view (RES-1 to RES-20).
+
+        :param run_id: The run.
+        :param table: The table or view.
+        :param offset: Index of the first row.
+        :param limit: Most rows; all when omitted.
+        :returns: The rows, in step order.
+        :raises NotFoundError: If the run or the table does not exist.
+        """
+        self.storage.get_run(run_id)
+        return self.storage.read_run_results(run_id, table, offset, limit)
+
+    @audited("run.cancel")
+    def cancel_run(self, run_id: str, context: CallContext) -> RunRecord:
+        """Cancel a queued or running run; it stops at the next step boundary and keeps its results (RUN-22).
+
+        :param run_id: The run.
+        :param context: Who is cancelling, through which channel.
+        :returns: The run.
+        :raises NotFoundError: If the run does not exist.
+        :raises ValidationFailed: If it has already finished or has no job.
+        """
+        run = self.storage.get_run(run_id)
+        if run.status not in (RunStatus.QUEUED, RunStatus.RUNNING) or run.job_id is None:
+            raise ValidationFailed([ValidationIssue("run_id", f"run {run_id} is {run.status}; only queued or running "
+                                                              "runs can be cancelled")])
+        self.cancel_job(run.job_id, context)
+        return self.storage.get_run(run_id)
+
+    def _recover_interrupted_runs(self) -> list[str]:
+        """Mark runs left queued or running by a previous process as failed, "interrupted" (RUN-20).
+
+        :returns: The ids of the runs changed.
+        """
+        changed = []
+        for run in self.storage.page_runs(limit=500, statuses=[RunStatus.QUEUED, RunStatus.RUNNING]).items:
+            self.storage.update_run(run.model_copy(update={"status": RunStatus.FAILED, "error": INTERRUPTED_MESSAGE,
+                                                           "finished_at": utc_now()}))
+            changed.append(run.run_id)
+        return changed
+
     def market_data(self, report: PreflightReport, spec: StrategySpec) -> MarketDataProvider:
         """The market data provider of a run that passed pre-flight (plan §4.6).
 
@@ -521,7 +644,8 @@ class BacktestService:
 
         :returns: Handlers by job kind.
         """
-        return {"ingest": self._ingest_job, "commit": self._data_job, "delete": self._data_job, "purge": self._data_job}
+        return {"ingest": self._ingest_job, "commit": self._data_job, "delete": self._data_job, "purge": self._data_job,
+                "run": self._run_job}
 
     def _ingest_job(self, ctx: JobContext) -> dict[str, Any]:
         """Run an import job (the ``ingest`` job kind).

@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 13 (triggers, rolls, expiry, settlement and the step loop).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 14 (run lifecycle, results storage and the run CLI) and the selection-message change.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -13,12 +13,12 @@ One row per requirement ID. This file is updated in every portion of work, in th
 
 ## Summary
 
-**222 requirements:** 115 done, 62 partial, 45 not started.
+**222 requirements:** 131 done, 48 partial, 43 not started.
 
 | Milestone | Plan phases | Status |
 | --- | --- | --- |
 | **M1 Data foundation** | 1–8 | **Done:** phases 1–8; checkpoint 1 held Oct 26, 2026 |
-| **M2 Engine core** | 9–15 | **In progress:** phases 9–13 done (Oct 27, 2026); 14–15 to go |
+| **M2 Engine core** | 9–15 | **In progress:** phases 9–14 done (Oct 27, 2026); 15 and checkpoint 2 to go |
 | **M3 Stress and analytics** | 16–18 | Not started |
 | **M4 Server and GUI** | 19–24 | Not started |
 
@@ -38,7 +38,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | 11 | Selection and entries | Oct 27, 2026 |
 | 12 | Book, marking, fills, sizing, hedging and accounting | Oct 27, 2026 |
 | 13 | Triggers, rolls, expiry, settlement and the step loop | Oct 27, 2026 |
-| 14 | Run lifecycle, results storage and the run CLI | — |
+| 14 | Run lifecycle, results storage and the run CLI | Oct 27, 2026 |
 | 15 | Acceptance, determinism, run time and checkpoint 2 | — |
 | 16–24 | M3–M4 (see the implementation plan, §8–§9) | — |
 
@@ -46,28 +46,28 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- |
 | Architecture (§4) | 4 | 2 | 1 |
 | Time, steps and snapshots (§5.1) | 1 | 2 | 0 |
-| Versioning (§5.3) | 1 | 3 | 0 |
+| Versioning (§5.3) | 2 | 2 | 0 |
 | Conventions (§5.4) | 0 | 10 | 0 |
 | Registries (§5.5) | 2 | 2 | 0 |
-| Data module (§6) | 22 | 8 | 0 |
+| Data module (§6) | 26 | 4 | 0 |
 | Reference data (§7) | 7 | 1 | 0 |
 | Strategy specification (§8) | 48 | 2 | 0 |
 | Engine (§9) | 17 | 2 | 0 |
 | Stress module (§10) | 0 | 1 | 17 |
-| Runs (§11) | 2 | 8 | 1 |
-| Results and analytics (§12) | 2 | 2 | 4 |
+| Runs (§11) | 9 | 2 | 0 |
+| Results and analytics (§12) | 3 | 2 | 3 |
 | Interfaces (§13) | 4 | 6 | 15 |
 | Schemas and documentation (§14) | 1 | 3 | 0 |
-| Audit (§15) | 1 | 3 | 0 |
+| Audit (§15) | 3 | 1 | 0 |
 | Distribution (§16.2) | 0 | 1 | 0 |
-| Testing (§17) | 3 | 3 | 5 |
+| Testing (§17) | 4 | 2 | 5 |
 | Non-functional (§18) | 0 | 3 | 2 |
 
 ## Architecture (§4)
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| ARC-1 | BacktestService is the only component that opens storage; clients are thin | **Partial** | Phase 3, 8 (CLI commands as thin service clients) | API (19-20) built as a thin client | `unit/test_service.py`, `unit/test_data_cli.py` |
+| ARC-1 | BacktestService is the only component that opens storage; clients are thin | **Partial** | Phase 3, 8, 9, 14 (CLI commands as thin service clients) | API (19-20) built as a thin client | `unit/test_service.py`, `unit/test_data_cli.py` |
 | ARC-2 | The engine is a pure library with no I/O | **Done** | Phase 9-13 (run_engine reads only its inputs and one view per step) |  | `golden/test_rules.py` |
 | ARC-3 | Point-in-time access through MarketDataView, enforced in code | **Done** | Phase 10 (the view refuses later as-of times), 13 (the engine reads only views) |  | `unit/test_market_data.py`, `golden/test_rules.py` |
 | ARC-4 | One writer: service owns read-write connections; write jobs one at a time; readers on cursors | **Done** | Phase 3, 4 |  | `contract/test_adapter_contract.py` (readers), `unit/test_jobs.py` |
@@ -89,7 +89,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | --- | --- | --- | --- | --- | --- |
 | VER-1 | Published definitions are immutable; every change is a new integer version | **Partial** | Phase 3, 4, 9 (strategy specs) | stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_audit.py`, `unit/test_strategy.py` |
 | VER-2 | Each published version stores a content hash of its canonical JSON | **Partial** | Phase 3, 9 (specs, hashed in canonical form) | stress definitions (16) | `contract/test_adapter_contract.py`, `unit/test_strategy.py` |
-| VER-3 | A run records by reference everything it used | **Partial** | Phase 10 (resolved configuration hashed; spec version and hash and the data versions to read fixed by pre-flight) | recorded on the run (14) | `unit/test_run_preflight.py` |
+| VER-3 | A run records by reference everything it used | **Done** | Phase 10 (fixed by pre-flight), 14 (recorded on the run) |  | `unit/test_runs.py` |
 | VER-4 | Market snapshots are versioned per (underlying, as_of) | **Done** | Phase 3, 7 |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
 
 ## Conventions (§5.4)
@@ -146,10 +146,10 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DATA-61 | The data-superseded flag is visible on runs and in the API | **Partial** | Phase 7 (persisted flags and service read) | Run lists/pages (14, 23) and API (20) | `unit/test_data_lifecycle.py` |
 | DATA-70 | Coverage view per trading day | **Partial** | Phase 7 (daily coverage and monthly summaries in service), 8 (CLI `data coverage`) | GUI (21) | `unit/test_data_lifecycle.py`, `unit/test_data_cli.py` |
 | DATA-80 | Parquet layout per underlying/year/month, one file per import; active-version filtering | **Done** | Phase 3, 7 |  | `unit/test_duckdb_storage.py`, `contract/test_lifecycle_contract.py` |
-| DATA-81 | Reads go through Ibis | **Partial** | Phase 3, 7 (catalog and active market reads), 10 (chunked market reads for runs) | result reads (14) | `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py` |
-| DATA-82 | Writes go through the StorageAdapter interface | **Partial** | Phase 3, 7 (commit, delete, purge, active snapshots) | Run result writes (14) | `contract/test_lifecycle_contract.py` |
-| DATA-83 | Physical layout is known only to the adapter | **Partial** | Phase 3, 7 (all lifecycle file operations inside adapter), 10 (the provider reads through adapter operations only) | results (14) | `contract/test_lifecycle_contract.py` |
-| DATA-84 | Adapter contract test suite | **Partial** | Phase 3, 7, 10 (exact-version chunk reads, horizon filter, index levels, purged versions) | Atomic run writes (14) | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py` |
+| DATA-81 | Reads go through Ibis | **Done** | Phase 3, 7, 10, 14 (result reads) |  | `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py`, `contract/test_run_contract.py` |
+| DATA-82 | Writes go through the StorageAdapter interface | **Done** | Phase 3, 7, 14 (run and result writes) |  | `contract/test_lifecycle_contract.py`, `contract/test_run_contract.py` |
+| DATA-83 | Physical layout is known only to the adapter | **Done** | Phase 3, 7, 10, 14 (results stored and read only through the adapter) |  | `contract/test_lifecycle_contract.py`, `contract/test_run_contract.py` |
+| DATA-84 | Adapter contract test suite | **Done** | Phase 3, 7, 10, 14 (runs and atomic result writes) |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py`, `contract/test_run_contract.py` |
 
 ## Reference data (§7)
 
@@ -171,7 +171,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-1 | StrategySpec contents | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-2 | Leg fields | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-3 | Leg references without cycles, resolved in dependency order | **Done** | Phase 9 (references checked, cycles named, selection order computed), 11 (legs selected in that order) |  | `unit/test_strategy.py`, `unit/test_selection.py` |
-| SPEC-4 | Selection is atomic across legs | **Done** | Phase 11 (all legs or none), 13 (selection_failed event) |  | `unit/test_selection.py`, `golden/test_rules.py` |
+| SPEC-4 | Selection is atomic across legs | **Done** | Phase Phase 11 (all legs or none), 13 (selection_failed event), selection-message change (nearest expirations either side of the window) |  | `unit/test_selection.py`, `golden/test_rules.py` |
 | SPEC-10 | `target_days` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-11 | `trading_days_out` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-12 | `nth_expiration` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
@@ -271,16 +271,16 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
 | RUN-1 | Run definition and configuration fields | **Done** | Phase 10 |  | `unit/test_run_preflight.py` |
-| RUN-2 | Configuration templates; full resolved configuration and hash stored | **Partial** | Phase 10 (named, versioned templates saved and listed through the service; resolved configuration and its hash) | the run stores them (14); CLI (14), GUI (23) | `unit/test_run_preflight.py` |
+| RUN-2 | Configuration templates; full resolved configuration and hash stored | **Done** | Phase 10 (templates; resolved configuration and its hash), 14 (stored on every run) |  | `unit/test_run_preflight.py`, `unit/test_runs.py` |
 | RUN-10 | Pre-flight checks | **Partial** | Phase 10 (spec, configuration, every trading day's active snapshot, non-empty chains, engine columns) | stress definitions validate (16) | `unit/test_run_preflight.py` |
 | RUN-11 | Pre-flight reports all problems; missing days; fixes the step schedule | **Done** | Phase 10 (pre-flight), 13 (missing_day_before on the next step's snapshots) |  | `unit/test_run_preflight.py`, `golden/test_rules.py` |
-| RUN-12 | Pre-flight available on its own | **Partial** | Phase 10 (readiness check in the service, audited as run.preflight) | CLI `run preflight` (14), API (20) | `unit/test_run_preflight.py` |
-| RUN-20 | Run statuses; runs left queued or running marked failed (interrupted) | **Partial** | Phase 4 (recovery pattern for jobs) | run statuses and recovery of interrupted runs (14) | `unit/test_jobs.py` |
-| RUN-21 | Run progress: steps done of total, with current as-of | **Partial** | Phase 13 (the engine reports steps done of total with the as-of time) | the run job's progress (14) | `golden/test_rules.py` |
-| RUN-22 | Cancellation at the next step boundary keeps results | **Partial** | Phase 13 (the engine stops at a step boundary and keeps its output) | the run's cancelled status and stored results (14) | `golden/test_rules.py` |
-| RUN-23 | Results written in one transaction when the run ends | Not started |  | Phase 14 |  |
-| RUN-30 | Recorded provenance of a run | **Partial** | Phase 1 (software versions collector) | provenance recorded on runs (14) | `unit/test_core.py` |
-| RUN-40 | Runs flagged data superseded | **Partial** | Phase 7 (invalidation against seeded run provenance) | Record each real run's read versions (14) | `unit/test_data_lifecycle.py` |
+| RUN-12 | Pre-flight available on its own | **Partial** | Phase 10 (readiness check in the service), 14 (CLI `run preflight`) | API (20) | `unit/test_run_preflight.py`, `unit/test_run_cli.py` |
+| RUN-20 | Run statuses; runs left queued or running marked failed (interrupted) | **Done** | Phase 4 (recovery pattern), 14 (run statuses; interrupted runs failed on open) |  | `unit/test_runs.py` |
+| RUN-21 | Run progress: steps done of total, with current as-of | **Done** | Phase 13 (engine progress), 14 (the run job's progress; the CLI's progress line) |  | `golden/test_rules.py`, `unit/test_runs.py`, `unit/test_run_cli.py` |
+| RUN-22 | Cancellation at the next step boundary keeps results | **Done** | Phase 13 (stops at a step boundary), 14 (cancelled status, results kept; Ctrl+C in the CLI) |  | `unit/test_runs.py` |
+| RUN-23 | Results written in one transaction when the run ends | **Done** | Phase 14 (one transaction whatever the outcome; partial on failure; nothing when the write fails) |  | `unit/test_runs.py`, `contract/test_run_contract.py` |
+| RUN-30 | Recorded provenance of a run | **Done** | Phase 1 (software versions), 14 (spec, configuration, data, underlying and data-source versions, registry and software versions, actor, channel, times, status) |  | `unit/test_runs.py` |
+| RUN-40 | Runs flagged data superseded | **Done** | Phase 7 (invalidation), 14 (each run records the versions it reads) |  | `unit/test_data_lifecycle.py`, `unit/test_runs.py` |
 
 ## Results and analytics (§12)
 
@@ -289,7 +289,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | RES-1 | Position snapshot fields | **Done** | Phase 12 |  | `golden/test_book.py` |
 | RES-2 | Hedge position snapshot greeks | **Done** | Phase 12 |  | `golden/test_book.py` |
 | RES-10 | Portfolio snapshot fields | **Partial** | Phase 12 (sums, cumulative P&L, equity, period return on capital, open structures, contracts held) | worst stress loss (16) | `golden/test_book.py` |
-| RES-11 | Structure snapshots as a view | Not started |  | Phase 14 |  |
+| RES-11 | Structure snapshots as a view | **Done** | Phase 14 (the structure_snapshots view) |  | `contract/test_run_contract.py`, `unit/test_runs.py` |
 | RES-20 | Events and their types | **Partial** | Phase 12 (event model and book events), 13 (entry, entry_skipped, trigger_fired, roll, close, settlement, forced closes, selection_failed, condition_null_greek) | stress events (17) | `golden/test_book.py`, `golden/test_rules.py` |
 | RES-30 | Aggregate statistics with periods_per_year | Not started |  | Phase 18 |  |
 | RES-31 | Documented formula for every statistic | Not started |  | Phase 18 |  |
@@ -319,7 +319,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | INT-35 | GUI: Run page | Not started |  | Phase 23 |  |
 | INT-36 | GUI: Jobs panel | Not started |  | Phase 21 |  |
 | INT-37 | Charts as tables; desktop-first layout; browsers | Not started |  | Phase 21-23 |  |
-| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`), 8 (`data`, `registry`, `jobs`, `docs`), 9 (`spec validate|publish|list|show|export`, and `spec examples`) | run (14), stress (16), demo (24) | `unit/test_cli.py`, `unit/test_data_cli.py`, `unit/test_spec_cli.py` |
+| INT-40 | CLI commands | **Partial** | Phase 1 (group with `--home`, `--version`), 5 (`testdata generate`), 8 (`data`, `registry`, `jobs`, `docs`), 9 (`spec`), 14 (`run preflight|start|list|show|cancel`) | stress (16), export (18), demo (24) | `unit/test_cli.py`, `unit/test_data_cli.py`, `unit/test_spec_cli.py`, `unit/test_run_cli.py` |
 | INT-41 | CLI and server cannot share a home; both say so with the remedy | **Partial** | Phase 3 (service reports it), 8 (CLI message with the remedy) | server message (19) | `unit/test_service.py`, `unit/test_data_cli.py` |
 | INT-50 | Synthetic data generator in the vendor format | **Done** | Phase 5 | also an older-conventions mode (five-character codes, historical roots, Saturday expirations, single price, discounted deltas) | `unit/test_generator.py` |
 | INT-51 | `prophetovol demo` | Not started |  | Phase 24 |  |
@@ -332,15 +332,15 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | DOC-1 | One pydantic definition per configurable item, every field described | **Partial** | Phase 1 (meta-test), applied in 2-9; 8 (generated reference docs, checked current by a meta-test) | applies to every later model | `meta/test_documentation.py` |
 | DOC-2 | Descriptions state units, signs, defaults and interactions | **Partial** | Phase 2-4, 9 (spec and parameter models) | applies to every later model |  |
 | DOC-3 | Conventions published as a document generated from the module | **Done** | Phase 2 (conventions module), 8 (`docs/reference/conventions.rst` generated by `docs generate`) |  | `unit/test_conventions.py`, `meta/test_documentation.py` |
-| DOC-4 | reST docstrings with Sphinx fields; README coverage | **Partial** | Phase 1 (meta-test enforces docstrings and `:param`), 8 (README: install, test data, import, review, coverage, delete, purge) | README sections for spec, run (14) and demo (24) | `meta/test_documentation.py` |
+| DOC-4 | reST docstrings with Sphinx fields; README coverage | **Partial** | Phase 1 (meta-test enforces docstrings and `:param`), 8 (README: install, test data, import, review, coverage, delete, purge), 9 (specs), 14 (running a backtest) | the demo (24) | `meta/test_documentation.py` |
 
 ## Audit (§15)
 
 | ID | Requirement | Status | Done in | Remaining or notes | Tests |
 | --- | --- | --- | --- | --- | --- |
-| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Partial** | Phase 3, 4, 6, 7 (lifecycle jobs and attempts) | Runs (14) | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
-| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4, 6, 7 (preview, commit, delete, purge and execution), 9 (spec.validate, spec.publish), 10 (run.preflight, run.save_template) | Each new operation is audited as it is added | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
-| AUD-3 | Software versions recorded on every run | **Partial** | Phase 1 (collector) | recorded on runs (14) | `unit/test_core.py` |
+| AUD-1 | Actor and channel recorded on runs, imports, commits, deletes, purges, definitions | **Done** | Phase 3, 4, 6, 7, 14 (runs record actor and channel) |  | `unit/test_audit.py`, `unit/test_runs.py` |
+| AUD-2 | Attempts log of every operation, including rejections | **Partial** | Phase 4, 6, 7 (preview, commit, delete, purge and execution), 9 (spec.validate, spec.publish), 10 (run.preflight, run.save_template), 14 (run.start, run.cancel) | Each new operation is audited as it is added | `unit/test_audit.py`, `unit/test_data_lifecycle.py` |
+| AUD-3 | Software versions recorded on every run | **Done** | Phase 1 (collector), 14 (recorded on every run) |  | `unit/test_runs.py` |
 | AUD-4 | Content hashes for definitions and import files | **Done** | Phase 3 (stored), 6 (file hashing at ingest) | specs (9) get hashes through the same `save_definition` | `contract/test_adapter_contract.py`, `unit/test_ingest.py` |
 
 ## Distribution (§16.2)
@@ -359,7 +359,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | TEST-4 | Point-in-time test | **Done** | Phase 10 |  | `unit/test_market_data.py` |
 | TEST-5 | Time-convention tests | **Done** | Phase 2 (unit cases incl. DST and Saturday expiries), 5 (generator greeks reproduced exactly), 6 (SQL time to expiry equal to Python for every row), 8 (vendor call deltas reproduced on real 2023 data, median error 3e-7) |  | `unit/test_time.py`, `unit/test_generator.py`, `unit/test_ingest.py`, `realdata/test_vendor_ingest.py` |
 | TEST-6 | Ingest tests reproducing real-data quirks | **Done** | Phase 6 |  | `unit/test_ingest.py` |
-| TEST-7 | Adapter contract suite | **Partial** | Phase 3, 7 | Atomic run writes (14) | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py` |
+| TEST-7 | Adapter contract suite | **Done** | Phase 3, 7, 10, 14 (atomic run writes) |  | `contract/test_adapter_contract.py`, `contract/test_lifecycle_contract.py`, `contract/test_market_read_contract.py`, `contract/test_run_contract.py` |
 | TEST-8 | Validation tests and YAML round trip | Not started |  | Phase 9 |  |
 | TEST-9 | API, front-end and end-to-end tests | Not started |  | Phase 19-24 |  |
 | TEST-10 | Optional real-data tests | **Partial** | Phase 8 (ingest part: real 2008 and 2023 through the CLI; counts, quality, coverage, derived columns, parity forwards, checkpoint 1 flow) | run part (15); Phase 0 findings recorded in plan §15 | `realdata/test_vendor_ingest.py` |

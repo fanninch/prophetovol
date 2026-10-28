@@ -81,8 +81,20 @@ class TestExpirationSelectors:
         assert chosen(views[MAR27], zero_dte)[:2] == ("SPXW", date(2024, 3, 28))
         failed = pick(views[MAR28], leg(expiration=zero_dte))  # next is Apr 1, 3.99 days out
         assert failed.failure.selector == "expiration_selector target_days"
-        assert failed.failure.message.startswith("no eligible expiration within 0–1 calendar days to expiry "
-                                                 "(eligible: SPXW 2024-04-01 (3.99 days, 1 trading day)")
+        assert failed.failure.message == ("no eligible expiration within 0 to 1 calendar days to expiry "
+                                          "(nearest eligible: SPXW 2024-04-01 (3.99 days, 1 trading day); none earlier)")
+
+    def test_a_gap_names_the_nearest_expiration_on_each_side(self, views):
+        # 60 to 80 days from Mar 27: nothing; May 17 (50.72) is short of it, Jun 21 (85.72) beyond it
+        failed = pick(views[MAR27], leg(expiration={"selector": "target_days", "days": 70}))
+        assert failed.failure.message == (
+            "no eligible expiration within 60 to 80 calendar days to expiry (nearest eligible: SPX 2024-05-17 "
+            "(50.72 days, 36 trading days) and SPX 2024-06-21 (85.72 days, 59 trading days))")
+        # past the chain's last expiration, Jun 21: a later one may exist beyond what the run reads (decision 31)
+        failed = pick(views[MAR27], leg(expiration={"selector": "target_days", "days": 200}))
+        assert failed.failure.message.endswith(
+            "(nearest eligible: SPX 2024-06-21 (85.72 days, 59 trading days); none later among the expirations "
+            "the run reads)")
 
     def test_default_window_is_floored_at_zero(self, views):
         # days 5: window 0–15; Apr 1 (4.99) is nearest
@@ -100,7 +112,10 @@ class TestExpirationSelectors:
         assert chosen(views[MAR27], dailies)[1] == date(2024, 3, 28)
         assert chosen(views[MAR28], dailies)[1] == date(2024, 4, 1)  # Good Friday is not a trading day
         # from Mar 27, trading days to expiry are 1, 2, 4, 6, …: none is 3, two are 1 away
-        assert not pick(views[MAR27], leg(expiration={"selector": "trading_days_out", "n": 3})).ok
+        failed = pick(views[MAR27], leg(expiration={"selector": "trading_days_out", "n": 3}))
+        assert failed.failure.message == (
+            "no eligible expiration 3 trading day(s) out (tolerance 0; nearest eligible: SPXW 2024-04-01 "
+            "(4.99 days, 2 trading days) and SPXW 2024-04-03 (6.99 days, 4 trading days))")
         tolerant = {"selector": "trading_days_out", "n": 3, "tolerance": 1}
         assert chosen(views[MAR27], tolerant)[1] == date(2024, 4, 3)
         assert chosen(views[MAR27], tolerant | {"tie_break": "earlier"})[1] == date(2024, 4, 1)

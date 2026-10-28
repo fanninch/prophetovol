@@ -4,11 +4,12 @@ Deterministic backtesting of index options on end-of-day vendor data (ivolatilit
 versioned data and strategies, a point-in-time engine, stress tests and statistics, with a
 CLI and, later, a local browser GUI.
 
-**Status:** Phase 1 is being built. Plan phases 0–13 of 24 are done. Milestone M1 (data foundation)
+**Status:** Phase 1 is being built. Plan phases 0–14 of 24 are done. Milestone M1 (data foundation)
 is complete, including its checkpoint demo on real data: data import, review, commit, delete, purge
 and coverage through the `prophetovol` CLI. M2 (engine core) has begun: strategy specs (validation,
 publishing, YAML round trips), run configurations, pre-flight checks, and the engine's contract
-selection, entry schedules, fills, hedging, accounting, triggers, rolls, expiry and the step loop. The requirements, the implementation plan and the
+selection, entry schedules, fills, hedging, accounting, triggers, rolls and expiry, and backtests run
+from the `prophetovol run` commands with their results stored. The requirements, the implementation plan and the
 [requirement status tracker](specs/implementation_plans/ProphetoVol%20—%20Phase%201%20Requirement%20Status.md)
 are in [`specs/`](specs/README.md). Strategies, runs, stress, statistics and the GUI follow in
 milestones M2 to M4.
@@ -143,25 +144,41 @@ rejects holding AM-settled legs to expiration (SPEC-52), and warns when an AM-se
 trigger closing it at least one trading day before expiry, since the engine then force-closes it
 on its last trading day (SPEC-53). Published versions are immutable and hashed; every change
 publishes a new version. `prophetovol registry list` and `registry show` describe every selector,
-schedule, condition, hedge rule and sizing method with its parameters. Runs arrive in Phase 14.
+schedule, condition, hedge rule and sizing method with its parameters.
 
-Until the `run` commands arrive, a run's **pre-flight check** is available from Python. It reports
-every problem at once (spec, configuration, missing trading days, empty snapshots) and fixes the
-run's steps:
+## Running a backtest
 
-```python
-from prophetovol.core.context import CallContext
-from prophetovol.runs.service import BacktestService
+A run needs a published spec and a run configuration file (YAML or JSON). Only the dates and the
+capital are required; everything else has a documented default (`prophetovol docs generate` writes
+them all to `docs/reference/`):
 
-with BacktestService.open() as svc:
-    report = svc.preflight_run("short_call_hedged", {"start_date": "2024-04-11", "end_date": "2024-06-24",
-                                                     "capital": 1_000_000}, CallContext.for_channel("library"))
-    print(len(report.schedule.steps), "steps;", [w.message for w in report.warnings])
+```yaml
+start_date: 2024-04-11
+end_date: 2024-06-24
+capital: 1000000
+fill_model: cross_spread          # mid, cross_spread or mid_plus_fraction (with fraction)
+commission_per_contract: 0.65     # per contract per side; default 0
+hedge_cost_bps: 0.0
+rounding: whole                   # or fractional
+allow_missing_days: false         # skip trading days without data instead of refusing
+label: first try
 ```
 
-A failed check raises `PreflightFailed`, whose `report` lists the errors and warnings. Missing days
-block a run unless the configuration sets `allow_missing_days: true`. Configurations can be saved
-as named, versioned templates with `save_run_template`.
+```bash
+prophetovol run preflight --spec short_call_hedged --config run.yaml   # every problem at once, nothing started
+prophetovol run start --spec short_call_hedged@1 --config run.yaml     # foreground, with a progress line
+prophetovol run list
+prophetovol run show RUN_ID [--structures] [--events] [--json]
+prophetovol run cancel RUN_ID                                           # a background run
+```
+
+A run reads exactly the data versions active when it starts, and records them with the spec version
+and hash, the full configuration and its hash, the registry implementation versions it uses and
+the software versions. If that data is later replaced, deleted or purged, the run is flagged *data
+superseded*. Its output is position and portfolio snapshots at every step, trades, structures and
+events, written in one transaction when it ends. Ctrl+C cancels a foreground run at once and keeps
+the steps it finished; a failed run keeps its results up to the failure, marked partial. Stress
+tests, statistics and export arrive in milestone M3.
 
 ## Jobs and the attempts log
 

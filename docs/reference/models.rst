@@ -753,6 +753,286 @@ prophetovol.core.records.JobRecord
      "type": "object"
    }
 
+prophetovol.core.records.RunRecord
+----------------------------------
+
+.. code-block:: json
+
+   {
+     "$defs": {
+       "Channel": {
+         "description": "The client through which an operation was requested.",
+         "enum": [
+           "cli",
+           "api",
+           "gui",
+           "library"
+         ],
+         "title": "Channel",
+         "type": "string"
+       },
+       "RunStatus": {
+         "description": "The life of a run (RUN-20).",
+         "enum": [
+           "queued",
+           "running",
+           "completed",
+           "failed",
+           "halted",
+           "cancelled"
+         ],
+         "title": "RunStatus",
+         "type": "string"
+       }
+     },
+     "description": "One run: what it ran, what it read, and how it ended (RUN-20 to RUN-40, VER-3).\n\nEverything it references is immutable, so the record alone reconstructs what ran (VER-3).",
+     "properties": {
+       "actor": {
+         "description": "Who started the run (AUD-1).",
+         "title": "Actor",
+         "type": "string"
+       },
+       "calendar_version": {
+         "description": "The trading calendar's version, the exchange_calendars version (REF-11).",
+         "title": "Calendar Version",
+         "type": "string"
+       },
+       "channel": {
+         "$ref": "#/$defs/Channel",
+         "description": "The client it was started through (AUD-1)."
+       },
+       "config": {
+         "additionalProperties": true,
+         "description": "The full resolved run configuration (RUN-1, RUN-2).",
+         "title": "Config",
+         "type": "object"
+       },
+       "config_hash": {
+         "description": "The configuration's canonical hash (VER-3).",
+         "title": "Config Hash",
+         "type": "string"
+       },
+       "created_at": {
+         "description": "When the run was created (UTC).",
+         "format": "date-time",
+         "title": "Created At",
+         "type": "string"
+       },
+       "data_source": {
+         "description": "The data source run.",
+         "title": "Data Source",
+         "type": "string"
+       },
+       "data_source_version": {
+         "description": "The data source configuration's version at the run's start.",
+         "title": "Data Source Version",
+         "type": "integer"
+       },
+       "data_superseded": {
+         "default": false,
+         "description": "Whether a data version the run read has since been replaced, deleted or purged (RUN-40).",
+         "title": "Data Superseded",
+         "type": "boolean"
+       },
+       "error": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Why the run failed, if it did.",
+         "title": "Error"
+       },
+       "final_equity": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Equity at the last step stored, in dollars.",
+         "title": "Final Equity"
+       },
+       "final_pnl": {
+         "anyOf": [
+           {
+             "type": "number"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "Cumulative P&L at the last step stored, in dollars.",
+         "title": "Final Pnl"
+       },
+       "finished_at": {
+         "anyOf": [
+           {
+             "format": "date-time",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "When it finished (UTC).",
+         "title": "Finished At"
+       },
+       "job_id": {
+         "anyOf": [
+           {
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The job that executes the run.",
+         "title": "Job Id"
+       },
+       "label": {
+         "default": "",
+         "description": "The configuration's label, for people.",
+         "title": "Label",
+         "type": "string"
+       },
+       "last_as_of": {
+         "anyOf": [
+           {
+             "format": "date-time",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "The as-of instant of the last step finished (UTC).",
+         "title": "Last As Of"
+       },
+       "partial": {
+         "default": false,
+         "description": "Whether a failed run's results stop at the failure (RUN-23).",
+         "title": "Partial",
+         "type": "boolean"
+       },
+       "registry_versions": {
+         "additionalProperties": {
+           "type": "string"
+         },
+         "description": "The implementation version of every registered component the run used, keyed kind/name (REG-2, RUN-30).",
+         "title": "Registry Versions",
+         "type": "object"
+       },
+       "run_id": {
+         "description": "The run's id (random, decision 14).",
+         "title": "Run Id",
+         "type": "string"
+       },
+       "software_versions": {
+         "additionalProperties": {
+           "type": "string"
+         },
+         "description": "Versions of ProphetoVol, Python and its libraries (RUN-30).",
+         "title": "Software Versions",
+         "type": "object"
+       },
+       "spec_hash": {
+         "description": "That version's content hash (VER-2).",
+         "title": "Spec Hash",
+         "type": "string"
+       },
+       "spec_id": {
+         "description": "The strategy spec's id.",
+         "title": "Spec Id",
+         "type": "string"
+       },
+       "spec_version": {
+         "description": "The spec version run (VER-1).",
+         "title": "Spec Version",
+         "type": "integer"
+       },
+       "started_at": {
+         "anyOf": [
+           {
+             "format": "date-time",
+             "type": "string"
+           },
+           {
+             "type": "null"
+           }
+         ],
+         "default": null,
+         "description": "When it started running (UTC).",
+         "title": "Started At"
+       },
+       "status": {
+         "$ref": "#/$defs/RunStatus",
+         "description": "queued, running, completed, failed, halted or cancelled (RUN-20)."
+       },
+       "steps_completed": {
+         "default": 0,
+         "description": "Steps finished and recorded.",
+         "title": "Steps Completed",
+         "type": "integer"
+       },
+       "steps_total": {
+         "description": "Steps in the run's schedule (RUN-21).",
+         "title": "Steps Total",
+         "type": "integer"
+       },
+       "stress_refs": {
+         "description": "Attached stress definitions as id@version; none until M3 (STR-2).",
+         "items": {
+           "type": "string"
+         },
+         "title": "Stress Refs",
+         "type": "array"
+       },
+       "underlying": {
+         "description": "The underlying run.",
+         "title": "Underlying",
+         "type": "string"
+       },
+       "underlying_version": {
+         "description": "The underlying configuration's version (REF-2) at the run's start.",
+         "title": "Underlying Version",
+         "type": "integer"
+       }
+     },
+     "required": [
+       "run_id",
+       "status",
+       "spec_id",
+       "spec_version",
+       "spec_hash",
+       "config",
+       "config_hash",
+       "underlying",
+       "underlying_version",
+       "data_source",
+       "data_source_version",
+       "calendar_version",
+       "software_versions",
+       "steps_total",
+       "actor",
+       "channel",
+       "created_at"
+     ],
+     "title": "RunRecord",
+     "type": "object"
+   }
+
 prophetovol.core.versions.SoftwareVersions
 ------------------------------------------
 

@@ -205,6 +205,14 @@ class TestTriggers:
         assert [f["trigger"] for f in fired["details"]["fired"]] == ["roll_on_delta", "stop"]
         assert pnl(rec) == pytest.approx([0, -800, 0]) and not rows(rec, "position_snapshots", step=3)
 
+    def test_a_leg_roll_does_not_make_room_for_an_entry(self):
+        spec = self.spec(self.ROLL)
+        spec["entry"] = {"schedule": "when_flat"}
+        outcome, rec = run(spec, [JUN3, JUN4, JUN5], self.chains())
+        # step 2's leg roll briefly leaves S1 without its leg; it still counts as open, so no second structure
+        assert [s["structure_id"] for s in rec.rows("structures")] == ["S1"]
+        assert events(rec, "entry") == [(1, "entry")]
+
     def test_null_delta_is_false_with_an_event(self):
         chains = self.chains()
         chains[1][0]["delta"] = None

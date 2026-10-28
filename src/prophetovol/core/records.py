@@ -1,4 +1,4 @@
-"""Records kept in the catalog (requirements §5.2): imports, data versions, definitions, jobs and attempts.
+"""Records kept in the catalog (requirements §5.2): imports, data versions, definitions, runs, jobs and attempts.
 
 Every instant is an aware UTC datetime.
 """
@@ -42,6 +42,17 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class RunStatus(StrEnum):
+    """The life of a run (RUN-20)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    HALTED = "halted"
     CANCELLED = "cancelled"
 
 
@@ -143,3 +154,45 @@ class AttemptRecord(BaseModel):
     actor: str = Field(description="Who asked (AUD-1).")
     channel: Channel = Field(description="The client the request came through (AUD-1).")
     attempted_at: datetime = Field(description="When the request was made (UTC).")
+
+
+class RunRecord(BaseModel):
+    """One run: what it ran, what it read, and how it ended (RUN-20 to RUN-40, VER-3).
+
+    Everything it references is immutable, so the record alone reconstructs what ran (VER-3).
+    """
+
+    run_id: str = Field(description="The run's id (random, decision 14).")
+    status: RunStatus = Field(description="queued, running, completed, failed, halted or cancelled (RUN-20).")
+    spec_id: str = Field(description="The strategy spec's id.")
+    spec_version: int = Field(description="The spec version run (VER-1).")
+    spec_hash: str = Field(description="That version's content hash (VER-2).")
+    stress_refs: list[str] = Field(default_factory=list,
+                                   description="Attached stress definitions as id@version; none until M3 (STR-2).")
+    config: dict[str, Any] = Field(description="The full resolved run configuration (RUN-1, RUN-2).")
+    config_hash: str = Field(description="The configuration's canonical hash (VER-3).")
+    underlying: str = Field(description="The underlying run.")
+    underlying_version: int = Field(description="The underlying configuration's version (REF-2) at the run's start.")
+    data_source: str = Field(description="The data source run.")
+    data_source_version: int = Field(description="The data source configuration's version at the run's start.")
+    calendar_version: str = Field(description="The trading calendar's version, the exchange_calendars version (REF-11).")
+    software_versions: dict[str, str] = Field(description="Versions of ProphetoVol, Python and its libraries (RUN-30).")
+    registry_versions: dict[str, str] = Field(default_factory=dict,
+                                              description="The implementation version of every registered component "
+                                                          "the run used, keyed kind/name (REG-2, RUN-30).")
+    job_id: str | None = Field(default=None, description="The job that executes the run.")
+    steps_total: int = Field(description="Steps in the run's schedule (RUN-21).")
+    steps_completed: int = Field(default=0, description="Steps finished and recorded.")
+    last_as_of: datetime | None = Field(default=None, description="The as-of instant of the last step finished (UTC).")
+    partial: bool = Field(default=False, description="Whether a failed run's results stop at the failure (RUN-23).")
+    error: str | None = Field(default=None, description="Why the run failed, if it did.")
+    data_superseded: bool = Field(default=False, description="Whether a data version the run read has since been "
+                                                             "replaced, deleted or purged (RUN-40).")
+    final_pnl: float | None = Field(default=None, description="Cumulative P&L at the last step stored, in dollars.")
+    final_equity: float | None = Field(default=None, description="Equity at the last step stored, in dollars.")
+    label: str = Field(default="", description="The configuration's label, for people.")
+    actor: str = Field(description="Who started the run (AUD-1).")
+    channel: Channel = Field(description="The client it was started through (AUD-1).")
+    created_at: datetime = Field(description="When the run was created (UTC).")
+    started_at: datetime | None = Field(default=None, description="When it started running (UTC).")
+    finished_at: datetime | None = Field(default=None, description="When it finished (UTC).")
