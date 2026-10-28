@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Requirement Status
 
-Oct 27, 2026 · @Chuck · **Up to date through plan Phase 14 (run lifecycle, results storage and the run CLI).** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
+Oct 27, 2026 · @Chuck · **Up to date through plan Phase 14 (run lifecycle, results storage and the run CLI) and the selection-message change.** · Tracks: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed) against *ProphetoVol — Phase 1 Implementation Plan* (v5, agreed).
 
 One row per requirement ID. This file is updated in every portion of work, in the same change as the code, so each commit carries its own status changes.
 
@@ -171,7 +171,7 @@ One row per requirement ID. This file is updated in every portion of work, in th
 | SPEC-1 | StrategySpec contents | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-2 | Leg fields | **Done** | Phase 9 |  | `unit/test_strategy.py` |
 | SPEC-3 | Leg references without cycles, resolved in dependency order | **Done** | Phase 9 (references checked, cycles named, selection order computed), 11 (legs selected in that order) |  | `unit/test_strategy.py`, `unit/test_selection.py` |
-| SPEC-4 | Selection is atomic across legs | **Done** | Phase 11 (all legs or none), 13 (selection_failed event) |  | `unit/test_selection.py`, `golden/test_rules.py` |
+| SPEC-4 | Selection is atomic across legs | **Done** | Phase Phase 11 (all legs or none), 13 (selection_failed event), selection-message change (nearest expirations either side of the window) |  | `unit/test_selection.py`, `golden/test_rules.py` |
 | SPEC-10 | `target_days` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-11 | `trading_days_out` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |
 | SPEC-12 | `nth_expiration` expiration selector | **Done** | Phase 11 |  | `unit/test_selection.py` |

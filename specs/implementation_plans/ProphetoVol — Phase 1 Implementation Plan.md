@@ -1,6 +1,6 @@
 # ProphetoVol — Phase 1 Implementation Plan
 
-Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–14 done and M1 complete (checkpoint 1 held Oct 26, 2026); the check-in after Phase 14, then Phase 15.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
+Oct 27, 2026 · @Chuck · **Status: Agreed (v5): M2 detailed in §7, with decisions 27–33 and your answers in §7.5, and decisions 34–36 from phases 9 and 10; updated for requirements v7. Plan phases 0–14 done and M1 complete (checkpoint 1 held Oct 26, 2026); the check-in after Phase 14 held, with the selection-message change; Phase 15 next.** · Requirement status: *ProphetoVol — Phase 1 Requirement Status*, one row per requirement. · Implements: *ProphetoVol — Phase 1 Requirements Specification* (v7, agreed), referred to below as "the requirements". IDs such as DATA-31 or ENG-41 refer to that document.
 
 ## 1. Approach
 
@@ -1418,3 +1418,12 @@ Not a plan phase: the checkpoint 1 demo that completes M1, and corrections to th
   - **`tests/contract/test_run_contract.py`, 6 tests:** runs and their inputs round trip; paging; results round trip in order; the structure view; atomic, write-once results; tables equal to the record models
   - **`tests/unit/test_run_cli.py`, 3 tests;** the leg-roll entry test in `golden/test_rules.py`; the version 2 migration test
 - **Next:** the check-in with you (§7.5, answer 8), one Appendix B run on generated data through the run CLI; then Phase 15 (acceptance, determinism, run time and checkpoint 2).
+
+**Selection message change (between Phases 14 and 15, branch `selection_message`), Oct 27, 2026**
+
+- **The check-in** (§7.5, answer 8): example 1 (`short_call_hedged`) over Apr 1 to May 31, 2024 on generated data, through `run preflight`, `run start` and `run show --structures --events`. It completed 44 of 44 steps: S1 opened Apr 1, rolled on time May 2, and closed May 21 when a delta roll found no expiration 35 to 55 days out (the generated listings jump from 31 to 59 days); entries failed May 22 to 24 for the same reason, and S2 opened May 28. The stored results and events were checked directly.
+- **What it showed:** a failed expiration selection listed the four nearest expirations ("SPXW 2024-05-22 … and 4 more"), which says nothing about why the window was missed.
+- **Changed** (`engine/selection.py`, SPEC-4): `target_days` and `trading_days_out` failures now name the nearest eligible expiration on each side of the window, for example "nearest eligible: SPX 2024-05-17 (50.72 days, 36 trading days) and SPX 2024-06-21 (85.72 days, 59 trading days)". A side without one says "none earlier", or "none later among the expirations the run reads": a run reads expirations only up to its spec's horizon (decision 31), so in the check-in July 19 (59 days, beyond the 55-day horizon) existed in the data but was not seen.
+- **Test mistake corrected during development:** the new test first expected 35 trading days from Mar 27 to May 17, 2024; there are 36.
+- **Tests:** 487, all passing: 481 run by default (unit 395, contract 39, golden 42, meta 3, packaging 2), and the 6 real-data tests. In `unit/test_selection.py`, the one-sided message is asserted in full, a new test covers a gap with expirations on both sides and one past the last expiration, and the `trading_days_out` failure message is asserted.
+- **Next:** Phase 15 (acceptance, determinism, run time and checkpoint 2).
